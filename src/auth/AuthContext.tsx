@@ -6,11 +6,12 @@ const SESSION_KEY = 'dravaint-auth';
 export interface StoredUser {
   username: string;
   password: string;
+  role: string | null;
 }
 
 const FALLBACK_USERS: StoredUser[] = [
-  { username: 'dturk', password: '1234' },
-  { username: 'kstankovic', password: 'ks741953' },
+  { username: 'dturk', password: '1234', role: null },
+  { username: 'kstankovic', password: 'ks741953', role: null },
 ];
 
 interface AuthContextValue {
@@ -20,8 +21,13 @@ interface AuthContextValue {
   loading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  addUser: (username: string, password: string) => Promise<boolean>;
-  updateUser: (originalUsername: string, username: string, password: string) => Promise<boolean>;
+  addUser: (username: string, password: string, role: string | null) => Promise<boolean>;
+  updateUser: (
+    originalUsername: string,
+    username: string,
+    password: string,
+    role: string | null,
+  ) => Promise<boolean>;
   deleteUser: (username: string) => Promise<boolean>;
 }
 
@@ -38,7 +44,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
 
     async function loadUsers() {
-      const { data, error } = await supabase!.from('app_users').select('username,password').order('id');
+      const { data, error } = await supabase!
+        .from('app_users')
+        .select('username,password,role')
+        .order('id');
       if (!error && data) setUsers(data);
       setLoading(false);
     }
@@ -69,16 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsername(null);
   }
 
-  async function addUser(newUsername: string, password: string): Promise<boolean> {
+  async function addUser(newUsername: string, password: string, role: string | null): Promise<boolean> {
     const trimmed = newUsername.trim();
     if (!trimmed || !password) return false;
     if (users.some((u) => u.username.toLowerCase() === trimmed.toLowerCase())) return false;
 
     if (supabase) {
-      const { error } = await supabase.from('app_users').insert({ username: trimmed, password });
+      const { error } = await supabase.from('app_users').insert({ username: trimmed, password, role });
       if (error) return false;
     } else {
-      setUsers((prev) => [...prev, { username: trimmed, password }]);
+      setUsers((prev) => [...prev, { username: trimmed, password, role }]);
     }
     return true;
   }
@@ -87,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     originalUsername: string,
     newUsername: string,
     password: string,
+    role: string | null,
   ): Promise<boolean> {
     const trimmed = newUsername.trim();
     if (!trimmed || !password) return false;
@@ -98,12 +108,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (supabase) {
       const { error } = await supabase
         .from('app_users')
-        .update({ username: trimmed, password })
+        .update({ username: trimmed, password, role })
         .eq('username', originalUsername);
       if (error) return false;
     } else {
       setUsers((prev) =>
-        prev.map((u) => (u.username === originalUsername ? { username: trimmed, password } : u)),
+        prev.map((u) => (u.username === originalUsername ? { username: trimmed, password, role } : u)),
       );
     }
 

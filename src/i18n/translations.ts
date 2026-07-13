@@ -57,6 +57,11 @@ export interface TranslationShape {
     noJobs: string;
     hours: string;
     sharedNote: string;
+    selectMachine: string;
+    noMachinesDefined: string;
+    typeMill: string;
+    typeLathe: string;
+    axisShort: string;
   };
   progress: {
     title: string;
@@ -138,6 +143,20 @@ export interface TranslationShape {
     userExists: string;
     cannotDeleteSelf: string;
     cannotDeleteLast: string;
+    machinesSection: string;
+    machineName: string;
+    machineType: string;
+    machineAxis: string;
+    addMachine: string;
+    editMachine: string;
+    machineExists: string;
+    noMachines: string;
+  };
+  roles: {
+    title: string;
+    roleName: string;
+    addRole: string;
+    noRole: string;
   };
 }
 
@@ -199,6 +218,11 @@ export const translations: Record<Lang, TranslationShape> = {
       noJobs: 'Nema zakazanih naloga.',
       hours: 'h',
       sharedNote: 'Ovi podaci su zajednički s karticama Praćenje napretka i Gantogram.',
+      selectMachine: '-- odaberite stroj --',
+      noMachinesDefined: 'Nema definiranih strojeva. Zamolite administratora da ih doda.',
+      typeMill: 'Glodalica',
+      typeLathe: 'Tokarilica',
+      axisShort: 'osna',
     },
     progress: {
       title: 'Praćenje napretka',
@@ -280,6 +304,20 @@ export const translations: Record<Lang, TranslationShape> = {
       userExists: 'Korisničko ime već postoji.',
       cannotDeleteSelf: 'Ne možete obrisati vlastiti račun.',
       cannotDeleteLast: 'Mora postojati barem jedan korisnik.',
+      machinesSection: 'Strojevi',
+      machineName: 'Naziv stroja',
+      machineType: 'Tip',
+      machineAxis: 'Broj osi',
+      addMachine: 'Dodaj stroj',
+      editMachine: 'Spremi izmjene',
+      machineExists: 'Stroj s tim nazivom već postoji.',
+      noMachines: 'Još nema definiranih strojeva.',
+    },
+    roles: {
+      title: 'Uloge radnika',
+      roleName: 'Naziv uloge',
+      addRole: 'Dodaj ulogu',
+      noRole: '(bez uloge)',
     },
   },
   en: {
@@ -339,6 +377,11 @@ export const translations: Record<Lang, TranslationShape> = {
       noJobs: 'No jobs scheduled.',
       hours: 'h',
       sharedNote: 'This data is shared with the Progress Monitoring and Gantt Chart tabs.',
+      selectMachine: '-- select a machine --',
+      noMachinesDefined: 'No machines defined yet. Ask an admin to add some.',
+      typeMill: 'Mill',
+      typeLathe: 'Lathe',
+      axisShort: 'axis',
     },
     progress: {
       title: 'Progress Monitoring',
@@ -420,6 +463,20 @@ export const translations: Record<Lang, TranslationShape> = {
       userExists: 'That username already exists.',
       cannotDeleteSelf: 'You cannot delete your own account.',
       cannotDeleteLast: 'There must be at least one user.',
+      machinesSection: 'Machines',
+      machineName: 'Machine name',
+      machineType: 'Type',
+      machineAxis: 'Axis count',
+      addMachine: 'Add machine',
+      editMachine: 'Save changes',
+      machineExists: 'A machine with that name already exists.',
+      noMachines: 'No machines defined yet.',
+    },
+    roles: {
+      title: 'Worker roles',
+      roleName: 'Role name',
+      addRole: 'Add role',
+      noRole: '(no role)',
     },
   },
 };

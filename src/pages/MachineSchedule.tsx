@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash } from '../components/Icons';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
+import { useMachines } from '../machines/MachinesContext';
 
 export default function MachineSchedule() {
   const { t } = useLanguage();
   const { jobs, addJob, updateJob, removeJob } = useScheduling();
+  const { machines } = useMachines();
 
   const [form, setForm] = useState({ machine: '', order: '', operator: '', start: '', end: '' });
 
@@ -35,11 +37,20 @@ export default function MachineSchedule() {
         <div className="grid-inputs workers-ruster">
           <div>
             <label>{t.machines.machine}</label>
-            <input
-              type="text"
-              value={form.machine}
-              onChange={(e) => setForm({ ...form, machine: e.target.value })}
-            />
+            <select value={form.machine} onChange={(e) => setForm({ ...form, machine: e.target.value })}>
+              <option value="">{t.machines.selectMachine}</option>
+              {machines.map((m) => (
+                <option key={m.id} value={m.name}>
+                  {m.name} ({m.type === 'mill' ? t.machines.typeMill : t.machines.typeLathe}
+                  {m.axis ? `, ${m.axis} ${t.machines.axisShort}` : ''})
+                </option>
+              ))}
+            </select>
+            {machines.length === 0 && (
+              <p className="subtitle-text" style={{ fontSize: 11, marginTop: 4 }}>
+                {t.machines.noMachinesDefined}
+              </p>
+            )}
           </div>
           <div>
             <label>{t.machines.order}</label>

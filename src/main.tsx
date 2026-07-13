@@ -7,6 +7,8 @@ import { AuthProvider } from './auth/AuthContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import { LogoProvider } from './logo/LogoContext';
 import { SchedulingProvider } from './scheduling/SchedulingContext';
+import { MachinesProvider } from './machines/MachinesContext';
+import { RolesProvider } from './roles/RolesContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,9 +16,13 @@ createRoot(document.getElementById('root')!).render(
       <LanguageProvider>
         <AuthProvider>
           <LogoProvider>
-            <SchedulingProvider>
-              <App />
-            </SchedulingProvider>
+            <MachinesProvider>
+              <RolesProvider>
+                <SchedulingProvider>
+                  <App />
+                </SchedulingProvider>
+              </RolesProvider>
+            </MachinesProvider>
           </LogoProvider>
         </AuthProvider>
       </LanguageProvider>
