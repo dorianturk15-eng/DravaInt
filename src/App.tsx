@@ -1,16 +1,23 @@
 import { useState } from 'react';
 import './App.css';
 import { useLanguage } from './i18n/LanguageContext';
+import { useAuth } from './auth/AuthContext';
 import ShiftSchedule from './pages/ShiftSchedule';
 import MachineSchedule from './pages/MachineSchedule';
 import ProgressMonitoring from './pages/ProgressMonitoring';
 import GanttChart from './pages/GanttChart';
+import Login from './pages/Login';
 
 type Tab = 'shifts' | 'machines' | 'progress' | 'gantt';
 
 function App() {
   const { t, lang, setLang } = useLanguage();
+  const { isAuthenticated, username, logout } = useAuth();
   const [tab, setTab] = useState<Tab>('shifts');
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'shifts', label: t.nav.shifts },
@@ -40,6 +47,12 @@ function App() {
           </button>
           <button className={`lang-btn${lang === 'en' ? ' active' : ''}`} onClick={() => setLang('en')}>
             EN
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: '#cbd5e1' }}>{username}</span>
+          <button className="logout-btn" onClick={logout}>
+            {t.login.logout}
           </button>
         </div>
       </nav>

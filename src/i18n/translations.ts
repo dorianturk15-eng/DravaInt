@@ -73,6 +73,15 @@ export interface TranslationShape {
     subtitle: string;
     today: string;
   };
+  login: {
+    title: string;
+    subtitle: string;
+    username: string;
+    password: string;
+    submit: string;
+    error: string;
+    logout: string;
+  };
 }
 
 export const translations: Record<Lang, TranslationShape> = {
@@ -149,6 +158,15 @@ export const translations: Record<Lang, TranslationShape> = {
       subtitle: 'Vremenski prikaz svih zadataka i naloga.',
       today: 'Danas',
     },
+    login: {
+      title: 'Prijava',
+      subtitle: 'Unesite korisničko ime i lozinku za pristup planeru.',
+      username: 'Korisničko ime',
+      password: 'Lozinka',
+      submit: 'Prijavi se',
+      error: 'Pogrešno korisničko ime ili lozinka.',
+      logout: 'Odjava',
+    },
   },
   en: {
     appTitle: 'Drava International - Planner',
@@ -222,6 +240,15 @@ export const translations: Record<Lang, TranslationShape> = {
       title: 'Gantt Chart',
       subtitle: 'Timeline view of all tasks and orders.',
       today: 'Today',
+    },
+    login: {
+      title: 'Sign in',
+      subtitle: 'Enter your username and password to access the planner.',
+      username: 'Username',
+      password: 'Password',
+      submit: 'Sign in',
+      error: 'Incorrect username or password.',
+      logout: 'Log out',
     },
   },
 };

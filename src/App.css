@@ -360,6 +360,45 @@ select {
   transition: width 0.2s;
 }
 
+/* Login */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: #f7fafc;
+  position: relative;
+}
+
+.login-lang-switch {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+.logout-btn {
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid #dc2626;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
+  color: white;
+}
+
 /* Gantt */
 .gantt-wrapper {
   overflow-x: auto;
