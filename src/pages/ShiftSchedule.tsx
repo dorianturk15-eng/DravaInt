@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useLogo } from '../logo/LogoContext';
 
 function formatDate(date: Date): string {
   const d = date.getDate();
@@ -37,7 +38,7 @@ export default function ShiftSchedule() {
   const [weekCount, setWeekCount] = useState(6);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const [logo, setLogo] = useState<string | null>(null);
+  const { logo, setLogo } = useLogo();
   const [weeks, setWeeks] = useState<WeekCell[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

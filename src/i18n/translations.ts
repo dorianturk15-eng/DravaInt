@@ -7,6 +7,7 @@ export interface TranslationShape {
     machines: string;
     progress: string;
     gantt: string;
+    admin: string;
   };
   common: {
     calculate: string;
@@ -82,6 +83,28 @@ export interface TranslationShape {
     error: string;
     logout: string;
   };
+  admin: {
+    title: string;
+    subtitle: string;
+    logoSection: string;
+    uploadLogo: string;
+    currentLogo: string;
+    noLogo: string;
+    save: string;
+    saved: string;
+    clear: string;
+    usersSection: string;
+    username: string;
+    password: string;
+    addUser: string;
+    editUser: string;
+    cancelEdit: string;
+    edit: string;
+    delete: string;
+    userExists: string;
+    cannotDeleteSelf: string;
+    cannotDeleteLast: string;
+  };
 }
 
 export const translations: Record<Lang, TranslationShape> = {
@@ -92,6 +115,7 @@ export const translations: Record<Lang, TranslationShape> = {
       machines: 'Raspored strojeva',
       progress: 'Praćenje napretka',
       gantt: 'Gantogram',
+      admin: 'Administracija',
     },
     common: {
       calculate: '🔄 1. Izračunaj i ažuriraj',
@@ -167,6 +191,28 @@ export const translations: Record<Lang, TranslationShape> = {
       error: 'Pogrešno korisničko ime ili lozinka.',
       logout: 'Odjava',
     },
+    admin: {
+      title: 'Administracija',
+      subtitle: 'Upravljanje logotipom tvrtke i korisničkim računima.',
+      logoSection: 'Logotip tvrtke',
+      uploadLogo: 'Učitajte logotip',
+      currentLogo: 'Trenutni logotip:',
+      noLogo: 'Logotip nije postavljen.',
+      save: 'Spremi logotip',
+      saved: 'Logotip spremljen.',
+      clear: 'Ukloni logotip',
+      usersSection: 'Korisnički računi',
+      username: 'Korisničko ime',
+      password: 'Lozinka',
+      addUser: 'Dodaj korisnika',
+      editUser: 'Spremi izmjene',
+      cancelEdit: 'Odustani',
+      edit: 'Uredi',
+      delete: 'Obriši',
+      userExists: 'Korisničko ime već postoji.',
+      cannotDeleteSelf: 'Ne možete obrisati vlastiti račun.',
+      cannotDeleteLast: 'Mora postojati barem jedan korisnik.',
+    },
   },
   en: {
     appTitle: 'Drava International - Planner',
@@ -175,6 +221,7 @@ export const translations: Record<Lang, TranslationShape> = {
       machines: 'Machine Scheduling',
       progress: 'Progress Monitoring',
       gantt: 'Gantt Chart',
+      admin: 'Admin',
     },
     common: {
       calculate: '🔄 1. Calculate and update',
@@ -249,6 +296,28 @@ export const translations: Record<Lang, TranslationShape> = {
       submit: 'Sign in',
       error: 'Incorrect username or password.',
       logout: 'Log out',
+    },
+    admin: {
+      title: 'Admin',
+      subtitle: 'Manage the company logo and user accounts.',
+      logoSection: 'Company logo',
+      uploadLogo: 'Upload logo',
+      currentLogo: 'Current logo:',
+      noLogo: 'No logo set.',
+      save: 'Save logo',
+      saved: 'Logo saved.',
+      clear: 'Remove logo',
+      usersSection: 'User accounts',
+      username: 'Username',
+      password: 'Password',
+      addUser: 'Add user',
+      editUser: 'Save changes',
+      cancelEdit: 'Cancel',
+      edit: 'Edit',
+      delete: 'Delete',
+      userExists: 'That username already exists.',
+      cannotDeleteSelf: 'You cannot delete your own account.',
+      cannotDeleteLast: 'There must be at least one user.',
     },
   },
 };
