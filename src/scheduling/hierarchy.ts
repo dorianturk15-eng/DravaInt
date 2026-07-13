@@ -1,6 +1,6 @@
 import type { Task } from 'gantt-task-react';
 import type { Job, OperationStep } from './SchedulingContext';
-import { computeEffectiveSchedule, computeCriticalPath, jobsToScheduleInput } from './cpm';
+import { computeEffectiveSchedule, computeCriticalPath, jobsToScheduleInput, type SchedulingOptions } from './cpm';
 
 export function getChildren(jobs: Job[], parentId: number): Job[] {
   return jobs.filter((j) => j.parentId === parentId);
@@ -79,11 +79,18 @@ const STATUS_COLORS: Record<Job['status'], string> = {
  * list, using its native "project" rows for containers so parent bars
  * automatically span their children.
  */
-export function buildGanttTasks(jobs: Job[]): Task[] {
+export interface GanttBuildOptions {
+  highlightCritical?: boolean;
+  criticalToleranceMs?: number;
+  collapsedIds?: Set<number>;
+  scheduling?: SchedulingOptions;
+}
+
+export function buildGanttTasks(jobs: Job[], options: GanttBuildOptions = {}): Task[] {
   const validJobs = jobs.filter((j) => j.start);
   const scheduleInput = jobsToScheduleInput(validJobs.filter((j) => !hasChildren(validJobs, j.id)));
-  const effective = computeEffectiveSchedule(scheduleInput);
-  const criticalIds = computeCriticalPath(scheduleInput, effective);
+  const effective = computeEffectiveSchedule(scheduleInput, options.scheduling);
+  const criticalIds = options.highlightCritical === false ? new Set<number>() : computeCriticalPath(scheduleInput, effective, options.criticalToleranceMs);
 
   const tasks: Task[] = [];
   const roots = validJobs.filter((j) => !j.parentId || !validJobs.some((p) => p.id === j.parentId));
@@ -107,6 +114,7 @@ export function buildGanttTasks(jobs: Job[]): Task[] {
         isDisabled: true,
         styles: { backgroundColor: color, backgroundSelectedColor: color },
       });
+      if (options.collapsedIds?.has(job.id)) return;
       children.forEach((child) => walk(child, `wo-${job.id}`));
       return;
     }
@@ -143,12 +151,13 @@ export function buildGanttTasks(jobs: Job[]): Task[] {
     const eff = effective.get(job.id);
     const start = eff ? new Date(eff.start) : new Date(job.start);
     const end = eff ? new Date(eff.end) : new Date(job.end || job.start);
+    const isMilestone = end.getTime() <= start.getTime();
     tasks.push({
       id: `wo-${job.id}`,
-      type: 'task',
+      type: isMilestone ? 'milestone' : 'task',
       name: label,
       start,
-      end: end > start ? end : new Date(start.getTime() + 3600000),
+      end: isMilestone ? start : end,
       progress: job.progress,
       project: projectId,
       dependencies: (job.dependencies ?? []).map((d) => `wo-${d.jobId}`),

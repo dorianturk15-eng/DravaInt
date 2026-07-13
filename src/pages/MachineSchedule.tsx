@@ -1,29 +1,23 @@
 import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
-import { IconPlus, IconTrash } from '../components/Icons';
-import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
+import { IconPlus } from '../components/Icons';
+import { useScheduling } from '../scheduling/SchedulingContext';
 import { useMachines } from '../machines/MachinesContext';
-import { hasChildren } from '../scheduling/hierarchy';
+import { useWorkers } from '../workers/WorkersContext';
+import { MachineBoard } from '../components/machine-board/MachineBoard';
 
 export default function MachineSchedule() {
-  const { t } = useLanguage();
-  const { jobs: allJobs, addJob, updateJob, removeJob } = useScheduling();
+  const { t, lang } = useLanguage();
+  const { addJob } = useScheduling();
   const { machines } = useMachines();
-  const jobs = allJobs.filter((j) => !hasChildren(allJobs, j.id));
+  const { activeWorkers, displayName } = useWorkers();
 
-  const [form, setForm] = useState({ machine: '', order: '', operator: '', start: '', end: '' });
+  const [form, setForm] = useState({ machine: '', order: '', operator: '', operatorId: null as number | null, start: '', end: '' });
 
   function handleAdd() {
     if (!form.machine || !form.order) return;
     addJob(form);
-    setForm({ machine: '', order: '', operator: '', start: '', end: '' });
-  }
-
-  function durationHours(start: string, end: string) {
-    if (!start || !end) return '-';
-    const ms = new Date(end).getTime() - new Date(start).getTime();
-    if (isNaN(ms) || ms <= 0) return '-';
-    return (ms / (1000 * 60 * 60)).toFixed(1);
+    setForm({ machine: '', order: '', operator: '', operatorId: null, start: '', end: '' });
   }
 
   return (
@@ -64,11 +58,10 @@ export default function MachineSchedule() {
           </div>
           <div>
             <label>{t.machines.operator}</label>
-            <input
-              type="text"
-              value={form.operator}
-              onChange={(e) => setForm({ ...form, operator: e.target.value })}
-            />
+            <select value={form.operatorId ?? ''} onChange={(e) => { const worker = activeWorkers.find((item) => item.id === Number(e.target.value)); setForm({ ...form, operatorId: worker?.id ?? null, operator: worker ? displayName(worker) : '' }); }}>
+              <option value="">{lang === 'hr' ? 'Nije dodijeljen' : 'Unassigned'}</option>
+              {activeWorkers.map((worker) => <option key={worker.id} value={worker.id} disabled={Boolean(form.machine && worker.qualifications.length && !worker.qualifications.includes(form.machine))}>{displayName(worker)} · {worker.qualifications.join(', ') || worker.roleName}</option>)}
+            </select>
           </div>
           <div>
             <label>{t.common.start}</label>
@@ -102,81 +95,11 @@ export default function MachineSchedule() {
         {t.machines.sharedNote}
       </p>
 
-      <div style={{ marginTop: 8, overflowX: 'auto' }}>
-        {jobs.length === 0 ? (
-          <p className="subtitle-text" style={{ fontSize: 13 }}>{t.machines.noJobs}</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t.machines.machine}</th>
-                <th>{t.machines.order}</th>
-                <th>{t.machines.operator}</th>
-                <th>{t.common.start}</th>
-                <th>{t.common.end}</th>
-                <th>{t.machines.hours}</th>
-                <th>{t.common.status}</th>
-                <th>{t.common.progressLabel}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <tr key={job.id}>
-                  <td>{job.machine}</td>
-                  <td>{job.order}</td>
-                  <td>{job.operator}</td>
-                  <td>{job.start ? new Date(job.start).toLocaleString() : '-'}</td>
-                  <td>{job.end ? new Date(job.end).toLocaleString() : '-'}</td>
-                  <td>{durationHours(job.start, job.end)}</td>
-                  <td>
-                    <select
-                      value={job.status}
-                      style={{ width: 'auto' }}
-                      onChange={(e) => updateJob(job.id, { status: e.target.value as JobStatus })}
-                    >
-                      {(['planned', 'inProgress', 'done', 'delayed'] as JobStatus[]).map((s) => (
-                        <option key={s} value={s}>
-                          {t.progress.statusOptions[s]}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div className="progress-bar-track" style={{ width: 60 }}>
-                        <div className="progress-bar-fill" style={{ width: `${job.progress}%` }} />
-                      </div>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={job.progress}
-                        style={{ width: 55 }}
-                        onChange={(e) =>
-                          updateJob(job.id, {
-                            progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
-                          })
-                        }
-                      />
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-red"
-                      style={{ padding: '4px 10px', fontSize: 11 }}
-                      onClick={() => removeJob(job.id)}
-                    >
-                      <IconTrash style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
-                      {t.common.remove}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div className="step-title" style={{ marginTop: 20 }}>
+        <span className="step-number">2</span>
+        {t.machines.title}
       </div>
+      <MachineBoard />
     </div>
   );
 }

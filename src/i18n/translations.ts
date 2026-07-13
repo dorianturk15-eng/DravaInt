@@ -63,6 +63,26 @@ export interface TranslationShape {
     typeLathe: string;
     axisShort: string;
   };
+  machineBoard: {
+    zoomHour: string;
+    zoomShift: string;
+    zoomDay: string;
+    zoomWeek: string;
+    sortByName: string;
+    sortByLoad: string;
+    connectMode: string;
+    connectModeHint: string;
+    scrollToday: string;
+    emptyLane: string;
+    undo: string;
+    redo: string;
+    conflicts: string;
+    deleteConnection: string;
+    cycleBlocked: string;
+    dropInvalidSelf: string;
+    dropInvalidDuplicate: string;
+    dragHint: string;
+  };
   progress: {
     title: string;
     subtitle: string;
@@ -243,6 +263,26 @@ export const translations: Record<Lang, TranslationShape> = {
       typeLathe: 'Tokarilica',
       axisShort: 'osna',
     },
+    machineBoard: {
+      zoomHour: 'Sat',
+      zoomShift: 'Smjena',
+      zoomDay: 'Dan',
+      zoomWeek: 'Tjedan',
+      sortByName: 'Naziv',
+      sortByLoad: 'Opterećenje',
+      connectMode: 'Način povezivanja',
+      connectModeHint: 'Dodirnite izvorni nalog, zatim ciljni nalog za stvaranje ovisnosti.',
+      scrollToday: 'Danas',
+      emptyLane: 'Nema naloga na ovom stroju.',
+      undo: 'Poništi',
+      redo: 'Ponovi',
+      conflicts: 'Upozorenja',
+      deleteConnection: 'Ukloni vezu',
+      cycleBlocked: 'Ova veza stvara kružnu ovisnost.',
+      dropInvalidSelf: 'Nalog se ne može povezati sam sa sobom.',
+      dropInvalidDuplicate: 'Ova veza već postoji.',
+      dragHint: 'Povucite karticu za promjenu termina ili stroja. Povucite iz ruba kartice za povezivanje naloga.',
+    },
     progress: {
       title: 'Praćenje napretka',
       subtitle: 'Pregled statusa svih aktivnih zadataka i naloga.',
@@ -420,6 +460,26 @@ export const translations: Record<Lang, TranslationShape> = {
       typeMill: 'Mill',
       typeLathe: 'Lathe',
       axisShort: 'axis',
+    },
+    machineBoard: {
+      zoomHour: 'Hour',
+      zoomShift: 'Shift',
+      zoomDay: 'Day',
+      zoomWeek: 'Week',
+      sortByName: 'Name',
+      sortByLoad: 'Load',
+      connectMode: 'Connect mode',
+      connectModeHint: 'Tap a source order, then a target order to create a dependency.',
+      scrollToday: 'Today',
+      emptyLane: 'No jobs on this machine.',
+      undo: 'Undo',
+      redo: 'Redo',
+      conflicts: 'Warnings',
+      deleteConnection: 'Remove link',
+      cycleBlocked: 'This link would create a dependency cycle.',
+      dropInvalidSelf: 'A job cannot link to itself.',
+      dropInvalidDuplicate: 'This link already exists.',
+      dragHint: 'Drag a card to reschedule or reassign it. Drag from a card edge to link two orders.',
     },
     progress: {
       title: 'Progress Monitoring',

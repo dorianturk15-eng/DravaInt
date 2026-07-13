@@ -1,39 +1,55 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark';
+export type ThemePreference = Theme | 'system';
 
 const STORAGE_KEY = 'dravaint-theme';
 
 interface ThemeContextValue {
   theme: Theme;
+  preference: ThemePreference;
   setTheme: (theme: Theme) => void;
+  setPreference: (preference: ThemePreference) => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
+  const [preference, setPreferenceState] = useState<ThemePreference>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'dark' || stored === 'light') return stored;
-    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return stored === 'dark' || stored === 'light' || stored === 'system' ? stored : 'system';
   });
+  const getSystemTheme = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const [theme, setThemeState] = useState<Theme>(() => preference === 'system' ? getSystemTheme() : preference);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const apply = () => setThemeState(preference === 'system' ? getSystemTheme() : preference);
+    apply();
+    media?.addEventListener('change', apply);
+    return () => media?.removeEventListener('change', apply);
+  }, [preference]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   function setTheme(next: Theme) {
-    setThemeState(next);
+    setPreference(next);
+  }
+
+  function setPreference(next: ThemePreference) {
+    setPreferenceState(next);
     localStorage.setItem(STORAGE_KEY, next);
   }
 
   function toggleTheme() {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+    setPreference(theme === 'light' ? 'dark' : 'light');
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, preference, setTheme, setPreference, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

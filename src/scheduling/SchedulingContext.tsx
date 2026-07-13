@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../supabase/client';
+import { getJobConflicts, type JobConflicts } from './cpm';
+import { enqueueMutation } from '../sync/offlineQueue';
 
 export type JobStatus = 'planned' | 'inProgress' | 'done' | 'delayed';
 
@@ -23,6 +25,8 @@ export interface Job {
   machine: string;
   order: string;
   operator: string;
+  operatorId?: number | null;
+  product?: string;
   start: string; // datetime-local string
   end: string; // datetime-local string
   status: JobStatus;
@@ -31,6 +35,10 @@ export interface Job {
   operations?: OperationStep[];
   dependencies?: Dependency[];
   parentId?: number | null;
+  comments?: string;
+  setupHours?: number;
+  materialStatus?: 'ready' | 'waiting' | 'delayed';
+  version?: number;
 }
 
 interface JobRow {
@@ -38,6 +46,8 @@ interface JobRow {
   machine: string;
   job_order: string;
   operator: string;
+  operator_id?: number | null;
+  product_description?: string | null;
   start_time: string;
   end_time: string;
   status: JobStatus;
@@ -46,6 +56,10 @@ interface JobRow {
   operations: OperationStep[] | null;
   dependencies: Dependency[] | null;
   parent_id: number | null;
+  comments?: string | null;
+  setup_hours?: number | null;
+  material_status?: 'ready' | 'waiting' | 'delayed' | null;
+  version?: number | null;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -54,6 +68,8 @@ function rowToJob(row: JobRow): Job {
     machine: row.machine,
     order: row.job_order,
     operator: row.operator,
+    operatorId: row.operator_id ?? null,
+    product: row.product_description ?? '',
     start: row.start_time,
     end: row.end_time,
     status: row.status,
@@ -62,6 +78,10 @@ function rowToJob(row: JobRow): Job {
     operations: row.operations ?? undefined,
     dependencies: row.dependencies ?? undefined,
     parentId: row.parent_id ?? undefined,
+    comments: row.comments ?? '',
+    setupHours: row.setup_hours ?? 0,
+    materialStatus: row.material_status ?? 'ready',
+    version: row.version ?? 1,
   };
 }
 
@@ -228,11 +248,21 @@ function saveFallbackJobs(jobs: Job[]) {
 
 let nextFallbackId = 1000;
 
+/** Custom Postgres errcode raised by validate_job_assignment() on a genuine machine/operator double-booking (see supabase/schema.sql). */
+const SLOT_TAKEN_ERRCODE = 'DR001';
+
+export type UpdateResult =
+  | { ok: true }
+  | { ok: false; reason: 'version-conflict' | 'rejected' | 'offline'; message?: string };
+
 interface SchedulingContextValue {
   jobs: Job[];
-  addJob: (job: Omit<Job, 'id' | 'color' | 'status' | 'progress'>) => Promise<void>;
-  updateJob: (id: number, patch: Partial<Job>) => Promise<void>;
+  loading: boolean;
+  addJob: (job: Omit<Job, 'id' | 'color' | 'status' | 'progress'>) => Promise<UpdateResult>;
+  updateJob: (id: number, patch: Partial<Job>) => Promise<UpdateResult>;
   removeJob: (id: number) => Promise<void>;
+  restoreBackup: (newJobs: Job[]) => Promise<void>;
+  getJobConflicts: (job: Job) => JobConflicts;
 }
 
 const SchedulingContext = createContext<SchedulingContextValue | null>(null);
@@ -244,6 +274,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     nextFallbackId = Math.max(nextFallbackId, ...loaded.map((j) => j.id + 1));
     return loaded;
   });
+  const [loading, setLoading] = useState(Boolean(supabase));
 
   useEffect(() => {
     if (!supabase) return;
@@ -251,6 +282,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     async function loadJobs() {
       const { data, error } = await supabase!.from('jobs').select('*').order('id');
       if (!error && data) setJobs((data as JobRow[]).map(rowToJob));
+      setLoading(false);
     }
     loadJobs();
 
@@ -264,14 +296,16 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function addJob(job: Omit<Job, 'id' | 'color' | 'status' | 'progress'>) {
+  async function addJob(job: Omit<Job, 'id' | 'color' | 'status' | 'progress'>): Promise<UpdateResult> {
     const color = COLORS[jobs.length % COLORS.length];
 
     if (supabase) {
-      await supabase.from('jobs').insert({
+      const payload = {
         machine: job.machine,
         job_order: job.order,
         operator: job.operator,
+        operator_id: job.operatorId ?? null,
+        product_description: job.product ?? '',
         start_time: job.start,
         end_time: job.end,
         status: 'planned',
@@ -280,22 +314,35 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         operations: job.operations ?? null,
         dependencies: job.dependencies ?? null,
         parent_id: job.parentId ?? null,
-      });
-    } else {
-      setJobs((prev) => {
-        const next = [...prev, { ...job, id: nextFallbackId++, status: 'planned' as JobStatus, progress: 0, color }];
-        saveFallbackJobs(next);
-        return next;
-      });
+        comments: job.comments ?? '',
+        setup_hours: job.setupHours ?? 0,
+        material_status: job.materialStatus ?? 'ready',
+      };
+      const { error } = await supabase.from('jobs').insert(payload);
+      if (error) {
+        if (error.code === SLOT_TAKEN_ERRCODE) return { ok: false, reason: 'rejected', message: error.message };
+        await enqueueMutation({ table: 'jobs', operation: 'insert', payload });
+        return { ok: false, reason: 'offline', message: error.message };
+      }
+      return { ok: true };
     }
+
+    setJobs((prev) => {
+      const next = [...prev, { ...job, id: nextFallbackId++, status: 'planned' as JobStatus, progress: 0, color }];
+      saveFallbackJobs(next);
+      return next;
+    });
+    return { ok: true };
   }
 
-  async function updateJob(id: number, patch: Partial<Job>) {
+  async function updateJob(id: number, patch: Partial<Job>): Promise<UpdateResult> {
     if (supabase) {
       const dbPatch: Record<string, unknown> = {};
       if (patch.machine !== undefined) dbPatch.machine = patch.machine;
       if (patch.order !== undefined) dbPatch.job_order = patch.order;
       if (patch.operator !== undefined) dbPatch.operator = patch.operator;
+      if (patch.operatorId !== undefined) dbPatch.operator_id = patch.operatorId;
+      if (patch.product !== undefined) dbPatch.product_description = patch.product;
       if (patch.start !== undefined) dbPatch.start_time = patch.start;
       if (patch.end !== undefined) dbPatch.end_time = patch.end;
       if (patch.status !== undefined) dbPatch.status = patch.status;
@@ -304,19 +351,39 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       if (patch.operations !== undefined) dbPatch.operations = patch.operations;
       if (patch.dependencies !== undefined) dbPatch.dependencies = patch.dependencies;
       if (patch.parentId !== undefined) dbPatch.parent_id = patch.parentId;
-      await supabase.from('jobs').update(dbPatch).eq('id', id);
-    } else {
-      setJobs((prev) => {
-        const next = prev.map((j) => (j.id === id ? { ...j, ...patch } : j));
-        saveFallbackJobs(next);
-        return next;
-      });
+      if (patch.comments !== undefined) dbPatch.comments = patch.comments;
+      if (patch.setupHours !== undefined) dbPatch.setup_hours = patch.setupHours;
+      if (patch.materialStatus !== undefined) dbPatch.material_status = patch.materialStatus;
+      dbPatch.version = (jobs.find((job) => job.id === id)?.version ?? 1) + 1;
+      let query = supabase.from('jobs').update(dbPatch).eq('id', id);
+      const expectedVersion = jobs.find((job) => job.id === id)?.version;
+      if (expectedVersion !== undefined) query = query.eq('version', expectedVersion);
+      const { error, data } = await query.select('id');
+      if (error) {
+        if (error.code === SLOT_TAKEN_ERRCODE) return { ok: false, reason: 'rejected', message: error.message };
+        await enqueueMutation({ table: 'jobs', operation: 'update', payload: dbPatch, match: { id } });
+        return { ok: false, reason: 'offline', message: error.message };
+      }
+      if (!data || data.length === 0) {
+        // The version filter matched zero rows: someone else updated this job first. The realtime
+        // channel will refetch the current row shortly; surface this instead of silently no-op'ing.
+        return { ok: false, reason: 'version-conflict' };
+      }
+      return { ok: true };
     }
+
+    setJobs((prev) => {
+      const next = prev.map((j) => (j.id === id ? { ...j, ...patch, version: (j.version ?? 1) + 1 } : j));
+      saveFallbackJobs(next);
+      return next;
+    });
+    return { ok: true };
   }
 
   async function removeJob(id: number) {
     if (supabase) {
-      await supabase.from('jobs').delete().eq('id', id);
+      const { error } = await supabase.from('jobs').delete().eq('id', id);
+      if (error) await enqueueMutation({ table: 'jobs', operation: 'delete', match: { id } });
     } else {
       setJobs((prev) => {
         const next = prev.filter((j) => j.id !== id);
@@ -326,8 +393,42 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function restoreBackup(newJobs: Job[]) {
+    if (!supabase) {
+      setJobs(newJobs);
+      saveFallbackJobs(newJobs);
+      return;
+    }
+
+    // Replay real writes for anything that changed or was removed since the snapshot, so undo/redo
+    // actually persists instead of only rewinding local state (which the next realtime refresh would
+    // then overwrite). Resurrecting a job deleted since the snapshot isn't supported here: addJob
+    // always mints a new server-side id, which would break any dependency still pointing at the old
+    // one — that case stays local-only via the optimistic setJobs below.
+    const currentById = new Map(jobs.map((job) => [job.id, job]));
+    const targetIds = new Set(newJobs.map((job) => job.id));
+    const replays: Promise<unknown>[] = [];
+
+    for (const target of newJobs) {
+      const current = currentById.get(target.id);
+      if (!current) continue;
+      const patch: Partial<Job> = {};
+      (Object.keys(target) as Array<keyof Job>).forEach((key) => {
+        if (key === 'id' || key === 'version') return;
+        if (JSON.stringify(target[key]) !== JSON.stringify(current[key])) (patch as Record<string, unknown>)[key] = target[key];
+      });
+      if (Object.keys(patch).length > 0) replays.push(updateJob(target.id, patch));
+    }
+    for (const current of jobs) {
+      if (!targetIds.has(current.id)) replays.push(removeJob(current.id));
+    }
+
+    await Promise.all(replays);
+    setJobs(newJobs);
+  }
+
   return (
-    <SchedulingContext.Provider value={{ jobs, addJob, updateJob, removeJob }}>
+    <SchedulingContext.Provider value={{ jobs, loading, addJob, updateJob, removeJob, restoreBackup, getJobConflicts: (job) => getJobConflicts(job, jobs) }}>
       {children}
     </SchedulingContext.Provider>
   );

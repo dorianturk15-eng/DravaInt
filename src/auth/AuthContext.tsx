@@ -1,26 +1,29 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase/client';
+import { isSupabaseConfigured, supabase } from '../supabase/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-const SESSION_KEY = 'dravaint-auth';
-const FALLBACK_STORAGE_KEY = 'dravaint-users-fallback';
+const SESSION_KEY = 'dravaint-offline-auth';
+const FALLBACK_STORAGE_KEY = 'dravaint-offline-users-v2';
 
 export interface StoredUser {
+  id?: string;
   username: string;
+  email: string;
   password: string;
   role: string | null;
+  rfid?: string;
 }
 
 const FALLBACK_USERS: StoredUser[] = [
-  { username: 'dturk', password: '1234', role: null },
-  { username: 'kstankovic', password: 'ks741953', role: null },
+  { username: 'admin', email: 'admin@dravaint.local', password: 'DravaInt!2026', role: 'admin', rfid: '10001' },
+  { username: 'supervisor', email: 'supervisor@dravaint.local', password: 'Workshop!2026', role: 'managers', rfid: '10002' },
 ];
 
 function loadFallbackUsers(): StoredUser[] {
   try {
     const raw = localStorage.getItem(FALLBACK_STORAGE_KEY);
-    if (!raw) return FALLBACK_USERS;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : FALLBACK_USERS;
+    const parsed = raw ? JSON.parse(raw) as StoredUser[] : FALLBACK_USERS;
+    return Array.isArray(parsed) && parsed.length ? parsed : FALLBACK_USERS;
   } catch {
     return FALLBACK_USERS;
   }
@@ -30,160 +33,145 @@ function saveFallbackUsers(users: StoredUser[]) {
   localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(users));
 }
 
+export function isStrongPassword(value: string) {
+  return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
+}
+
 interface AuthContextValue {
   isAuthenticated: boolean;
   username: string | null;
   users: StoredUser[];
   loading: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  secureMode: boolean;
+  login: (identifier: string, password: string) => Promise<boolean>;
+  loginWithRfid: (badge: string) => Promise<boolean>;
+  loginWithSso: () => Promise<boolean>;
+  logout: () => Promise<void>;
   addUser: (username: string, password: string, role: string | null) => Promise<boolean>;
-  updateUser: (
-    originalUsername: string,
-    username: string,
-    password: string,
-    role: string | null,
-  ) => Promise<boolean>;
+  updateUser: (originalUsername: string, username: string, password: string, role: string | null) => Promise<boolean>;
   deleteUser: (username: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<StoredUser[]>(() => (supabase ? FALLBACK_USERS : loadFallbackUsers()));
-  const [loading, setLoading] = useState(isSupabaseConfigured);
-  const [username, setUsername] = useState<string | null>(() =>
-    sessionStorage.getItem(SESSION_KEY),
-  );
+  const queryClient = useQueryClient();
+  const [fallbackUsers, setFallbackUsers] = useState<StoredUser[]>(loadFallbackUsers);
+  const [sessionLoading, setSessionLoading] = useState(isSupabaseConfigured);
+  const [username, setUsername] = useState<string | null>(() => isSupabaseConfigured ? null : sessionStorage.getItem(SESSION_KEY));
+  const profilesQuery = useQuery({
+    queryKey: ['profiles'],
+    enabled: Boolean(supabase),
+    queryFn: async () => {
+      const { data, error } = await supabase!.from('profiles').select('id,username,email,role,rfid_code').order('username');
+      if (error) throw error;
+      return data.map((profile) => ({ id: profile.id, username: profile.username, email: profile.email ?? '', role: profile.role ?? 'workers', password: '', rfid: profile.rfid_code ?? undefined }));
+    },
+  });
+  const users = supabase ? (profilesQuery.data ?? []) : fallbackUsers;
+  const loading = isSupabaseConfigured ? sessionLoading || profilesQuery.isLoading : false;
 
   useEffect(() => {
     if (!supabase) return;
+    const client = supabase;
+    void client.auth.getSession().then((sessionResult) => {
+      const user = sessionResult.data.session?.user;
+      if (user) setUsername(String(user.user_metadata.username ?? user.email?.split('@')[0] ?? 'user'));
+      setSessionLoading(false);
+    });
+    const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
+      setUsername(user ? String(user.user_metadata.username ?? user.email?.split('@')[0] ?? 'user') : null);
+      if (user) void queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      setSessionLoading(false);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, [queryClient]);
 
-    async function loadUsers() {
-      const { data, error } = await supabase!
-        .from('app_users')
-        .select('username,password,role')
-        .order('id');
-      if (!error && data) setUsers(data);
-      setLoading(false);
+  async function login(identifier: string, password: string) {
+    const normalized = identifier.trim().toLowerCase();
+    if (!normalized || !password) return false;
+    if (supabase) {
+      const profile = users.find((user) => user.username.toLowerCase() === normalized);
+      const email = normalized.includes('@') ? normalized : profile?.email || `${normalized}@dravaint.local`;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return !error;
     }
-    loadUsers();
-
-    const channel = supabase
-      .channel('app_users-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, loadUsers)
-      .subscribe();
-
-    return () => {
-      supabase!.removeChannel(channel);
-    };
-  }, []);
-
-  async function login(user: string, password: string): Promise<boolean> {
-    const found = users.find((u) => u.username === user && u.password === password);
-    if (found) {
-      sessionStorage.setItem(SESSION_KEY, found.username);
-      setUsername(found.username);
-      return true;
-    }
-    return false;
+    const found = users.find((user) => (user.username.toLowerCase() === normalized || user.email.toLowerCase() === normalized) && user.password === password);
+    if (!found) return false;
+    sessionStorage.setItem(SESSION_KEY, found.username);
+    setUsername(found.username);
+    return true;
   }
 
-  function logout() {
+  async function loginWithRfid(badge: string) {
+    const profile = users.find((user) => user.rfid?.toLowerCase() === badge.trim().toLowerCase());
+    if (!profile || supabase) return false;
+    sessionStorage.setItem(SESSION_KEY, profile.username);
+    setUsername(profile.username);
+    return true;
+  }
+
+  async function loginWithSso() {
+    if (!supabase) return false;
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'azure', options: { redirectTo: window.location.origin } });
+    return !error;
+  }
+
+  async function logout() {
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem('dravaint-session-locked');
+    if (supabase) await supabase.auth.signOut();
     setUsername(null);
   }
 
-  async function addUser(newUsername: string, password: string, role: string | null): Promise<boolean> {
+  async function invokeAdmin(action: string, payload: Record<string, unknown>) {
+    if (!supabase) return false;
+    const { error } = await supabase.functions.invoke('admin-users', { body: { action, ...payload } });
+    if (!error) await queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    return !error;
+  }
+
+  async function addUser(newUsername: string, password: string, role: string | null) {
     const trimmed = newUsername.trim();
-    if (!trimmed || !password) return false;
-    if (users.some((u) => u.username.toLowerCase() === trimmed.toLowerCase())) return false;
-
-    if (supabase) {
-      const { error } = await supabase.from('app_users').insert({ username: trimmed, password, role });
-      if (error) return false;
-    } else {
-      setUsers((prev) => {
-        const next = [...prev, { username: trimmed, password, role }];
-        saveFallbackUsers(next);
-        return next;
-      });
-    }
+    if (!trimmed || !isStrongPassword(password) || users.some((user) => user.username.toLowerCase() === trimmed.toLowerCase())) return false;
+    if (supabase) return invokeAdmin('create', { username: trimmed, email: `${trimmed}@dravaint.local`, password, role: role ?? 'workers' });
+    const next = [...users, { username: trimmed, email: `${trimmed}@dravaint.local`, password, role: role ?? 'workers' }];
+    setFallbackUsers(next);
+    saveFallbackUsers(next);
     return true;
   }
 
-  async function updateUser(
-    originalUsername: string,
-    newUsername: string,
-    password: string,
-    role: string | null,
-  ): Promise<boolean> {
-    const trimmed = newUsername.trim();
-    if (!trimmed || !password) return false;
-    const clash = users.some(
-      (u) => u.username.toLowerCase() === trimmed.toLowerCase() && u.username !== originalUsername,
-    );
-    if (clash) return false;
-
-    if (supabase) {
-      const { error } = await supabase
-        .from('app_users')
-        .update({ username: trimmed, password, role })
-        .eq('username', originalUsername);
-      if (error) return false;
-    } else {
-      setUsers((prev) => {
-        const next = prev.map((u) => (u.username === originalUsername ? { username: trimmed, password, role } : u));
-        saveFallbackUsers(next);
-        return next;
-      });
-    }
-
-    if (username === originalUsername) {
-      sessionStorage.setItem(SESSION_KEY, trimmed);
-      setUsername(trimmed);
-    }
+  async function updateUser(originalUsername: string, nextUsername: string, password: string, role: string | null) {
+    const trimmed = nextUsername.trim();
+    const original = users.find((user) => user.username === originalUsername);
+    if (!original || !trimmed || (password && !isStrongPassword(password))) return false;
+    if (users.some((user) => user.username.toLowerCase() === trimmed.toLowerCase() && user.username !== originalUsername)) return false;
+    if (supabase) return invokeAdmin('update', { id: original.id, username: trimmed, password: password || undefined, role: role ?? 'workers' });
+    const next = users.map((user) => user.username === originalUsername ? { ...user, username: trimmed, email: `${trimmed}@dravaint.local`, password: password || user.password, role } : user);
+    setFallbackUsers(next);
+    saveFallbackUsers(next);
+    if (username === originalUsername) { sessionStorage.setItem(SESSION_KEY, trimmed); setUsername(trimmed); }
     return true;
   }
 
-  async function deleteUser(targetUsername: string): Promise<boolean> {
-    if (users.length <= 1) return false;
-    if (targetUsername === username) return false;
-
-    if (supabase) {
-      const { error } = await supabase.from('app_users').delete().eq('username', targetUsername);
-      if (error) return false;
-    } else {
-      setUsers((prev) => {
-        const next = prev.filter((u) => u.username !== targetUsername);
-        saveFallbackUsers(next);
-        return next;
-      });
-    }
+  async function deleteUser(targetUsername: string) {
+    if (targetUsername === username || users.length <= 1) return false;
+    const target = users.find((user) => user.username === targetUsername);
+    if (!target) return false;
+    if (supabase) return invokeAdmin('delete', { id: target.id });
+    const next = users.filter((user) => user.username !== targetUsername);
+    setFallbackUsers(next);
+    saveFallbackUsers(next);
     return true;
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated: !!username,
-        username,
-        users,
-        loading,
-        login,
-        logout,
-        addUser,
-        updateUser,
-        deleteUser,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value: AuthContextValue = { isAuthenticated: Boolean(username), username, users, loading, secureMode: isSupabaseConfigured, login, loginWithRfid, loginWithSso, logout, addUser, updateUser, deleteUser };
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
 }

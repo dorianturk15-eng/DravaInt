@@ -1,0 +1,19 @@
+{
+  "name": "DravaInt Production OS",
+  "short_name": "DravaInt",
+  "description": "Production planning, shift scheduling, and workshop operations.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#071222",
+  "theme_color": "#071222",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
