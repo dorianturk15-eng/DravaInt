@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { supabase } from '../supabase/client';
 
-const STORAGE_KEY = 'dravaint-logo';
+const LOGO_KEY = 'logo';
 const DEFAULT_FAVICON =
   document.querySelector<HTMLLinkElement>("link[rel='icon']")?.getAttribute('href') ?? '/favicon.svg';
 
@@ -19,18 +20,35 @@ function applyFavicon(dataUrl: string | null) {
 }
 
 export function LogoProvider({ children }: { children: ReactNode }) {
-  const [logo, setLogoState] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY));
+  const [logo, setLogoState] = useState<string | null>(null);
 
   useEffect(() => {
     applyFavicon(logo);
   }, [logo]);
 
-  function setLogo(dataUrl: string | null) {
+  useEffect(() => {
+    if (!supabase) return;
+
+    async function loadLogo() {
+      const { data } = await supabase!.from('app_settings').select('value').eq('key', LOGO_KEY).maybeSingle();
+      setLogoState(data?.value ?? null);
+    }
+    loadLogo();
+
+    const channel = supabase
+      .channel('app_settings-logo-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, loadLogo)
+      .subscribe();
+
+    return () => {
+      supabase!.removeChannel(channel);
+    };
+  }, []);
+
+  async function setLogo(dataUrl: string | null) {
     setLogoState(dataUrl);
-    if (dataUrl) {
-      localStorage.setItem(STORAGE_KEY, dataUrl);
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
+    if (supabase) {
+      await supabase.from('app_settings').upsert({ key: LOGO_KEY, value: dataUrl });
     }
   }
 
@@ -42,3 +60,4 @@ export function useLogo() {
   if (!ctx) throw new Error('useLogo must be used within LogoProvider');
   return ctx;
 }
+

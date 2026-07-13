@@ -1,51 +1,57 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { supabase, isSupabaseConfigured } from '../supabase/client';
 
 const SESSION_KEY = 'dravaint-auth';
-const USERS_KEY = 'dravaint-users';
 
 export interface StoredUser {
   username: string;
   password: string;
 }
 
-const DEFAULT_USERS: StoredUser[] = [{ username: 'dturk', password: '1234' }];
-
-function loadUsers(): StoredUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    if (!raw) return DEFAULT_USERS;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    return DEFAULT_USERS;
-  } catch {
-    return DEFAULT_USERS;
-  }
-}
-
-function saveUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
+const FALLBACK_USERS: StoredUser[] = [{ username: 'dturk', password: '1234' }];
 
 interface AuthContextValue {
   isAuthenticated: boolean;
   username: string | null;
   users: StoredUser[];
-  login: (username: string, password: string) => boolean;
+  loading: boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  addUser: (username: string, password: string) => boolean;
-  updateUser: (originalUsername: string, username: string, password: string) => boolean;
-  deleteUser: (username: string) => boolean;
+  addUser: (username: string, password: string) => Promise<boolean>;
+  updateUser: (originalUsername: string, username: string, password: string) => Promise<boolean>;
+  deleteUser: (username: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<StoredUser[]>(() => loadUsers());
+  const [users, setUsers] = useState<StoredUser[]>(FALLBACK_USERS);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
   const [username, setUsername] = useState<string | null>(() =>
     sessionStorage.getItem(SESSION_KEY),
   );
 
-  function login(user: string, password: string): boolean {
+  useEffect(() => {
+    if (!supabase) return;
+
+    async function loadUsers() {
+      const { data, error } = await supabase!.from('app_users').select('username,password').order('id');
+      if (!error && data) setUsers(data);
+      setLoading(false);
+    }
+    loadUsers();
+
+    const channel = supabase
+      .channel('app_users-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, loadUsers)
+      .subscribe();
+
+    return () => {
+      supabase!.removeChannel(channel);
+    };
+  }, []);
+
+  async function login(user: string, password: string): Promise<boolean> {
     const found = users.find((u) => u.username === user && u.password === password);
     if (found) {
       sessionStorage.setItem(SESSION_KEY, found.username);
@@ -60,28 +66,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsername(null);
   }
 
-  function addUser(newUsername: string, password: string): boolean {
+  async function addUser(newUsername: string, password: string): Promise<boolean> {
     const trimmed = newUsername.trim();
     if (!trimmed || !password) return false;
     if (users.some((u) => u.username.toLowerCase() === trimmed.toLowerCase())) return false;
-    const next = [...users, { username: trimmed, password }];
-    setUsers(next);
-    saveUsers(next);
+
+    if (supabase) {
+      const { error } = await supabase.from('app_users').insert({ username: trimmed, password });
+      if (error) return false;
+    } else {
+      setUsers((prev) => [...prev, { username: trimmed, password }]);
+    }
     return true;
   }
 
-  function updateUser(originalUsername: string, newUsername: string, password: string): boolean {
+  async function updateUser(
+    originalUsername: string,
+    newUsername: string,
+    password: string,
+  ): Promise<boolean> {
     const trimmed = newUsername.trim();
     if (!trimmed || !password) return false;
     const clash = users.some(
       (u) => u.username.toLowerCase() === trimmed.toLowerCase() && u.username !== originalUsername,
     );
     if (clash) return false;
-    const next = users.map((u) =>
-      u.username === originalUsername ? { username: trimmed, password } : u,
-    );
-    setUsers(next);
-    saveUsers(next);
+
+    if (supabase) {
+      const { error } = await supabase
+        .from('app_users')
+        .update({ username: trimmed, password })
+        .eq('username', originalUsername);
+      if (error) return false;
+    } else {
+      setUsers((prev) =>
+        prev.map((u) => (u.username === originalUsername ? { username: trimmed, password } : u)),
+      );
+    }
+
     if (username === originalUsername) {
       sessionStorage.setItem(SESSION_KEY, trimmed);
       setUsername(trimmed);
@@ -89,12 +111,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }
 
-  function deleteUser(targetUsername: string): boolean {
+  async function deleteUser(targetUsername: string): Promise<boolean> {
     if (users.length <= 1) return false;
     if (targetUsername === username) return false;
-    const next = users.filter((u) => u.username !== targetUsername);
-    setUsers(next);
-    saveUsers(next);
+
+    if (supabase) {
+      const { error } = await supabase.from('app_users').delete().eq('username', targetUsername);
+      if (error) return false;
+    } else {
+      setUsers((prev) => prev.filter((u) => u.username !== targetUsername));
+    }
     return true;
   }
 
@@ -104,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!username,
         username,
         users,
+        loading,
         login,
         logout,
         addUser,

@@ -46,20 +46,14 @@ export default function Admin() {
     setUserError('');
   }
 
-  function submitUser() {
+  async function submitUser() {
     setUserError('');
-    if (editingUsername) {
-      const ok = updateUser(editingUsername, newUsername, newPassword);
-      if (!ok) {
-        setUserError(t.admin.userExists);
-        return;
-      }
-    } else {
-      const ok = addUser(newUsername, newPassword);
-      if (!ok) {
-        setUserError(t.admin.userExists);
-        return;
-      }
+    const ok = editingUsername
+      ? await updateUser(editingUsername, newUsername, newPassword)
+      : await addUser(newUsername, newPassword);
+    if (!ok) {
+      setUserError(t.admin.userExists);
+      return;
     }
     resetUserForm();
   }
@@ -71,7 +65,7 @@ export default function Admin() {
     setUserError('');
   }
 
-  function handleDelete(username: string) {
+  async function handleDelete(username: string) {
     setUserError('');
     if (username === currentUsername) {
       setUserError(t.admin.cannotDeleteSelf);
@@ -81,7 +75,7 @@ export default function Admin() {
       setUserError(t.admin.cannotDeleteLast);
       return;
     }
-    deleteUser(username);
+    await deleteUser(username);
     if (editingUsername === username) resetUserForm();
   }
 
