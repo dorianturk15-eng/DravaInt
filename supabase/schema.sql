@@ -11,7 +11,9 @@ create table if not exists app_users (
 );
 
 insert into app_users (username, password)
-values ('dturk', '1234')
+values
+  ('dturk', '1234'),
+  ('kstankovic', 'ks741953')
 on conflict (username) do nothing;
 
 create table if not exists app_settings (

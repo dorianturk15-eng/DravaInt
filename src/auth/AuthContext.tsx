@@ -8,7 +8,10 @@ export interface StoredUser {
   password: string;
 }
 
-const FALLBACK_USERS: StoredUser[] = [{ username: 'dturk', password: '1234' }];
+const FALLBACK_USERS: StoredUser[] = [
+  { username: 'dturk', password: '1234' },
+  { username: 'kstankovic', password: 'ks741953' },
+];
 
 interface AuthContextValue {
   isAuthenticated: boolean;
