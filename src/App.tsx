@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import './App.css';
 import { useLanguage } from './i18n/LanguageContext';
 import { useAuth } from './auth/AuthContext';
 import { useTheme } from './theme/ThemeContext';
+import { IconCalendar, IconGear, IconChart, IconGantt, IconShield, IconSun, IconMoon, IconLogout } from './components/Icons';
 import ShiftSchedule from './pages/ShiftSchedule';
 import MachineSchedule from './pages/MachineSchedule';
 import ProgressMonitoring from './pages/ProgressMonitoring';
@@ -26,12 +27,12 @@ function App() {
 
   const isAdmin = username === ADMIN_USERNAME;
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'shifts', label: t.nav.shifts },
-    { key: 'machines', label: t.nav.machines },
-    { key: 'progress', label: t.nav.progress },
-    { key: 'gantt', label: t.nav.gantt },
-    ...(isAdmin ? [{ key: 'admin' as Tab, label: t.nav.admin }] : []),
+  const tabs: { key: Tab; label: string; icon: ReactElement }[] = [
+    { key: 'shifts', label: t.nav.shifts, icon: <IconCalendar /> },
+    { key: 'machines', label: t.nav.machines, icon: <IconGear /> },
+    { key: 'progress', label: t.nav.progress, icon: <IconChart /> },
+    { key: 'gantt', label: t.nav.gantt, icon: <IconGantt /> },
+    ...(isAdmin ? [{ key: 'admin' as Tab, label: t.nav.admin, icon: <IconShield /> }] : []),
   ];
 
   return (
@@ -45,6 +46,7 @@ function App() {
               className={`tab-btn${tab === tabItem.key ? ' active' : ''}`}
               onClick={() => setTab(tabItem.key)}
             >
+              <span style={{ marginRight: 6, verticalAlign: -3, display: 'inline-flex' }}>{tabItem.icon}</span>
               {tabItem.label}
             </button>
           ))}
@@ -58,11 +60,16 @@ function App() {
           </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button className="theme-toggle-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
-            {theme === 'dark' ? '☀️' : '🌙'}
+          <button
+            className="theme-toggle-btn"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            {theme === 'dark' ? <IconSun /> : <IconMoon />}
           </button>
           <span style={{ fontSize: 12, color: '#cbd5e1' }}>{username}</span>
           <button className="logout-btn" onClick={logout}>
+            <IconLogout style={{ marginRight: 5, verticalAlign: -3 }} />
             {t.login.logout}
           </button>
         </div>

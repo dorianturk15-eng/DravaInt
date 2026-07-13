@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { IconPlus, IconTrash } from '../components/Icons';
 
 type Status = 'planned' | 'inProgress' | 'done' | 'delayed';
 
@@ -44,7 +45,7 @@ export default function ProgressMonitoring() {
   return (
     <div className="wizard-container">
       <h2 style={{ marginBottom: 5 }}>{t.progress.title}</h2>
-      <p style={{ margin: '0 0 20px 0', fontSize: 13, color: '#64748b' }}>{t.progress.subtitle}</p>
+      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.progress.subtitle}</p>
 
       <div className="step-box">
         <div className="step-title">
@@ -61,6 +62,7 @@ export default function ProgressMonitoring() {
             />
           </div>
           <button className="btn btn-green" onClick={addTask}>
+            <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
             {t.common.add}
           </button>
         </div>
@@ -119,6 +121,7 @@ export default function ProgressMonitoring() {
                     style={{ padding: '4px 10px', fontSize: 11 }}
                     onClick={() => removeTask(task.id)}
                   >
+                    <IconTrash style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
                     {t.common.remove}
                   </button>
                 </td>

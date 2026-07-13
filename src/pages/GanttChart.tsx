@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { IconPlus, IconTrash } from '../components/Icons';
 
 interface GanttTask {
   id: number;
@@ -72,7 +73,7 @@ export default function GanttChart() {
   return (
     <div className="wizard-container">
       <h2 style={{ marginBottom: 5 }}>{t.gantt.title}</h2>
-      <p style={{ margin: '0 0 20px 0', fontSize: 13, color: '#64748b' }}>{t.gantt.subtitle}</p>
+      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.gantt.subtitle}</p>
 
       <div className="step-box">
         <div className="step-title">
@@ -97,6 +98,7 @@ export default function GanttChart() {
 
       <div className="action-bar">
         <button className="btn btn-green" onClick={addTask}>
+          <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
           {t.common.add}
         </button>
       </div>
@@ -127,10 +129,10 @@ export default function GanttChart() {
                   {task.name}
                   <button
                     className="btn btn-red"
-                    style={{ padding: '2px 8px', fontSize: 10, width: 'auto', marginLeft: 'auto' }}
+                    style={{ padding: '3px 8px', width: 'auto', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}
                     onClick={() => removeTask(task.id)}
                   >
-                    ✕
+                    <IconTrash style={{ width: 12, height: 12 }} />
                   </button>
                 </div>
                 <div

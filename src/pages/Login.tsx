@@ -28,7 +28,7 @@ export default function Login() {
 
       <form className="wizard-container login-card" onSubmit={handleSubmit}>
         <h2 style={{ marginBottom: 5 }}>{t.login.title}</h2>
-        <p style={{ margin: '0 0 20px 0', fontSize: 13, color: '#64748b' }}>{t.login.subtitle}</p>
+        <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.login.subtitle}</p>
 
         <div className="step-box">
           <label>{t.login.username}</label>

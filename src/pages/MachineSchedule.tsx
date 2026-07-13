@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { IconPlus, IconTrash } from '../components/Icons';
 
 interface MachineJob {
   id: number;
@@ -42,7 +43,7 @@ export default function MachineSchedule() {
   return (
     <div className="wizard-container">
       <h2 style={{ marginBottom: 5 }}>{t.machines.title}</h2>
-      <p style={{ margin: '0 0 20px 0', fontSize: 13, color: '#64748b' }}>{t.machines.subtitle}</p>
+      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.machines.subtitle}</p>
 
       <div className="step-box">
         <div className="step-title">
@@ -97,13 +98,14 @@ export default function MachineSchedule() {
 
       <div className="action-bar">
         <button className="btn btn-green" onClick={addJob}>
+          <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
           {t.common.add}
         </button>
       </div>
 
       <div style={{ marginTop: 20, overflowX: 'auto' }}>
         {jobs.length === 0 ? (
-          <p style={{ color: '#64748b', fontSize: 13 }}>{t.machines.noJobs}</p>
+          <p className="subtitle-text" style={{ fontSize: 13 }}>{t.machines.noJobs}</p>
         ) : (
           <table className="data-table">
             <thead>
@@ -132,6 +134,7 @@ export default function MachineSchedule() {
                       style={{ padding: '4px 10px', fontSize: 11 }}
                       onClick={() => removeJob(job.id)}
                     >
+                      <IconTrash style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
                       {t.common.remove}
                     </button>
                   </td>

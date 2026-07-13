@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
-import { useLogo } from '../logo/LogoContext';
+import { IconRefresh, IconPrint } from '../components/Icons';
 
 function formatDate(date: Date): string {
   const d = date.getDate();
@@ -38,9 +38,7 @@ export default function ShiftSchedule() {
   const [weekCount, setWeekCount] = useState(6);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const { logo, setLogo } = useLogo();
   const [weeks, setWeeks] = useState<WeekCell[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const docDate = useMemo(() => formatDate(new Date()), []);
 
@@ -84,14 +82,6 @@ export default function ShiftSchedule() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleLogo(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setLogo(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  }
-
   const rows: WeekCell[][] = [];
   for (let i = 0; i < weeks.length; i += 3) {
     rows.push(weeks.slice(i, i + 3));
@@ -107,21 +97,13 @@ export default function ShiftSchedule() {
     <>
       <div className="wizard-container">
         <h2 style={{ marginBottom: 5 }}>{t.shifts.wizardTitle}</h2>
-        <p style={{ margin: '0 0 20px 0', fontSize: 13, color: '#64748b' }}>
+        <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>
           {t.shifts.wizardSubtitle}
         </p>
 
         <div className="step-box">
           <div className="step-title">
             <span className="step-number">1</span>
-            {t.shifts.step1}
-          </div>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogo} />
-        </div>
-
-        <div className="step-box">
-          <div className="step-title">
-            <span className="step-number">2</span>
             {t.shifts.step2}
           </div>
           <div className="grid-inputs workers-ruster">
@@ -146,7 +128,7 @@ export default function ShiftSchedule() {
 
         <div className="step-box">
           <div className="step-title">
-            <span className="step-number">3</span>
+            <span className="step-number">2</span>
             {t.shifts.step3}
           </div>
           <div className="grid-inputs time-settings">
@@ -175,10 +157,12 @@ export default function ShiftSchedule() {
 
         <div className="action-bar">
           <button className="btn btn-green" onClick={generateSchedule}>
+            <IconRefresh style={{ marginRight: 6, verticalAlign: -3 }} />
             {t.common.calculate}
           </button>
           <div style={{ width: 10, height: 10 }} />
           <button className="btn btn-blue" onClick={() => window.print()}>
+            <IconPrint style={{ marginRight: 6, verticalAlign: -3 }} />
             {t.common.print}
           </button>
         </div>
@@ -186,22 +170,7 @@ export default function ShiftSchedule() {
 
       <div className="print-preview-scroll">
         <div className="print-document">
-          <table className="header-table">
-            <tbody>
-              <tr>
-                <td>
-                  <h1 className="doc-title">{t.shifts.docTitle}</h1>
-                </td>
-                <td className="logo-container">
-                  {logo ? (
-                    <img src={logo} className="logo-img" alt="Logo" />
-                  ) : (
-                    <span className="logo-placeholder">{t.shifts.logoMissing}</span>
-                  )}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <h1 className="doc-title">{t.shifts.docTitle}</h1>
 
           <table className="meta-table">
             <tbody>

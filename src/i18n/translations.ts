@@ -28,7 +28,6 @@ export interface TranslationShape {
   shifts: {
     wizardTitle: string;
     wizardSubtitle: string;
-    step1: string;
     step2: string;
     step3: string;
     base: string;
@@ -39,7 +38,6 @@ export interface TranslationShape {
     weekCount: string;
     startDate: string;
     docTitle: string;
-    logoMissing: string;
     dept: string;
     author: string;
     week: string;
@@ -118,8 +116,8 @@ export const translations: Record<Lang, TranslationShape> = {
       admin: 'Administracija',
     },
     common: {
-      calculate: '🔄 1. Izračunaj i ažuriraj',
-      print: '🖨️ 2. Isprintaj / PDF',
+      calculate: '1. Izračunaj i ažuriraj',
+      print: '2. Isprintaj / PDF',
       add: 'Dodaj',
       remove: 'Ukloni',
       save: 'Spremi',
@@ -136,7 +134,6 @@ export const translations: Record<Lang, TranslationShape> = {
     shifts: {
       wizardTitle: 'Čarobnjak za izradu rasporeda',
       wizardSubtitle: 'Prilagođeno za sve ekrane. Unesite podatke i isprintajte A4 dokument.',
-      step1: 'Učitajte logotip tvrtke',
       step2: 'Provjerite popise radnika',
       step3: 'Postavke tjedana i datuma',
       base: 'Mijenjaju 2. smjenu (1 po 1):',
@@ -147,7 +144,6 @@ export const translations: Record<Lang, TranslationShape> = {
       weekCount: 'Koliko tjedana napraviti:',
       startDate: 'Datum početka (od):',
       docTitle: 'Raspored smjena',
-      logoMissing: 'Logotip nije učitan (korak 1)',
       dept: 'Alatnica',
       author: 'Dorian Turk',
       week: 'TJEDAN',
@@ -224,8 +220,8 @@ export const translations: Record<Lang, TranslationShape> = {
       admin: 'Admin',
     },
     common: {
-      calculate: '🔄 1. Calculate and update',
-      print: '🖨️ 2. Print / PDF',
+      calculate: '1. Calculate and update',
+      print: '2. Print / PDF',
       add: 'Add',
       remove: 'Remove',
       save: 'Save',
@@ -242,7 +238,6 @@ export const translations: Record<Lang, TranslationShape> = {
     shifts: {
       wizardTitle: 'Schedule Generator Wizard',
       wizardSubtitle: 'Adapted for all screens. Enter the data and print the A4 document.',
-      step1: 'Upload company logo',
       step2: 'Check worker lists',
       step3: 'Week and date settings',
       base: 'Rotate 2nd shift (1 by 1):',
@@ -253,7 +248,6 @@ export const translations: Record<Lang, TranslationShape> = {
       weekCount: 'How many weeks to generate:',
       startDate: 'Start date (from):',
       docTitle: 'Shift Schedule',
-      logoMissing: 'Logo not uploaded (step 1)',
       dept: 'Toolshop',
       author: 'Dorian Turk',
       week: 'WEEK',

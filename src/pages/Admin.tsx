@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
 import { useAuth } from '../auth/AuthContext';
+import { IconUpload, IconTrash, IconEdit, IconPlus } from '../components/Icons';
 
 export default function Admin() {
   const { t } = useLanguage();
@@ -87,7 +88,7 @@ export default function Admin() {
   return (
     <div className="wizard-container">
       <h2 style={{ marginBottom: 5 }}>{t.admin.title}</h2>
-      <p style={{ margin: '0 0 20px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>
         {t.admin.subtitle}
       </p>
 
@@ -103,15 +104,17 @@ export default function Admin() {
           {pendingLogo ? (
             <img src={pendingLogo} alt="Logo" style={{ maxHeight: 60, background: 'white', padding: 6, borderRadius: 6 }} />
           ) : (
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t.admin.noLogo}</span>
+            <span className="subtitle-text" style={{ fontSize: 13 }}>{t.admin.noLogo}</span>
           )}
         </div>
 
         <div className="action-bar" style={{ justifyContent: 'flex-start' }}>
           <button className="btn btn-green" onClick={saveLogo}>
+            <IconUpload style={{ marginRight: 6, verticalAlign: -3 }} />
             {t.admin.save}
           </button>
           <button className="btn btn-red" onClick={clearLogo}>
+            <IconTrash style={{ marginRight: 6, verticalAlign: -3 }} />
             {t.admin.clear}
           </button>
         </div>
@@ -135,6 +138,11 @@ export default function Admin() {
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
             <button className="btn btn-blue" onClick={submitUser}>
+              {editingUsername ? (
+                <IconEdit style={{ marginRight: 6, verticalAlign: -3 }} />
+              ) : (
+                <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
+              )}
               {editingUsername ? t.admin.editUser : t.admin.addUser}
             </button>
             {editingUsername && (
@@ -166,6 +174,7 @@ export default function Admin() {
                       style={{ padding: '4px 10px', fontSize: 11 }}
                       onClick={() => startEdit(u.username, u.password)}
                     >
+                      <IconEdit style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
                       {t.admin.edit}
                     </button>
                     <button
@@ -173,6 +182,7 @@ export default function Admin() {
                       style={{ padding: '4px 10px', fontSize: 11 }}
                       onClick={() => handleDelete(u.username)}
                     >
+                      <IconTrash style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
                       {t.admin.delete}
                     </button>
                   </td>
