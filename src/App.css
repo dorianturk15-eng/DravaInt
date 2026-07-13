@@ -643,6 +643,13 @@ select {
   overflow-x: auto;
 }
 
+.gantt-lib-wrapper {
+  margin-top: 10px;
+  overflow-x: auto;
+  background: var(--bg-card);
+  border-radius: 8px;
+}
+
 .gantt-grid {
   display: grid;
   min-width: 700px;

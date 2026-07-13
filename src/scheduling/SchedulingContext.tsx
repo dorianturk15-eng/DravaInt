@@ -106,6 +106,23 @@ const FALLBACK_JOBS: Job[] = [
   },
 ];
 
+const FALLBACK_STORAGE_KEY = 'dravaint-jobs-fallback';
+
+function loadFallbackJobs(): Job[] {
+  try {
+    const raw = localStorage.getItem(FALLBACK_STORAGE_KEY);
+    if (!raw) return FALLBACK_JOBS;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : FALLBACK_JOBS;
+  } catch {
+    return FALLBACK_JOBS;
+  }
+}
+
+function saveFallbackJobs(jobs: Job[]) {
+  localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(jobs));
+}
+
 let nextFallbackId = 1000;
 
 interface SchedulingContextValue {
@@ -118,7 +135,12 @@ interface SchedulingContextValue {
 const SchedulingContext = createContext<SchedulingContextValue | null>(null);
 
 export function SchedulingProvider({ children }: { children: ReactNode }) {
-  const [jobs, setJobs] = useState<Job[]>(FALLBACK_JOBS);
+  const [jobs, setJobs] = useState<Job[]>(() => {
+    if (supabase) return FALLBACK_JOBS;
+    const loaded = loadFallbackJobs();
+    nextFallbackId = Math.max(nextFallbackId, ...loaded.map((j) => j.id + 1));
+    return loaded;
+  });
 
   useEffect(() => {
     if (!supabase) return;
@@ -156,10 +178,11 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         dependencies: job.dependencies ?? null,
       });
     } else {
-      setJobs((prev) => [
-        ...prev,
-        { ...job, id: nextFallbackId++, status: 'planned', progress: 0, color },
-      ]);
+      setJobs((prev) => {
+        const next = [...prev, { ...job, id: nextFallbackId++, status: 'planned' as JobStatus, progress: 0, color }];
+        saveFallbackJobs(next);
+        return next;
+      });
     }
   }
 
@@ -178,7 +201,11 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       if (patch.dependencies !== undefined) dbPatch.dependencies = patch.dependencies;
       await supabase.from('jobs').update(dbPatch).eq('id', id);
     } else {
-      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
+      setJobs((prev) => {
+        const next = prev.map((j) => (j.id === id ? { ...j, ...patch } : j));
+        saveFallbackJobs(next);
+        return next;
+      });
     }
   }
 
@@ -186,7 +213,11 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     if (supabase) {
       await supabase.from('jobs').delete().eq('id', id);
     } else {
-      setJobs((prev) => prev.filter((j) => j.id !== id));
+      setJobs((prev) => {
+        const next = prev.filter((j) => j.id !== id);
+        saveFallbackJobs(next);
+        return next;
+      });
     }
   }
 

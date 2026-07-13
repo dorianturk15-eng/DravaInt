@@ -24,6 +24,23 @@ const FALLBACK_MACHINES: Machine[] = [
   { id: 3, name: 'Tokarilica-1', type: 'lathe', axis: null },
 ];
 
+const FALLBACK_STORAGE_KEY = 'dravaint-machines-fallback';
+
+function loadFallbackMachines(): Machine[] {
+  try {
+    const raw = localStorage.getItem(FALLBACK_STORAGE_KEY);
+    if (!raw) return FALLBACK_MACHINES;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : FALLBACK_MACHINES;
+  } catch {
+    return FALLBACK_MACHINES;
+  }
+}
+
+function saveFallbackMachines(machines: Machine[]) {
+  localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(machines));
+}
+
 let nextFallbackId = 1000;
 
 interface MachinesContextValue {
@@ -36,7 +53,12 @@ interface MachinesContextValue {
 const MachinesContext = createContext<MachinesContextValue | null>(null);
 
 export function MachinesProvider({ children }: { children: ReactNode }) {
-  const [machines, setMachines] = useState<Machine[]>(FALLBACK_MACHINES);
+  const [machines, setMachines] = useState<Machine[]>(() => {
+    if (supabase) return FALLBACK_MACHINES;
+    const loaded = loadFallbackMachines();
+    nextFallbackId = Math.max(nextFallbackId, ...loaded.map((m) => m.id + 1));
+    return loaded;
+  });
 
   useEffect(() => {
     if (!supabase) return;
@@ -67,7 +89,11 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('machines').insert({ name: trimmed, type: machine.type, axis });
       if (error) return false;
     } else {
-      setMachines((prev) => [...prev, { id: nextFallbackId++, name: trimmed, type: machine.type, axis }]);
+      setMachines((prev) => {
+        const next = [...prev, { id: nextFallbackId++, name: trimmed, type: machine.type, axis }];
+        saveFallbackMachines(next);
+        return next;
+      });
     }
     return true;
   }
@@ -85,7 +111,11 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('machines').update(patch).eq('id', id);
       if (error) return false;
     } else {
-      setMachines((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+      setMachines((prev) => {
+        const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m));
+        saveFallbackMachines(next);
+        return next;
+      });
     }
     return true;
   }
@@ -94,7 +124,11 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     if (supabase) {
       await supabase.from('machines').delete().eq('id', id);
     } else {
-      setMachines((prev) => prev.filter((m) => m.id !== id));
+      setMachines((prev) => {
+        const next = prev.filter((m) => m.id !== id);
+        saveFallbackMachines(next);
+        return next;
+      });
     }
   }
 

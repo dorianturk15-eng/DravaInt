@@ -1,6 +1,8 @@
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Gantt, ViewMode, type Task } from 'gantt-task-react';
+import 'gantt-task-react/dist/index.css';
 import { useLanguage } from '../i18n/LanguageContext';
-import { IconPlus, IconTrash } from '../components/Icons';
+import { IconPlus } from '../components/Icons';
 import { useScheduling, type JobStatus, type DependencyType } from '../scheduling/SchedulingContext';
 import { computeEffectiveSchedule, computeCriticalPath, jobsToScheduleInput } from '../scheduling/cpm';
 
@@ -13,18 +15,11 @@ const STATUS_COLORS: Record<JobStatus, string> = {
 
 const DEPENDENCY_TYPES: DependencyType[] = ['FS', 'SS', 'FF', 'SF'];
 
-function dateOnly(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function addDays(d: Date, days: number) {
-  const copy = new Date(d);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-function diffDays(a: Date, b: Date) {
-  return Math.round((dateOnly(b).getTime() - dateOnly(a).getTime()) / 86400000);
+function toLocalDateTimeString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )}`;
 }
 
 export default function GanttChart() {
@@ -34,29 +29,35 @@ export default function GanttChart() {
   const [form, setForm] = useState({ name: '', start: '', end: '' });
   const [depForm, setDepForm] = useState({ jobId: '', predecessorId: '', type: 'FS' as DependencyType, lagHours: '0' });
   const [depError, setDepError] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Day);
 
   const validJobs = jobs.filter((j) => j.start && j.end);
-
   const scheduleInput = useMemo(() => jobsToScheduleInput(validJobs), [validJobs]);
   const effective = useMemo(() => computeEffectiveSchedule(scheduleInput), [scheduleInput]);
   const criticalIds = useMemo(() => computeCriticalPath(scheduleInput, effective), [scheduleInput, effective]);
   const hasAnyDependency = validJobs.some((j) => (j.dependencies?.length ?? 0) > 0);
 
-  const { rangeStart, totalDays } = useMemo(() => {
-    if (validJobs.length === 0) {
-      const today = dateOnly(new Date());
-      return { rangeStart: today, totalDays: 14 };
-    }
-    const starts = validJobs.map((j) => dateOnly(new Date(effective.get(j.id)?.start ?? new Date(j.start).getTime())));
-    const ends = validJobs.map((j) => dateOnly(new Date(effective.get(j.id)?.end ?? new Date(j.end).getTime())));
-    const min = new Date(Math.min(...starts.map((d) => d.getTime())));
-    const max = new Date(Math.max(...ends.map((d) => d.getTime())));
-    const days = Math.max(diffDays(min, max) + 1, 7);
-    return { rangeStart: min, totalDays: days };
-  }, [validJobs, effective]);
-
-  const today = dateOnly(new Date());
-  const todayOffset = diffDays(rangeStart, today);
+  const tasks: Task[] = validJobs.map((job) => {
+    const eff = effective.get(job.id);
+    const start = eff ? new Date(eff.start) : new Date(job.start);
+    const end = eff ? new Date(eff.end) : new Date(job.end);
+    const isCritical = criticalIds.has(job.id);
+    return {
+      id: String(job.id),
+      type: 'task',
+      name: job.order || job.machine || `#${job.id}`,
+      start,
+      end: end > start ? end : new Date(start.getTime() + 3600000),
+      progress: job.progress,
+      dependencies: (job.dependencies ?? []).map((d) => String(d.jobId)),
+      styles: {
+        backgroundColor: isCritical ? '#dc2626' : STATUS_COLORS[job.status],
+        backgroundSelectedColor: isCritical ? '#b91c1c' : STATUS_COLORS[job.status],
+        progressColor: 'rgba(0,0,0,0.35)',
+        progressSelectedColor: 'rgba(0,0,0,0.45)',
+      },
+    };
+  });
 
   function handleAdd() {
     if (!form.name || !form.start || !form.end) return;
@@ -68,6 +69,22 @@ export default function GanttChart() {
       end: `${form.end}T00:00`,
     });
     setForm({ name: '', start: '', end: '' });
+  }
+
+  function handleDateChange(task: Task) {
+    updateJob(Number(task.id), {
+      start: toLocalDateTimeString(task.start),
+      end: toLocalDateTimeString(task.end),
+    });
+  }
+
+  function handleProgressChange(task: Task) {
+    updateJob(Number(task.id), { progress: Math.round(task.progress) });
+  }
+
+  function handleDelete(task: Task): boolean {
+    removeJob(Number(task.id));
+    return true;
   }
 
   function addDependency() {
@@ -94,16 +111,12 @@ export default function GanttChart() {
     updateJob(jobId, { dependencies: (job.dependencies ?? []).filter((d) => d.jobId !== predecessorId) });
   }
 
-  const dayWidth = 28;
-  const rowHeight = 34;
   const typeLabel: Record<DependencyType, string> = {
     FS: t.gantt.typeFS,
     SS: t.gantt.typeSS,
     FF: t.gantt.typeFF,
     SF: t.gantt.typeSF,
   };
-
-  const rowIndex = new Map(validJobs.map((j, i) => [j.id, i]));
 
   return (
     <div className="wizard-container">
@@ -232,113 +245,29 @@ export default function GanttChart() {
         </p>
       )}
 
-      <div className="gantt-wrapper" style={{ marginTop: 10 }}>
-        <div
-          className="gantt-grid"
-          style={{ gridTemplateColumns: `200px repeat(${totalDays}, ${dayWidth}px)`, position: 'relative' }}
-        >
-          <div className="gantt-header-cell" style={{ textAlign: 'left', paddingLeft: 10 }}>
-            {t.progress.task}
-          </div>
-          {Array.from({ length: totalDays }).map((_, i) => {
-            const day = addDays(rangeStart, i);
-            return (
-              <div className="gantt-header-cell" key={i}>
-                {day.getDate()}/{day.getMonth() + 1}
-              </div>
-            );
-          })}
-
-          {validJobs.map((job) => {
-            const eff = effective.get(job.id);
-            const jobStart = eff ? new Date(eff.start) : new Date(job.start);
-            const jobEnd = eff ? new Date(eff.end) : new Date(job.end);
-            const startOffset = diffDays(rangeStart, dateOnly(jobStart));
-            const length = diffDays(jobStart, jobEnd) + 1;
-            const label = job.order || job.machine;
-            const isCritical = criticalIds.has(job.id);
-            return (
-              <Fragment key={job.id}>
-                <div className="gantt-row-label">
-                  {label}
-                  <button
-                    className="btn btn-red"
-                    style={{ padding: '3px 8px', width: 'auto', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}
-                    onClick={() => removeJob(job.id)}
-                  >
-                    <IconTrash style={{ width: 12, height: 12 }} />
-                  </button>
-                </div>
-                <div
-                  className="gantt-row-track"
-                  style={{ gridColumn: `2 / span ${totalDays}`, position: 'relative' }}
-                >
-                  <div
-                    className="gantt-bar"
-                    style={{
-                      left: startOffset * dayWidth,
-                      width: Math.max(length, 1) * dayWidth - 4,
-                      background: `${STATUS_COLORS[job.status]}55`,
-                      border: isCritical ? '2px solid #dc2626' : `1px solid ${STATUS_COLORS[job.status]}`,
-                    }}
-                  >
-                    <div
-                      className="gantt-bar-fill"
-                      style={{ width: `${job.progress}%`, background: STATUS_COLORS[job.status] }}
-                    />
-                    <span className="gantt-bar-label">{label}</span>
-                  </div>
-                  {todayOffset >= 0 && todayOffset < totalDays && (
-                    <div className="gantt-today-line" style={{ left: todayOffset * dayWidth }} title={t.gantt.today} />
-                  )}
-                </div>
-              </Fragment>
-            );
-          })}
-
-          <svg
-            style={{
-              position: 'absolute',
-              top: rowHeight,
-              left: 200,
-              width: totalDays * dayWidth,
-              height: validJobs.length * rowHeight,
-              pointerEvents: 'none',
-            }}
-          >
-            {validJobs.flatMap((job) =>
-              (job.dependencies ?? []).map((dep) => {
-                const predRow = rowIndex.get(dep.jobId);
-                const succRow = rowIndex.get(job.id);
-                const predEff = effective.get(dep.jobId);
-                const succEff = effective.get(job.id);
-                if (predRow === undefined || succRow === undefined || !predEff || !succEff) return null;
-                const predEndOffset = diffDays(rangeStart, dateOnly(new Date(predEff.end)));
-                const succStartOffset = diffDays(rangeStart, dateOnly(new Date(succEff.start)));
-                const x1 = predEndOffset * dayWidth;
-                const y1 = predRow * rowHeight + rowHeight / 2;
-                const x2 = succStartOffset * dayWidth;
-                const y2 = succRow * rowHeight + rowHeight / 2;
-                return (
-                  <path
-                    key={`${job.id}-${dep.jobId}`}
-                    d={`M ${x1} ${y1} L ${(x1 + x2) / 2} ${y1} L ${(x1 + x2) / 2} ${y2} L ${x2} ${y2}`}
-                    stroke="#94a3b8"
-                    strokeWidth={1.5}
-                    fill="none"
-                    markerEnd="url(#gantt-arrow)"
-                  />
-                );
-              }),
-            )}
-            <defs>
-              <marker id="gantt-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
-              </marker>
-            </defs>
-          </svg>
-        </div>
+      <div className="view-toggle" style={{ marginTop: 20 }}>
+        {[ViewMode.Day, ViewMode.Week, ViewMode.Month].map((mode) => (
+          <button key={mode} className={viewMode === mode ? 'active' : ''} onClick={() => setViewMode(mode)}>
+            {mode}
+          </button>
+        ))}
       </div>
+
+      {tasks.length === 0 ? (
+        <p className="subtitle-text" style={{ fontSize: 13 }}>{t.machines.noJobs}</p>
+      ) : (
+        <div className="gantt-lib-wrapper">
+          <Gantt
+            tasks={tasks}
+            viewMode={viewMode}
+            onDateChange={handleDateChange}
+            onProgressChange={handleProgressChange}
+            onDelete={handleDelete}
+            columnWidth={viewMode === ViewMode.Month ? 300 : viewMode === ViewMode.Week ? 250 : 65}
+            todayColor="rgba(220, 38, 38, 0.15)"
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase } from '../supabase/client';
 
 const LOGO_KEY = 'logo';
+const FALLBACK_STORAGE_KEY = 'dravaint-logo-fallback';
 const DEFAULT_FAVICON =
   document.querySelector<HTMLLinkElement>("link[rel='icon']")?.getAttribute('href') ?? '/favicon.svg';
 
@@ -20,7 +21,9 @@ function applyFavicon(dataUrl: string | null) {
 }
 
 export function LogoProvider({ children }: { children: ReactNode }) {
-  const [logo, setLogoState] = useState<string | null>(null);
+  const [logo, setLogoState] = useState<string | null>(() =>
+    supabase ? null : localStorage.getItem(FALLBACK_STORAGE_KEY),
+  );
 
   useEffect(() => {
     applyFavicon(logo);
@@ -49,6 +52,10 @@ export function LogoProvider({ children }: { children: ReactNode }) {
     setLogoState(dataUrl);
     if (supabase) {
       await supabase.from('app_settings').upsert({ key: LOGO_KEY, value: dataUrl });
+    } else if (dataUrl) {
+      localStorage.setItem(FALLBACK_STORAGE_KEY, dataUrl);
+    } else {
+      localStorage.removeItem(FALLBACK_STORAGE_KEY);
     }
   }
 
@@ -60,4 +67,3 @@ export function useLogo() {
   if (!ctx) throw new Error('useLogo must be used within LogoProvider');
   return ctx;
 }
-

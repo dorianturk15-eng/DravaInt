@@ -26,19 +26,46 @@ interface WeekCell {
   secondShiftExtra: string[];
 }
 
+const STORAGE_KEY = 'dravaint-shift-schedule';
+
+const DEFAULTS = {
+  base: 'Božidar B.\nPerica B.\nNenad S.\nToni P.\nIvica B.',
+  always1: 'Goran Ć.\nAlen M.\nDamir M.\nKrunoslav S.\nDorian T.',
+  g1: 'Matej B.\nAnthony Đ.',
+  g2: 'Tihomir M.\nDarko N.\nMatej P.',
+  startWeek: 29,
+  weekCount: 6,
+};
+
+function loadStoredState(): typeof DEFAULTS {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULTS;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULTS, ...parsed };
+  } catch {
+    return DEFAULTS;
+  }
+}
+
 export default function ShiftSchedule() {
   const { t } = useLanguage();
+  const stored = useMemo(() => loadStoredState(), []);
 
-  const [base, setBase] = useState('Božidar B.\nPerica B.\nNenad S.\nToni P.\nIvica B.');
-  const [always1, setAlways1] = useState('Goran Ć.\nAlen M.\nDamir M.\nKrunoslav S.\nDorian T.');
-  const [g1, setG1] = useState('Matej B.\nAnthony Đ.');
-  const [g2, setG2] = useState('Tihomir M.\nDarko N.\nMatej P.');
+  const [base, setBase] = useState(stored.base);
+  const [always1, setAlways1] = useState(stored.always1);
+  const [g1, setG1] = useState(stored.g1);
+  const [g2, setG2] = useState(stored.g2);
 
-  const [startWeek, setStartWeek] = useState(29);
-  const [weekCount, setWeekCount] = useState(6);
+  const [startWeek, setStartWeek] = useState(stored.startWeek);
+  const [weekCount, setWeekCount] = useState(stored.weekCount);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const [weeks, setWeeks] = useState<WeekCell[]>([]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ base, always1, g1, g2, startWeek, weekCount }));
+  }, [base, always1, g1, g2, startWeek, weekCount]);
 
   const docDate = useMemo(() => formatDate(new Date()), []);
 

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase, isSupabaseConfigured } from '../supabase/client';
 
 const SESSION_KEY = 'dravaint-auth';
+const FALLBACK_STORAGE_KEY = 'dravaint-users-fallback';
 
 export interface StoredUser {
   username: string;
@@ -13,6 +14,21 @@ const FALLBACK_USERS: StoredUser[] = [
   { username: 'dturk', password: '1234', role: null },
   { username: 'kstankovic', password: 'ks741953', role: null },
 ];
+
+function loadFallbackUsers(): StoredUser[] {
+  try {
+    const raw = localStorage.getItem(FALLBACK_STORAGE_KEY);
+    if (!raw) return FALLBACK_USERS;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : FALLBACK_USERS;
+  } catch {
+    return FALLBACK_USERS;
+  }
+}
+
+function saveFallbackUsers(users: StoredUser[]) {
+  localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(users));
+}
 
 interface AuthContextValue {
   isAuthenticated: boolean;
@@ -34,7 +50,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<StoredUser[]>(FALLBACK_USERS);
+  const [users, setUsers] = useState<StoredUser[]>(() => (supabase ? FALLBACK_USERS : loadFallbackUsers()));
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [username, setUsername] = useState<string | null>(() =>
     sessionStorage.getItem(SESSION_KEY),
@@ -87,7 +103,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('app_users').insert({ username: trimmed, password, role });
       if (error) return false;
     } else {
-      setUsers((prev) => [...prev, { username: trimmed, password, role }]);
+      setUsers((prev) => {
+        const next = [...prev, { username: trimmed, password, role }];
+        saveFallbackUsers(next);
+        return next;
+      });
     }
     return true;
   }
@@ -112,9 +132,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('username', originalUsername);
       if (error) return false;
     } else {
-      setUsers((prev) =>
-        prev.map((u) => (u.username === originalUsername ? { username: trimmed, password, role } : u)),
-      );
+      setUsers((prev) => {
+        const next = prev.map((u) => (u.username === originalUsername ? { username: trimmed, password, role } : u));
+        saveFallbackUsers(next);
+        return next;
+      });
     }
 
     if (username === originalUsername) {
@@ -132,7 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('app_users').delete().eq('username', targetUsername);
       if (error) return false;
     } else {
-      setUsers((prev) => prev.filter((u) => u.username !== targetUsername));
+      setUsers((prev) => {
+        const next = prev.filter((u) => u.username !== targetUsername);
+        saveFallbackUsers(next);
+        return next;
+      });
     }
     return true;
   }

@@ -13,6 +13,23 @@ const FALLBACK_ROLES: Role[] = [
   { id: 4, name: 'CNC Programer' },
 ];
 
+const FALLBACK_STORAGE_KEY = 'dravaint-roles-fallback';
+
+function loadFallbackRoles(): Role[] {
+  try {
+    const raw = localStorage.getItem(FALLBACK_STORAGE_KEY);
+    if (!raw) return FALLBACK_ROLES;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : FALLBACK_ROLES;
+  } catch {
+    return FALLBACK_ROLES;
+  }
+}
+
+function saveFallbackRoles(roles: Role[]) {
+  localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(roles));
+}
+
 let nextFallbackId = 1000;
 
 interface RolesContextValue {
@@ -24,7 +41,12 @@ interface RolesContextValue {
 const RolesContext = createContext<RolesContextValue | null>(null);
 
 export function RolesProvider({ children }: { children: ReactNode }) {
-  const [roles, setRoles] = useState<Role[]>(FALLBACK_ROLES);
+  const [roles, setRoles] = useState<Role[]>(() => {
+    if (supabase) return FALLBACK_ROLES;
+    const loaded = loadFallbackRoles();
+    nextFallbackId = Math.max(nextFallbackId, ...loaded.map((r) => r.id + 1));
+    return loaded;
+  });
 
   useEffect(() => {
     if (!supabase) return;
@@ -54,7 +76,11 @@ export function RolesProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.from('roles').insert({ name: trimmed });
       if (error) return false;
     } else {
-      setRoles((prev) => [...prev, { id: nextFallbackId++, name: trimmed }]);
+      setRoles((prev) => {
+        const next = [...prev, { id: nextFallbackId++, name: trimmed }];
+        saveFallbackRoles(next);
+        return next;
+      });
     }
     return true;
   }
@@ -63,7 +89,11 @@ export function RolesProvider({ children }: { children: ReactNode }) {
     if (supabase) {
       await supabase.from('roles').delete().eq('id', id);
     } else {
-      setRoles((prev) => prev.filter((r) => r.id !== id));
+      setRoles((prev) => {
+        const next = prev.filter((r) => r.id !== id);
+        saveFallbackRoles(next);
+        return next;
+      });
     }
   }
 
