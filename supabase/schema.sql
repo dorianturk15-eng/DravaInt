@@ -68,6 +68,25 @@ create table if not exists jobs (
   created_at timestamptz not null default now()
 );
 
+-- Example work order created via the Work Order Creator's block-diagram route,
+-- so there's a realistic sample in the app right after setup.
+insert into jobs (machine, job_order, operator, start_time, end_time, status, progress, color, operations)
+select
+  'Tokarilica-1 → CNC-2 → Kontrola kvalitete',
+  'RN-2026-021',
+  'Kalup za brizganje (poklopac)',
+  '2026-07-14T06:00',
+  '2026-07-14T17:00',
+  'planned',
+  0,
+  '#16a34a',
+  '[
+    {"id": 1, "name": "Tokarenje", "machine": "Tokarilica-1", "hours": 4},
+    {"id": 2, "name": "Glodanje (5-osno)", "machine": "CNC-2", "hours": 6},
+    {"id": 3, "name": "Završna kontrola", "machine": "Kontrola kvalitete", "hours": 1}
+  ]'::jsonb
+where not exists (select 1 from jobs where job_order = 'RN-2026-021');
+
 -- Row level security: enabled but with permissive policies for the anon key,
 -- since access control is handled in the app itself (simple username/password
 -- gate), not via Supabase Auth. This is fine for a small internal tool but

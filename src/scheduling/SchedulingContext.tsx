@@ -76,6 +76,22 @@ const FALLBACK_JOBS: Job[] = [
     progress: 0,
     color: COLORS[1],
   },
+  {
+    id: 3,
+    machine: 'Tokarilica-1 → CNC-2 → Kontrola kvalitete',
+    order: 'RN-2026-021',
+    operator: 'Kalup za brizganje (poklopac)',
+    start: '2026-07-14T06:00',
+    end: '2026-07-14T17:00',
+    status: 'planned',
+    progress: 0,
+    color: COLORS[2],
+    operations: [
+      { id: 1, name: 'Tokarenje', machine: 'Tokarilica-1', hours: 4 },
+      { id: 2, name: 'Glodanje (5-osno)', machine: 'CNC-2', hours: 6 },
+      { id: 3, name: 'Završna kontrola', machine: 'Kontrola kvalitete', hours: 1 },
+    ],
+  },
 ];
 
 let nextFallbackId = 1000;

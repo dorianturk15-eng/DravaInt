@@ -170,7 +170,7 @@ export default function ShiftSchedule() {
 
       <div className="print-preview-scroll">
         <div className="print-document">
-          <h1 className="doc-title">{t.shifts.docTitle}</h1>
+          <h1 className="doc-title" style={{ marginBottom: 15 }}>{t.shifts.docTitle}</h1>
 
           <table className="meta-table">
             <tbody>

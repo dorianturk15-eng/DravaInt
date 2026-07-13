@@ -1,13 +1,28 @@
 import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
-import { IconPlus, IconTrash } from '../components/Icons';
+import { IconPlus, IconTrash, IconPrint } from '../components/Icons';
 import { useScheduling, type OperationStep } from '../scheduling/SchedulingContext';
+import { useLogo } from '../logo/LogoContext';
 
 let nextOpId = 1;
+
+function formatDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}.`;
+}
+
+function formatDateTime(value: string): string {
+  if (!value) return '-';
+  const d = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${formatDate(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function WorkOrderCreator() {
   const { t } = useLanguage();
   const { jobs, addJob } = useScheduling();
+  const { logo } = useLogo();
+  const [printOrderId, setPrintOrderId] = useState<number | null>(null);
 
   const [orderNumber, setOrderNumber] = useState('');
   const [product, setProduct] = useState('');
@@ -64,8 +79,11 @@ export default function WorkOrderCreator() {
   }
 
   const createdOrders = jobs.filter((j) => j.operations && j.operations.length > 0);
+  const printOrder = createdOrders.find((j) => j.id === printOrderId) ?? null;
+  const printOpsTotal = printOrder?.operations?.reduce((s, op) => s + op.hours, 0) ?? 0;
 
   return (
+    <>
     <div className="wizard-container">
       <h2 style={{ marginBottom: 5 }}>{t.workOrders.title}</h2>
       <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.workOrders.subtitle}</p>
@@ -180,6 +198,7 @@ export default function WorkOrderCreator() {
                 <th>{t.workOrders.product}</th>
                 <th>{t.workOrders.buildRoute}</th>
                 <th>{t.common.status}</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -193,6 +212,16 @@ export default function WorkOrderCreator() {
                       {t.progress.statusOptions[job.status]}
                     </span>
                   </td>
+                  <td>
+                    <button
+                      className="btn btn-blue"
+                      style={{ padding: '4px 10px', fontSize: 11 }}
+                      onClick={() => setPrintOrderId(job.id)}
+                    >
+                      <IconPrint style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
+                      {t.workOrders.print}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -200,5 +229,93 @@ export default function WorkOrderCreator() {
         )}
       </div>
     </div>
+
+    {printOrder && (
+      <div className="print-preview-scroll">
+        <div className="print-document">
+          <table className="header-table">
+            <tbody>
+              <tr>
+                <td>
+                  <h1 className="doc-title">{t.workOrders.printTitle}</h1>
+                </td>
+                <td className="logo-container">
+                  {logo ? <img src={logo} className="logo-img" alt="Logo" /> : null}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table className="meta-table">
+            <tbody>
+              <tr>
+                <td className="meta-label">{t.workOrders.orderNumber.toUpperCase()}:</td>
+                <td className="meta-value">{printOrder.order}</td>
+              </tr>
+              <tr>
+                <td className="meta-label">{t.workOrders.product.toUpperCase()}:</td>
+                <td className="meta-value">{printOrder.operator || '-'}</td>
+              </tr>
+              <tr>
+                <td className="meta-label">{t.common.start.toUpperCase()}:</td>
+                <td className="meta-value">{formatDateTime(printOrder.start)}</td>
+              </tr>
+              <tr>
+                <td className="meta-label">{t.common.end.toUpperCase()}:</td>
+                <td className="meta-value">{formatDateTime(printOrder.end)}</td>
+              </tr>
+              <tr>
+                <td className="meta-label">{t.common.status.toUpperCase()}:</td>
+                <td className="meta-value">{t.progress.statusOptions[printOrder.status]}</td>
+              </tr>
+              <tr>
+                <td className="meta-label">{t.common.documentDate.toUpperCase()}:</td>
+                <td className="meta-value">{formatDate(new Date())}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table className="meta-table">
+            <thead>
+              <tr>
+                <th className="meta-label">{t.workOrders.opNumber}</th>
+                <th className="meta-label">{t.workOrders.operationName}</th>
+                <th className="meta-label">{t.workOrders.operationMachine}</th>
+                <th className="meta-label">{t.workOrders.operationHours}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printOrder.operations?.map((op, i) => (
+                <tr key={op.id}>
+                  <td className="meta-value">{i + 1}</td>
+                  <td className="meta-value">{op.name}</td>
+                  <td className="meta-value">{op.machine}</td>
+                  <td className="meta-value">{op.hours} h</td>
+                </tr>
+              ))}
+              <tr>
+                <td className="meta-value" colSpan={3} style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                  {t.workOrders.totalHours}:
+                </td>
+                <td className="meta-value" style={{ fontWeight: 'bold' }}>
+                  {printOpsTotal} h
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="action-bar no-print" style={{ borderTop: 'none', marginTop: 20 }}>
+            <button className="btn btn-blue" onClick={() => window.print()}>
+              <IconPrint style={{ marginRight: 6, verticalAlign: -3 }} />
+              {t.workOrders.print}
+            </button>
+            <button className="btn btn-red" onClick={() => setPrintOrderId(null)}>
+              {t.workOrders.closePreview}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

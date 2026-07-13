@@ -112,6 +112,10 @@ export interface TranslationShape {
     missingFields: string;
     createdOrders: string;
     noCreatedOrders: string;
+    print: string;
+    printTitle: string;
+    closePreview: string;
+    opNumber: string;
   };
   login: {
     title: string;
@@ -273,6 +277,10 @@ export const translations: Record<Lang, TranslationShape> = {
       missingFields: 'Unesite broj naloga i barem jednu operaciju.',
       createdOrders: 'Kreirani nalozi',
       noCreatedOrders: 'Još nema kreiranih naloga.',
+      print: 'Ispis',
+      printTitle: 'RADNI NALOG',
+      closePreview: 'Zatvori pregled',
+      opNumber: 'R.br.',
     },
     login: {
       title: 'Prijava',
@@ -432,6 +440,10 @@ export const translations: Record<Lang, TranslationShape> = {
       missingFields: 'Enter an order number and at least one operation.',
       createdOrders: 'Created orders',
       noCreatedOrders: 'No orders created yet.',
+      print: 'Print',
+      printTitle: 'WORK ORDER',
+      closePreview: 'Close preview',
+      opNumber: 'No.',
     },
     login: {
       title: 'Sign in',

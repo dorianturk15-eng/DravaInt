@@ -262,6 +262,7 @@ select {
   box-sizing: border-box;
 }
 
+.header-table,
 .meta-table,
 .grid-table,
 .names-list-table {
@@ -269,7 +270,10 @@ select {
   border-collapse: collapse;
 }
 
-.doc-title { margin: 0 0 15px 0; font-size: 24pt; font-weight: bold; color: #000000; }
+.header-table td { vertical-align: bottom; }
+.doc-title { margin: 0; font-size: 24pt; font-weight: bold; color: #000000; }
+.logo-container { text-align: right; width: 40%; }
+.logo-img { max-height: 55px; width: auto; }
 
 .meta-table { margin-bottom: 20px; border: 1px solid #d9e2ec; }
 .meta-table td { border: 1px solid #d9e2ec; padding: 8px 12px; font-size: 10pt; }
@@ -709,6 +713,7 @@ select {
 @media print {
   .wizard-container { display: none !important; }
   .top-nav { display: none !important; }
+  .no-print { display: none !important; }
   body { margin: 0; background: white; }
   .print-preview-scroll { overflow-x: visible; }
   .print-document { border: none; padding: 0; width: 100%; min-width: 100%; }
