@@ -136,6 +136,18 @@ export function IconGantt(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconFlow(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <rect x="2" y="4" width="6" height="6" rx="1" />
+      <rect x="16" y="4" width="6" height="6" rx="1" />
+      <rect x="9" y="15" width="6" height="6" rx="1" />
+      <path d="M8 7h4a4 4 0 0 1 4 4v0" />
+      <path d="M12 15v-4" />
+    </svg>
+  );
+}
+
 export function IconShield(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base(props)}>

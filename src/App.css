@@ -427,6 +427,65 @@ select {
   color: white;
 }
 
+/* Work order flow / block diagram */
+.flow-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.flow-block {
+  background: var(--bg-card);
+  border: 2px solid var(--border-color-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 120px;
+  text-align: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.flow-block .flow-name {
+  font-weight: bold;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.flow-block .flow-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.flow-block .flow-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+}
+
+.flow-arrow {
+  color: var(--border-color-strong);
+  font-size: 20px;
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+
 /* Gantt */
 .gantt-wrapper {
   overflow-x: auto;

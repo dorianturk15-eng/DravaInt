@@ -3,15 +3,16 @@ import './App.css';
 import { useLanguage } from './i18n/LanguageContext';
 import { useAuth } from './auth/AuthContext';
 import { useTheme } from './theme/ThemeContext';
-import { IconCalendar, IconGear, IconChart, IconGantt, IconShield, IconSun, IconMoon, IconLogout } from './components/Icons';
+import { IconCalendar, IconGear, IconChart, IconGantt, IconFlow, IconShield, IconSun, IconMoon, IconLogout } from './components/Icons';
 import ShiftSchedule from './pages/ShiftSchedule';
 import MachineSchedule from './pages/MachineSchedule';
 import ProgressMonitoring from './pages/ProgressMonitoring';
 import GanttChart from './pages/GanttChart';
+import WorkOrderCreator from './pages/WorkOrderCreator';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 
-type Tab = 'shifts' | 'machines' | 'progress' | 'gantt' | 'admin';
+type Tab = 'shifts' | 'machines' | 'progress' | 'gantt' | 'workOrders' | 'admin';
 
 const ADMIN_USERNAME = 'dturk';
 
@@ -30,6 +31,7 @@ function App() {
   const tabs: { key: Tab; label: string; icon: ReactElement }[] = [
     { key: 'shifts', label: t.nav.shifts, icon: <IconCalendar /> },
     { key: 'machines', label: t.nav.machines, icon: <IconGear /> },
+    { key: 'workOrders', label: t.nav.workOrders, icon: <IconFlow /> },
     { key: 'progress', label: t.nav.progress, icon: <IconChart /> },
     { key: 'gantt', label: t.nav.gantt, icon: <IconGantt /> },
     ...(isAdmin ? [{ key: 'admin' as Tab, label: t.nav.admin, icon: <IconShield /> }] : []),
@@ -78,6 +80,7 @@ function App() {
       <div className="page-content">
         {tab === 'shifts' && <ShiftSchedule />}
         {tab === 'machines' && <MachineSchedule />}
+        {tab === 'workOrders' && <WorkOrderCreator />}
         {tab === 'progress' && <ProgressMonitoring />}
         {tab === 'gantt' && <GanttChart />}
         {tab === 'admin' && isAdmin && <Admin />}

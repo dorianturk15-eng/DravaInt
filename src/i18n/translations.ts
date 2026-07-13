@@ -7,6 +7,7 @@ export interface TranslationShape {
     machines: string;
     progress: string;
     gantt: string;
+    workOrders: string;
     admin: string;
   };
   common: {
@@ -54,12 +55,14 @@ export interface TranslationShape {
     addJob: string;
     noJobs: string;
     hours: string;
+    sharedNote: string;
   };
   progress: {
     title: string;
     subtitle: string;
     task: string;
     addTask: string;
+    sharedNote: string;
     statusOptions: {
       planned: string;
       inProgress: string;
@@ -71,6 +74,27 @@ export interface TranslationShape {
     title: string;
     subtitle: string;
     today: string;
+    sharedNote: string;
+  };
+  workOrders: {
+    title: string;
+    subtitle: string;
+    orderInfo: string;
+    orderNumber: string;
+    product: string;
+    startDateTime: string;
+    buildRoute: string;
+    operationName: string;
+    operationMachine: string;
+    operationHours: string;
+    addOperation: string;
+    noOperations: string;
+    totalHours: string;
+    createOrder: string;
+    created: string;
+    missingFields: string;
+    createdOrders: string;
+    noCreatedOrders: string;
   };
   login: {
     title: string;
@@ -113,6 +137,7 @@ export const translations: Record<Lang, TranslationShape> = {
       machines: 'Raspored strojeva',
       progress: 'Praćenje napretka',
       gantt: 'Gantogram',
+      workOrders: 'Kreator radnih naloga',
       admin: 'Administracija',
     },
     common: {
@@ -160,12 +185,14 @@ export const translations: Record<Lang, TranslationShape> = {
       addJob: 'Dodaj nalog',
       noJobs: 'Nema zakazanih naloga.',
       hours: 'h',
+      sharedNote: 'Ovi podaci su zajednički s karticama Praćenje napretka i Gantogram.',
     },
     progress: {
       title: 'Praćenje napretka',
       subtitle: 'Pregled statusa svih aktivnih zadataka i naloga.',
       task: 'Zadatak',
       addTask: 'Dodaj zadatak',
+      sharedNote: 'Podaci su zajednički s Rasporedom strojeva i Gantogramom — izmjene ovdje vidljive su i tamo.',
       statusOptions: {
         planned: 'Planirano',
         inProgress: 'U tijeku',
@@ -177,6 +204,27 @@ export const translations: Record<Lang, TranslationShape> = {
       title: 'Gantogram',
       subtitle: 'Vremenski prikaz svih zadataka i naloga.',
       today: 'Danas',
+      sharedNote: 'Prikazuje iste naloge kao Raspored strojeva i Praćenje napretka.',
+    },
+    workOrders: {
+      title: 'Kreator radnih naloga',
+      subtitle: 'Sastavite slijed operacija (blok dijagram) i od njega izradite radni nalog.',
+      orderInfo: 'Podaci o nalogu',
+      orderNumber: 'Broj naloga',
+      product: 'Proizvod / opis',
+      startDateTime: 'Početak izvođenja',
+      buildRoute: 'Sastavite slijed operacija',
+      operationName: 'Naziv operacije',
+      operationMachine: 'Stroj',
+      operationHours: 'Trajanje (h)',
+      addOperation: 'Dodaj operaciju',
+      noOperations: 'Slijed je prazan. Dodajte prvu operaciju.',
+      totalHours: 'Ukupno trajanje',
+      createOrder: 'Kreiraj radni nalog',
+      created: 'Radni nalog je kreiran i vidljiv je u Rasporedu strojeva, Praćenju napretka i Gantogramu.',
+      missingFields: 'Unesite broj naloga i barem jednu operaciju.',
+      createdOrders: 'Kreirani nalozi',
+      noCreatedOrders: 'Još nema kreiranih naloga.',
     },
     login: {
       title: 'Prijava',
@@ -217,6 +265,7 @@ export const translations: Record<Lang, TranslationShape> = {
       machines: 'Machine Scheduling',
       progress: 'Progress Monitoring',
       gantt: 'Gantt Chart',
+      workOrders: 'Work Order Creator',
       admin: 'Admin',
     },
     common: {
@@ -264,12 +313,14 @@ export const translations: Record<Lang, TranslationShape> = {
       addJob: 'Add job',
       noJobs: 'No jobs scheduled.',
       hours: 'h',
+      sharedNote: 'This data is shared with the Progress Monitoring and Gantt Chart tabs.',
     },
     progress: {
       title: 'Progress Monitoring',
       subtitle: 'Overview of the status of all active tasks and orders.',
       task: 'Task',
       addTask: 'Add task',
+      sharedNote: 'Shared with Machine Scheduling and the Gantt Chart — edits here show up there too.',
       statusOptions: {
         planned: 'Planned',
         inProgress: 'In progress',
@@ -281,6 +332,27 @@ export const translations: Record<Lang, TranslationShape> = {
       title: 'Gantt Chart',
       subtitle: 'Timeline view of all tasks and orders.',
       today: 'Today',
+      sharedNote: 'Shows the same jobs as Machine Scheduling and Progress Monitoring.',
+    },
+    workOrders: {
+      title: 'Work Order Creator',
+      subtitle: 'Build a sequence of operations (block diagram) and turn it into a work order.',
+      orderInfo: 'Order details',
+      orderNumber: 'Order number',
+      product: 'Product / description',
+      startDateTime: 'Start time',
+      buildRoute: 'Build the operation sequence',
+      operationName: 'Operation name',
+      operationMachine: 'Machine',
+      operationHours: 'Duration (h)',
+      addOperation: 'Add operation',
+      noOperations: 'The sequence is empty. Add the first operation.',
+      totalHours: 'Total duration',
+      createOrder: 'Create work order',
+      created: 'Work order created and visible in Machine Scheduling, Progress Monitoring, and the Gantt Chart.',
+      missingFields: 'Enter an order number and at least one operation.',
+      createdOrders: 'Created orders',
+      noCreatedOrders: 'No orders created yet.',
     },
     login: {
       title: 'Sign in',

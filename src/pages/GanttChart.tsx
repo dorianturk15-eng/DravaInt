@@ -1,18 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash } from '../components/Icons';
-
-interface GanttTask {
-  id: number;
-  name: string;
-  start: string; // ISO date
-  end: string; // ISO date
-  color: string;
-}
-
-let nextId = 1;
-
-const COLORS = ['#1a365d', '#2b6cb0', '#16a34a', '#d97706', '#7c3aed', '#dc2626'];
+import { useScheduling } from '../scheduling/SchedulingContext';
 
 function dateOnly(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -30,42 +19,38 @@ function diffDays(a: Date, b: Date) {
 
 export default function GanttChart() {
   const { t } = useLanguage();
-  const [tasks, setTasks] = useState<GanttTask[]>([
-    { id: nextId++, name: 'Nabava sirovine', start: '2026-07-10', end: '2026-07-14', color: COLORS[0] },
-    { id: nextId++, name: 'Izrada kalupa RN-2026-014', start: '2026-07-12', end: '2026-07-20', color: COLORS[1] },
-    { id: nextId++, name: 'Montaža CNC-2', start: '2026-07-15', end: '2026-07-18', color: COLORS[2] },
-    { id: nextId++, name: 'Kontrola kvalitete', start: '2026-07-19', end: '2026-07-24', color: COLORS[3] },
-  ]);
+  const { jobs, addJob, removeJob } = useScheduling();
 
   const [form, setForm] = useState({ name: '', start: '', end: '' });
 
+  const validJobs = jobs.filter((j) => j.start && j.end);
+
   const { rangeStart, totalDays } = useMemo(() => {
-    if (tasks.length === 0) {
+    if (validJobs.length === 0) {
       const today = dateOnly(new Date());
       return { rangeStart: today, totalDays: 14 };
     }
-    const starts = tasks.map((t) => dateOnly(new Date(t.start)));
-    const ends = tasks.map((t) => dateOnly(new Date(t.end)));
+    const starts = validJobs.map((j) => dateOnly(new Date(j.start)));
+    const ends = validJobs.map((j) => dateOnly(new Date(j.end)));
     const min = new Date(Math.min(...starts.map((d) => d.getTime())));
     const max = new Date(Math.max(...ends.map((d) => d.getTime())));
     const days = Math.max(diffDays(min, max) + 1, 7);
     return { rangeStart: min, totalDays: days };
-  }, [tasks]);
+  }, [validJobs]);
 
   const today = dateOnly(new Date());
   const todayOffset = diffDays(rangeStart, today);
 
-  function addTask() {
+  function handleAdd() {
     if (!form.name || !form.start || !form.end) return;
-    setTasks((prev) => [
-      ...prev,
-      { id: nextId++, name: form.name, start: form.start, end: form.end, color: COLORS[prev.length % COLORS.length] },
-    ]);
+    addJob({
+      machine: '',
+      order: form.name,
+      operator: '',
+      start: `${form.start}T00:00`,
+      end: `${form.end}T00:00`,
+    });
     setForm({ name: '', start: '', end: '' });
-  }
-
-  function removeTask(id: number) {
-    setTasks((prev) => prev.filter((task) => task.id !== id));
   }
 
   const dayWidth = 28;
@@ -73,7 +58,8 @@ export default function GanttChart() {
   return (
     <div className="wizard-container">
       <h2 style={{ marginBottom: 5 }}>{t.gantt.title}</h2>
-      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.gantt.subtitle}</p>
+      <p className="subtitle-text" style={{ margin: '0 0 8px 0', fontSize: 13 }}>{t.gantt.subtitle}</p>
+      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 12 }}>{t.gantt.sharedNote}</p>
 
       <div className="step-box">
         <div className="step-title">
@@ -97,7 +83,7 @@ export default function GanttChart() {
       </div>
 
       <div className="action-bar">
-        <button className="btn btn-green" onClick={addTask}>
+        <button className="btn btn-green" onClick={handleAdd}>
           <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
           {t.common.add}
         </button>
@@ -120,17 +106,18 @@ export default function GanttChart() {
             );
           })}
 
-          {tasks.map((task) => {
-            const startOffset = diffDays(rangeStart, dateOnly(new Date(task.start)));
-            const length = diffDays(new Date(task.start), new Date(task.end)) + 1;
+          {validJobs.map((job) => {
+            const startOffset = diffDays(rangeStart, dateOnly(new Date(job.start)));
+            const length = diffDays(new Date(job.start), new Date(job.end)) + 1;
+            const label = job.order || job.machine;
             return (
-              <Fragment key={task.id}>
+              <Fragment key={job.id}>
                 <div className="gantt-row-label">
-                  {task.name}
+                  {label}
                   <button
                     className="btn btn-red"
                     style={{ padding: '3px 8px', width: 'auto', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}
-                    onClick={() => removeTask(task.id)}
+                    onClick={() => removeJob(job.id)}
                   >
                     <IconTrash style={{ width: 12, height: 12 }} />
                   </button>
@@ -144,10 +131,10 @@ export default function GanttChart() {
                     style={{
                       left: startOffset * dayWidth,
                       width: Math.max(length, 1) * dayWidth - 4,
-                      background: task.color,
+                      background: job.color,
                     }}
                   >
-                    {task.name}
+                    {label}
                   </div>
                   {todayOffset >= 0 && todayOffset < totalDays && (
                     <div className="gantt-today-line" style={{ left: todayOffset * dayWidth }} title={t.gantt.today} />

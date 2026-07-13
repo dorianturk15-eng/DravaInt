@@ -1,36 +1,18 @@
 import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash } from '../components/Icons';
-
-interface MachineJob {
-  id: number;
-  machine: string;
-  order: string;
-  operator: string;
-  start: string;
-  end: string;
-}
-
-let nextId = 1;
+import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
 
 export default function MachineSchedule() {
   const { t } = useLanguage();
-  const [jobs, setJobs] = useState<MachineJob[]>([
-    { id: nextId++, machine: 'CNC-1', order: 'RN-2026-014', operator: 'Goran Ć.', start: '2026-07-13T06:00', end: '2026-07-13T14:00' },
-    { id: nextId++, machine: 'CNC-2', order: 'RN-2026-015', operator: 'Alen M.', start: '2026-07-13T14:00', end: '2026-07-13T22:00' },
-    { id: nextId++, machine: 'Glodalica-1', order: 'RN-2026-016', operator: 'Damir M.', start: '2026-07-13T06:00', end: '2026-07-13T13:00' },
-  ]);
+  const { jobs, addJob, updateJob, removeJob } = useScheduling();
 
   const [form, setForm] = useState({ machine: '', order: '', operator: '', start: '', end: '' });
 
-  function addJob() {
+  function handleAdd() {
     if (!form.machine || !form.order) return;
-    setJobs((prev) => [...prev, { id: nextId++, ...form }]);
+    addJob(form);
     setForm({ machine: '', order: '', operator: '', start: '', end: '' });
-  }
-
-  function removeJob(id: number) {
-    setJobs((prev) => prev.filter((j) => j.id !== id));
   }
 
   function durationHours(start: string, end: string) {
@@ -97,13 +79,17 @@ export default function MachineSchedule() {
       </div>
 
       <div className="action-bar">
-        <button className="btn btn-green" onClick={addJob}>
+        <button className="btn btn-green" onClick={handleAdd}>
           <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
           {t.common.add}
         </button>
       </div>
 
-      <div style={{ marginTop: 20, overflowX: 'auto' }}>
+      <p className="subtitle-text" style={{ fontSize: 12, marginTop: 20 }}>
+        {t.machines.sharedNote}
+      </p>
+
+      <div style={{ marginTop: 8, overflowX: 'auto' }}>
         {jobs.length === 0 ? (
           <p className="subtitle-text" style={{ fontSize: 13 }}>{t.machines.noJobs}</p>
         ) : (
@@ -116,6 +102,8 @@ export default function MachineSchedule() {
                 <th>{t.common.start}</th>
                 <th>{t.common.end}</th>
                 <th>{t.machines.hours}</th>
+                <th>{t.common.status}</th>
+                <th>{t.common.progressLabel}</th>
                 <th></th>
               </tr>
             </thead>
@@ -128,6 +116,38 @@ export default function MachineSchedule() {
                   <td>{job.start ? new Date(job.start).toLocaleString() : '-'}</td>
                   <td>{job.end ? new Date(job.end).toLocaleString() : '-'}</td>
                   <td>{durationHours(job.start, job.end)}</td>
+                  <td>
+                    <select
+                      value={job.status}
+                      style={{ width: 'auto' }}
+                      onChange={(e) => updateJob(job.id, { status: e.target.value as JobStatus })}
+                    >
+                      {(['planned', 'inProgress', 'done', 'delayed'] as JobStatus[]).map((s) => (
+                        <option key={s} value={s}>
+                          {t.progress.statusOptions[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div className="progress-bar-track" style={{ width: 60 }}>
+                        <div className="progress-bar-fill" style={{ width: `${job.progress}%` }} />
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={job.progress}
+                        style={{ width: 55 }}
+                        onChange={(e) =>
+                          updateJob(job.id, {
+                            progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
+                          })
+                        }
+                      />
+                    </div>
+                  </td>
                   <td>
                     <button
                       className="btn btn-red"
