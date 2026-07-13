@@ -3,7 +3,8 @@ import './App.css';
 import { useLanguage } from './i18n/LanguageContext';
 import { useAuth } from './auth/AuthContext';
 import { useTheme } from './theme/ThemeContext';
-import { IconCalendar, IconGear, IconChart, IconGantt, IconFlow, IconShield, IconSun, IconMoon, IconLogout } from './components/Icons';
+import { IconDashboard, IconCalendar, IconGear, IconChart, IconGantt, IconFlow, IconShield, IconSun, IconMoon, IconLogout } from './components/Icons';
+import Dashboard from './pages/Dashboard';
 import ShiftSchedule from './pages/ShiftSchedule';
 import MachineSchedule from './pages/MachineSchedule';
 import ProgressMonitoring from './pages/ProgressMonitoring';
@@ -12,7 +13,7 @@ import WorkOrderCreator from './pages/WorkOrderCreator';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 
-type Tab = 'shifts' | 'machines' | 'progress' | 'gantt' | 'workOrders' | 'admin';
+type Tab = 'dashboard' | 'shifts' | 'machines' | 'progress' | 'gantt' | 'workOrders' | 'admin';
 
 const ADMIN_USERNAME = 'dturk';
 
@@ -20,7 +21,7 @@ function App() {
   const { t, lang, setLang } = useLanguage();
   const { isAuthenticated, username, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [tab, setTab] = useState<Tab>('shifts');
+  const [tab, setTab] = useState<Tab>('dashboard');
 
   if (!isAuthenticated) {
     return <Login />;
@@ -29,6 +30,7 @@ function App() {
   const isAdmin = username === ADMIN_USERNAME;
 
   const tabs: { key: Tab; label: string; icon: ReactElement }[] = [
+    { key: 'dashboard', label: t.nav.dashboard, icon: <IconDashboard /> },
     { key: 'shifts', label: t.nav.shifts, icon: <IconCalendar /> },
     { key: 'machines', label: t.nav.machines, icon: <IconGear /> },
     { key: 'workOrders', label: t.nav.workOrders, icon: <IconFlow /> },
@@ -78,6 +80,7 @@ function App() {
       </nav>
 
       <div className="page-content">
+        {tab === 'dashboard' && <Dashboard />}
         {tab === 'shifts' && <ShiftSchedule />}
         {tab === 'machines' && <MachineSchedule />}
         {tab === 'workOrders' && <WorkOrderCreator />}

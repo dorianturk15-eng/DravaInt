@@ -3,6 +3,7 @@ export type Lang = 'hr' | 'en';
 export interface TranslationShape {
   appTitle: string;
   nav: {
+    dashboard: string;
     shifts: string;
     machines: string;
     progress: string;
@@ -63,12 +64,23 @@ export interface TranslationShape {
     task: string;
     addTask: string;
     sharedNote: string;
+    viewList: string;
+    viewBoard: string;
     statusOptions: {
       planned: string;
       inProgress: string;
       done: string;
       delayed: string;
     };
+  };
+  dashboard: {
+    title: string;
+    subtitle: string;
+    totalJobs: string;
+    avgProgress: string;
+    statusBreakdown: string;
+    recentJobs: string;
+    noJobs: string;
   };
   gantt: {
     title: string;
@@ -133,6 +145,7 @@ export const translations: Record<Lang, TranslationShape> = {
   hr: {
     appTitle: 'Drava International - Planer',
     nav: {
+      dashboard: 'Pregled',
       shifts: 'Raspored smjena',
       machines: 'Raspored strojeva',
       progress: 'Praćenje napretka',
@@ -193,6 +206,8 @@ export const translations: Record<Lang, TranslationShape> = {
       task: 'Zadatak',
       addTask: 'Dodaj zadatak',
       sharedNote: 'Podaci su zajednički s Rasporedom strojeva i Gantogramom — izmjene ovdje vidljive su i tamo.',
+      viewList: 'Popis',
+      viewBoard: 'Ploča',
       statusOptions: {
         planned: 'Planirano',
         inProgress: 'U tijeku',
@@ -205,6 +220,15 @@ export const translations: Record<Lang, TranslationShape> = {
       subtitle: 'Vremenski prikaz svih zadataka i naloga.',
       today: 'Danas',
       sharedNote: 'Prikazuje iste naloge kao Raspored strojeva i Praćenje napretka.',
+    },
+    dashboard: {
+      title: 'Pregled',
+      subtitle: 'Sažetak svih naloga i njihovog statusa na jednom mjestu.',
+      totalJobs: 'Ukupno naloga',
+      avgProgress: 'Prosječni napredak',
+      statusBreakdown: 'Naloga po statusu',
+      recentJobs: 'Najnoviji nalozi',
+      noJobs: 'Još nema naloga u sustavu.',
     },
     workOrders: {
       title: 'Kreator radnih naloga',
@@ -261,6 +285,7 @@ export const translations: Record<Lang, TranslationShape> = {
   en: {
     appTitle: 'Drava International - Planner',
     nav: {
+      dashboard: 'Dashboard',
       shifts: 'Shift Schedule',
       machines: 'Machine Scheduling',
       progress: 'Progress Monitoring',
@@ -321,6 +346,8 @@ export const translations: Record<Lang, TranslationShape> = {
       task: 'Task',
       addTask: 'Add task',
       sharedNote: 'Shared with Machine Scheduling and the Gantt Chart — edits here show up there too.',
+      viewList: 'List',
+      viewBoard: 'Board',
       statusOptions: {
         planned: 'Planned',
         inProgress: 'In progress',
@@ -333,6 +360,15 @@ export const translations: Record<Lang, TranslationShape> = {
       subtitle: 'Timeline view of all tasks and orders.',
       today: 'Today',
       sharedNote: 'Shows the same jobs as Machine Scheduling and Progress Monitoring.',
+    },
+    dashboard: {
+      title: 'Dashboard',
+      subtitle: 'A summary of all orders and their status in one place.',
+      totalJobs: 'Total orders',
+      avgProgress: 'Average progress',
+      statusBreakdown: 'Orders by status',
+      recentJobs: 'Recent orders',
+      noJobs: 'No orders in the system yet.',
     },
     workOrders: {
       title: 'Work Order Creator',

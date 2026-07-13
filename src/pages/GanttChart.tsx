@@ -1,7 +1,14 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash } from '../components/Icons';
-import { useScheduling } from '../scheduling/SchedulingContext';
+import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
+
+const STATUS_COLORS: Record<JobStatus, string> = {
+  planned: '#64748b',
+  inProgress: '#2b6cb0',
+  done: '#16a34a',
+  delayed: '#dc2626',
+};
 
 function dateOnly(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -131,10 +138,15 @@ export default function GanttChart() {
                     style={{
                       left: startOffset * dayWidth,
                       width: Math.max(length, 1) * dayWidth - 4,
-                      background: job.color,
+                      background: `${STATUS_COLORS[job.status]}55`,
+                      border: `1px solid ${STATUS_COLORS[job.status]}`,
                     }}
                   >
-                    {label}
+                    <div
+                      className="gantt-bar-fill"
+                      style={{ width: `${job.progress}%`, background: STATUS_COLORS[job.status] }}
+                    />
+                    <span className="gantt-bar-label">{label}</span>
                   </div>
                   {todayOffset >= 0 && todayOffset < totalDays && (
                     <div className="gantt-today-line" style={{ left: todayOffset * dayWidth }} title={t.gantt.today} />

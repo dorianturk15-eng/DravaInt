@@ -427,6 +427,124 @@ select {
   color: white;
 }
 
+/* Dashboard */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 768px) {
+  .stat-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 1024px) {
+  .stat-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+.stat-tile {
+  background: var(--bg-step);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px 16px;
+  border-left: 4px solid var(--accent, #1a365d);
+}
+
+.stat-tile .stat-value {
+  font-size: 26px;
+  font-weight: bold;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.stat-tile .stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Kanban board */
+.board-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+
+@media (min-width: 700px) {
+  .board-columns { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 1100px) {
+  .board-columns { grid-template-columns: repeat(4, 1fr); }
+}
+
+.board-column {
+  background: var(--bg-step);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px;
+  min-height: 100px;
+}
+
+.board-column-title {
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.board-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-card);
+}
+
+.board-card .board-card-title {
+  font-weight: bold;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.board-card .board-card-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 2px 0 8px 0;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-color-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 15px;
+}
+
+.view-toggle button {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: none;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.view-toggle button.active {
+  background: #1a365d;
+  color: white;
+}
+
 /* Work order flow / block diagram */
 .flow-row {
   display: flex;
@@ -516,14 +634,30 @@ select {
   top: 5px;
   height: 24px;
   border-radius: 4px;
-  color: white;
   font-size: 10px;
   display: flex;
   align-items: center;
-  padding: 0 6px;
   white-space: nowrap;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.gantt-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 3px 0 0 3px;
+}
+
+.gantt-bar-label {
+  position: relative;
+  z-index: 1;
+  padding: 0 6px;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gantt-header-cell {
