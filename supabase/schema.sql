@@ -65,8 +65,12 @@ create table if not exists jobs (
   progress int not null default 0,
   color text not null default '#1a365d',
   operations jsonb,
+  dependencies jsonb,
   created_at timestamptz not null default now()
 );
+
+-- safe to re-run if jobs already existed without the dependencies column
+alter table jobs add column if not exists dependencies jsonb;
 
 -- Example work order created via the Work Order Creator's block-diagram route,
 -- so there's a realistic sample in the app right after setup.

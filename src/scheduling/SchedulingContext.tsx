@@ -3,6 +3,14 @@ import { supabase } from '../supabase/client';
 
 export type JobStatus = 'planned' | 'inProgress' | 'done' | 'delayed';
 
+export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
+export interface Dependency {
+  jobId: number;
+  type: DependencyType;
+  lagHours: number;
+}
+
 export interface OperationStep {
   id: number;
   name: string;
@@ -21,6 +29,7 @@ export interface Job {
   progress: number;
   color: string;
   operations?: OperationStep[];
+  dependencies?: Dependency[];
 }
 
 interface JobRow {
@@ -34,6 +43,7 @@ interface JobRow {
   progress: number;
   color: string;
   operations: OperationStep[] | null;
+  dependencies: Dependency[] | null;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -48,6 +58,7 @@ function rowToJob(row: JobRow): Job {
     progress: row.progress,
     color: row.color,
     operations: row.operations ?? undefined,
+    dependencies: row.dependencies ?? undefined,
   };
 }
 
@@ -75,6 +86,7 @@ const FALLBACK_JOBS: Job[] = [
     status: 'planned',
     progress: 0,
     color: COLORS[1],
+    dependencies: [{ jobId: 1, type: 'FS', lagHours: 0 }],
   },
   {
     id: 3,
@@ -141,6 +153,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         progress: 0,
         color,
         operations: job.operations ?? null,
+        dependencies: job.dependencies ?? null,
       });
     } else {
       setJobs((prev) => [
@@ -162,6 +175,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       if (patch.progress !== undefined) dbPatch.progress = patch.progress;
       if (patch.color !== undefined) dbPatch.color = patch.color;
       if (patch.operations !== undefined) dbPatch.operations = patch.operations;
+      if (patch.dependencies !== undefined) dbPatch.dependencies = patch.dependencies;
       await supabase.from('jobs').update(dbPatch).eq('id', id);
     } else {
       setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));

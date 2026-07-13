@@ -92,6 +92,19 @@ export interface TranslationShape {
     subtitle: string;
     today: string;
     sharedNote: string;
+    dependencies: string;
+    addDependency: string;
+    predecessor: string;
+    dependencyType: string;
+    lagHours: string;
+    noDependencies: string;
+    criticalPathLegend: string;
+    typeFS: string;
+    typeSS: string;
+    typeFF: string;
+    typeSF: string;
+    selectPredecessor: string;
+    dependencyError: string;
   };
   workOrders: {
     title: string;
@@ -248,6 +261,19 @@ export const translations: Record<Lang, TranslationShape> = {
       subtitle: 'Vremenski prikaz svih zadataka i naloga.',
       today: 'Danas',
       sharedNote: 'Prikazuje iste naloge kao Raspored strojeva i Praćenje napretka.',
+      dependencies: 'Ovisnosti',
+      addDependency: 'Dodaj ovisnost',
+      predecessor: 'Prethodni zadatak',
+      dependencyType: 'Tip ovisnosti',
+      lagHours: 'Odgoda (h)',
+      noDependencies: 'Nema definiranih ovisnosti.',
+      criticalPathLegend: 'Crveni obrub označava kritični put (critical path) — kašnjenje ovih naloga pomiče cijeli projekt.',
+      typeFS: 'Kraj → Početak',
+      typeSS: 'Početak → Početak',
+      typeFF: 'Kraj → Kraj',
+      typeSF: 'Početak → Kraj',
+      selectPredecessor: '-- odaberite prethodni zadatak --',
+      dependencyError: 'Odaberite zadatak i drugačiji prethodni zadatak.',
     },
     dashboard: {
       title: 'Pregled',
@@ -411,6 +437,19 @@ export const translations: Record<Lang, TranslationShape> = {
       subtitle: 'Timeline view of all tasks and orders.',
       today: 'Today',
       sharedNote: 'Shows the same jobs as Machine Scheduling and Progress Monitoring.',
+      dependencies: 'Dependencies',
+      addDependency: 'Add dependency',
+      predecessor: 'Predecessor',
+      dependencyType: 'Dependency type',
+      lagHours: 'Lag (h)',
+      noDependencies: 'No dependencies defined.',
+      criticalPathLegend: 'Red outline marks the critical path — delaying these jobs delays the whole project.',
+      typeFS: 'Finish → Start',
+      typeSS: 'Start → Start',
+      typeFF: 'Finish → Finish',
+      typeSF: 'Start → Finish',
+      selectPredecessor: '-- select a predecessor --',
+      dependencyError: 'Select a task and a different predecessor task.',
     },
     dashboard: {
       title: 'Dashboard',
