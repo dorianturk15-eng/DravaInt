@@ -3,15 +3,8 @@ import { Gantt, ViewMode, type Task } from 'gantt-task-react';
 import 'gantt-task-react/dist/index.css';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
-import { useScheduling, type JobStatus, type DependencyType } from '../scheduling/SchedulingContext';
-import { computeEffectiveSchedule, computeCriticalPath, jobsToScheduleInput } from '../scheduling/cpm';
-
-const STATUS_COLORS: Record<JobStatus, string> = {
-  planned: '#64748b',
-  inProgress: '#2b6cb0',
-  done: '#16a34a',
-  delayed: '#dc2626',
-};
+import { useScheduling, type DependencyType } from '../scheduling/SchedulingContext';
+import { buildGanttTasks, jobIdFromTaskId, hasChildren } from '../scheduling/hierarchy';
 
 const DEPENDENCY_TYPES: DependencyType[] = ['FS', 'SS', 'FF', 'SF'];
 
@@ -31,33 +24,10 @@ export default function GanttChart() {
   const [depError, setDepError] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Day);
 
-  const validJobs = jobs.filter((j) => j.start && j.end);
-  const scheduleInput = useMemo(() => jobsToScheduleInput(validJobs), [validJobs]);
-  const effective = useMemo(() => computeEffectiveSchedule(scheduleInput), [scheduleInput]);
-  const criticalIds = useMemo(() => computeCriticalPath(scheduleInput, effective), [scheduleInput, effective]);
+  const validJobs = jobs.filter((j) => j.start);
   const hasAnyDependency = validJobs.some((j) => (j.dependencies?.length ?? 0) > 0);
-
-  const tasks: Task[] = validJobs.map((job) => {
-    const eff = effective.get(job.id);
-    const start = eff ? new Date(eff.start) : new Date(job.start);
-    const end = eff ? new Date(eff.end) : new Date(job.end);
-    const isCritical = criticalIds.has(job.id);
-    return {
-      id: String(job.id),
-      type: 'task',
-      name: job.order || job.machine || `#${job.id}`,
-      start,
-      end: end > start ? end : new Date(start.getTime() + 3600000),
-      progress: job.progress,
-      dependencies: (job.dependencies ?? []).map((d) => String(d.jobId)),
-      styles: {
-        backgroundColor: isCritical ? '#dc2626' : STATUS_COLORS[job.status],
-        backgroundSelectedColor: isCritical ? '#b91c1c' : STATUS_COLORS[job.status],
-        progressColor: 'rgba(0,0,0,0.35)',
-        progressSelectedColor: 'rgba(0,0,0,0.45)',
-      },
-    };
-  });
+  const tasks: Task[] = useMemo(() => buildGanttTasks(jobs), [jobs]);
+  const schedulableJobs = validJobs.filter((j) => !hasChildren(jobs, j.id));
 
   function handleAdd() {
     if (!form.name || !form.start || !form.end) return;
@@ -72,18 +42,24 @@ export default function GanttChart() {
   }
 
   function handleDateChange(task: Task) {
-    updateJob(Number(task.id), {
+    const jobId = jobIdFromTaskId(task.id);
+    if (!jobId) return;
+    updateJob(jobId, {
       start: toLocalDateTimeString(task.start),
       end: toLocalDateTimeString(task.end),
     });
   }
 
   function handleProgressChange(task: Task) {
-    updateJob(Number(task.id), { progress: Math.round(task.progress) });
+    const jobId = jobIdFromTaskId(task.id);
+    if (!jobId) return;
+    updateJob(jobId, { progress: Math.round(task.progress) });
   }
 
   function handleDelete(task: Task): boolean {
-    removeJob(Number(task.id));
+    const jobId = jobIdFromTaskId(task.id);
+    if (!jobId) return false;
+    removeJob(jobId);
     return true;
   }
 
@@ -162,7 +138,7 @@ export default function GanttChart() {
             <label>{t.progress.task}</label>
             <select value={depForm.jobId} onChange={(e) => setDepForm({ ...depForm, jobId: e.target.value })}>
               <option value="">{t.gantt.selectPredecessor}</option>
-              {validJobs.map((j) => (
+              {schedulableJobs.map((j) => (
                 <option key={j.id} value={j.id}>
                   {j.order || j.machine}
                 </option>
@@ -176,7 +152,7 @@ export default function GanttChart() {
               onChange={(e) => setDepForm({ ...depForm, predecessorId: e.target.value })}
             >
               <option value="">{t.gantt.selectPredecessor}</option>
-              {validJobs.map((j) => (
+              {schedulableJobs.map((j) => (
                 <option key={j.id} value={j.id}>
                   {j.order || j.machine}
                 </option>

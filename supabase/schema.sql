@@ -66,11 +66,13 @@ create table if not exists jobs (
   color text not null default '#1a365d',
   operations jsonb,
   dependencies jsonb,
+  parent_id bigint references jobs(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
--- safe to re-run if jobs already existed without the dependencies column
+-- safe to re-run if jobs already existed without these columns
 alter table jobs add column if not exists dependencies jsonb;
+alter table jobs add column if not exists parent_id bigint references jobs(id) on delete set null;
 
 -- Example work order created via the Work Order Creator's block-diagram route,
 -- so there's a realistic sample in the app right after setup.

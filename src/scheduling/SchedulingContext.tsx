@@ -30,6 +30,7 @@ export interface Job {
   color: string;
   operations?: OperationStep[];
   dependencies?: Dependency[];
+  parentId?: number | null;
 }
 
 interface JobRow {
@@ -44,6 +45,7 @@ interface JobRow {
   color: string;
   operations: OperationStep[] | null;
   dependencies: Dependency[] | null;
+  parent_id: number | null;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -59,6 +61,7 @@ function rowToJob(row: JobRow): Job {
     color: row.color,
     operations: row.operations ?? undefined,
     dependencies: row.dependencies ?? undefined,
+    parentId: row.parent_id ?? undefined,
   };
 }
 
@@ -102,6 +105,106 @@ const FALLBACK_JOBS: Job[] = [
       { id: 1, name: 'Tokarenje', machine: 'Tokarilica-1', hours: 4 },
       { id: 2, name: 'Glodanje (5-osno)', machine: 'CNC-2', hours: 6 },
       { id: 3, name: 'Završna kontrola', machine: 'Kontrola kvalitete', hours: 1 },
+    ],
+  },
+  {
+    id: 30,
+    machine: '',
+    order: 'RN-2026-030',
+    operator: 'Alat XY (kompletan alat)',
+    start: '2026-07-15T06:00',
+    end: '2026-07-15T06:00',
+    status: 'inProgress',
+    progress: 0,
+    color: COLORS[3],
+  },
+  {
+    id: 31,
+    machine: '',
+    order: 'RN-2026-030-A',
+    operator: 'Sklop A',
+    start: '2026-07-15T06:00',
+    end: '2026-07-15T06:00',
+    status: 'inProgress',
+    progress: 0,
+    color: COLORS[3],
+    parentId: 30,
+  },
+  {
+    id: 32,
+    machine: 'Pila → CNC-1',
+    order: 'RN-2026-030-A1',
+    operator: 'Podsklop A1',
+    start: '2026-07-15T06:00',
+    end: '2026-07-15T06:00',
+    status: 'inProgress',
+    progress: 40,
+    color: COLORS[3],
+    parentId: 31,
+    operations: [
+      { id: 1, name: 'Pila', machine: 'Pila', hours: 2 },
+      { id: 2, name: 'Glodanje Operacija 1', machine: 'CNC-1', hours: 3 },
+      { id: 3, name: 'Glodanje Operacija 2', machine: 'CNC-1', hours: 2 },
+    ],
+  },
+  {
+    id: 33,
+    machine: 'Tokarilica-1 → CNC-2',
+    order: 'RN-2026-030-A2',
+    operator: 'Podsklop A2',
+    start: '2026-07-15T13:00',
+    end: '2026-07-15T13:00',
+    status: 'planned',
+    progress: 0,
+    color: COLORS[3],
+    parentId: 31,
+    operations: [
+      { id: 1, name: 'Tokarenje Operacija 1', machine: 'Tokarilica-1', hours: 3 },
+      { id: 2, name: 'Glodanje Operacija 1', machine: 'CNC-2', hours: 4 },
+    ],
+  },
+  {
+    id: 34,
+    machine: '',
+    order: 'RN-2026-030-B',
+    operator: 'Sklop B',
+    start: '2026-07-15T06:00',
+    end: '2026-07-15T06:00',
+    status: 'planned',
+    progress: 0,
+    color: COLORS[4],
+    parentId: 30,
+  },
+  {
+    id: 35,
+    machine: 'Pila → Tokarilica-1',
+    order: 'RN-2026-030-B1',
+    operator: 'Podsklop B1',
+    start: '2026-07-15T06:00',
+    end: '2026-07-15T06:00',
+    status: 'planned',
+    progress: 0,
+    color: COLORS[4],
+    parentId: 34,
+    operations: [
+      { id: 1, name: 'Pila', machine: 'Pila', hours: 1.5 },
+      { id: 2, name: 'Tokarenje Operacija 1', machine: 'Tokarilica-1', hours: 2 },
+    ],
+  },
+  {
+    id: 36,
+    machine: 'CNC-1',
+    order: 'RN-2026-030-B2',
+    operator: 'Podsklop B2',
+    start: '2026-07-15T09:30',
+    end: '2026-07-15T09:30',
+    status: 'planned',
+    progress: 0,
+    color: COLORS[4],
+    parentId: 34,
+    operations: [
+      { id: 1, name: 'Glodanje Operacija 1', machine: 'CNC-1', hours: 3 },
+      { id: 2, name: 'Glodanje Operacija 2', machine: 'CNC-1', hours: 2 },
     ],
   },
 ];
@@ -176,6 +279,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         color,
         operations: job.operations ?? null,
         dependencies: job.dependencies ?? null,
+        parent_id: job.parentId ?? null,
       });
     } else {
       setJobs((prev) => {
@@ -199,6 +303,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       if (patch.color !== undefined) dbPatch.color = patch.color;
       if (patch.operations !== undefined) dbPatch.operations = patch.operations;
       if (patch.dependencies !== undefined) dbPatch.dependencies = patch.dependencies;
+      if (patch.parentId !== undefined) dbPatch.parent_id = patch.parentId;
       await supabase.from('jobs').update(dbPatch).eq('id', id);
     } else {
       setJobs((prev) => {

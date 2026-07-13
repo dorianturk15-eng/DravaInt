@@ -3,11 +3,13 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash } from '../components/Icons';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
 import { useMachines } from '../machines/MachinesContext';
+import { hasChildren } from '../scheduling/hierarchy';
 
 export default function MachineSchedule() {
   const { t } = useLanguage();
-  const { jobs, addJob, updateJob, removeJob } = useScheduling();
+  const { jobs: allJobs, addJob, updateJob, removeJob } = useScheduling();
   const { machines } = useMachines();
+  const jobs = allJobs.filter((j) => !hasChildren(allJobs, j.id));
 
   const [form, setForm] = useState({ machine: '', order: '', operator: '', start: '', end: '' });
 

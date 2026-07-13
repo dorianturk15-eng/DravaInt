@@ -1,5 +1,6 @@
 import { useLanguage } from '../i18n/LanguageContext';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
+import { hasChildren } from '../scheduling/hierarchy';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   planned: '#64748b',
@@ -10,7 +11,8 @@ const STATUS_COLORS: Record<JobStatus, string> = {
 
 export default function Dashboard() {
   const { t } = useLanguage();
-  const { jobs } = useScheduling();
+  const { jobs: allJobs } = useScheduling();
+  const jobs = allJobs.filter((j) => !hasChildren(allJobs, j.id));
 
   const total = jobs.length;
   const avgProgress = total === 0 ? 0 : Math.round(jobs.reduce((s, j) => s + j.progress, 0) / total);

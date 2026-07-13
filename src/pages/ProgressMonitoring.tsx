@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconTrash, IconList, IconBoard } from '../components/Icons';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
+import { hasChildren } from '../scheduling/hierarchy';
 
 const STATUSES: JobStatus[] = ['planned', 'inProgress', 'done', 'delayed'];
 
 export default function ProgressMonitoring() {
   const { t } = useLanguage();
-  const { jobs, updateJob, removeJob } = useScheduling();
+  const { jobs: allJobs, updateJob, removeJob } = useScheduling();
+  const jobs = allJobs.filter((j) => !hasChildren(allJobs, j.id));
   const [view, setView] = useState<'list' | 'board'>('list');
 
   return (

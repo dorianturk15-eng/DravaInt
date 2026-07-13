@@ -129,6 +129,8 @@ export interface TranslationShape {
     printTitle: string;
     closePreview: string;
     opNumber: string;
+    parentOrder: string;
+    noParent: string;
   };
   login: {
     title: string;
@@ -307,6 +309,8 @@ export const translations: Record<Lang, TranslationShape> = {
       printTitle: 'RADNI NALOG',
       closePreview: 'Zatvori pregled',
       opNumber: 'R.br.',
+      parentOrder: 'Nadređeni radni nalog',
+      noParent: '(bez nadređenog - glavni nalog)',
     },
     login: {
       title: 'Prijava',
@@ -483,6 +487,8 @@ export const translations: Record<Lang, TranslationShape> = {
       printTitle: 'WORK ORDER',
       closePreview: 'Close preview',
       opNumber: 'No.',
+      parentOrder: 'Parent work order',
+      noParent: '(no parent - top-level order)',
     },
     login: {
       title: 'Sign in',

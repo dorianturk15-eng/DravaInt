@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash, IconPrint } from '../components/Icons';
 import { useScheduling, type OperationStep } from '../scheduling/SchedulingContext';
+import { hasChildren } from '../scheduling/hierarchy';
 import { useLogo } from '../logo/LogoContext';
 
 let nextOpId = 1;
@@ -27,6 +28,7 @@ export default function WorkOrderCreator() {
   const [orderNumber, setOrderNumber] = useState('');
   const [product, setProduct] = useState('');
   const [startDateTime, setStartDateTime] = useState('');
+  const [parentId, setParentId] = useState('');
 
   const [operations, setOperations] = useState<OperationStep[]>([]);
   const [opForm, setOpForm] = useState({ name: '', machine: '', hours: '' });
@@ -50,7 +52,7 @@ export default function WorkOrderCreator() {
   function createOrder() {
     setMessage(null);
     setError(null);
-    if (!orderNumber.trim() || operations.length === 0 || !startDateTime) {
+    if (!orderNumber.trim() || !startDateTime) {
       setError(t.workOrders.missingFields);
       return;
     }
@@ -68,17 +70,21 @@ export default function WorkOrderCreator() {
       operator: product.trim(),
       start: startDateTime,
       end: endLocal,
-      operations,
+      operations: operations.length > 0 ? operations : undefined,
+      parentId: parentId ? Number(parentId) : undefined,
     });
 
     setMessage(t.workOrders.created);
     setOrderNumber('');
     setProduct('');
     setStartDateTime('');
+    setParentId('');
     setOperations([]);
   }
 
-  const createdOrders = jobs.filter((j) => j.operations && j.operations.length > 0);
+  const createdOrders = jobs.filter(
+    (j) => (j.operations && j.operations.length > 0) || j.parentId !== undefined || hasChildren(jobs, j.id),
+  );
   const printOrder = createdOrders.find((j) => j.id === printOrderId) ?? null;
   const printOpsTotal = printOrder?.operations?.reduce((s, op) => s + op.hours, 0) ?? 0;
 
@@ -109,6 +115,17 @@ export default function WorkOrderCreator() {
               value={startDateTime}
               onChange={(e) => setStartDateTime(e.target.value)}
             />
+          </div>
+          <div>
+            <label>{t.workOrders.parentOrder}</label>
+            <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+              <option value="">{t.workOrders.noParent}</option>
+              {jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.order || j.machine}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -202,11 +219,16 @@ export default function WorkOrderCreator() {
               </tr>
             </thead>
             <tbody>
-              {createdOrders.map((job) => (
+              {createdOrders.map((job) => {
+                const parent = jobs.find((p) => p.id === job.parentId);
+                return (
                 <tr key={job.id}>
-                  <td>{job.order}</td>
+                  <td>
+                    {parent && <span className="subtitle-text" style={{ fontSize: 11 }}>{parent.order} → </span>}
+                    {job.order}
+                  </td>
                   <td>{job.operator || '-'}</td>
-                  <td>{job.operations?.map((op) => op.name).join(' → ')}</td>
+                  <td>{job.operations?.map((op) => op.name).join(' → ') || '-'}</td>
                   <td>
                     <span className={`status-pill status-${job.status}`}>
                       {t.progress.statusOptions[job.status]}
@@ -223,7 +245,8 @@ export default function WorkOrderCreator() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
