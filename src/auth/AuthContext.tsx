@@ -33,6 +33,27 @@ function saveFallbackUsers(users: StoredUser[]) {
   localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(users));
 }
 
+const LAST_LOGIN_KEY = 'dravaint-last-logins';
+
+/** Per-workstation last-login registry shown in Administration. */
+export function recordLogin(username: string) {
+  try {
+    const map = JSON.parse(localStorage.getItem(LAST_LOGIN_KEY) || '{}') as Record<string, string>;
+    map[username] = new Date().toISOString();
+    localStorage.setItem(LAST_LOGIN_KEY, JSON.stringify(map));
+  } catch {
+    // A corrupt registry must never block sign-in.
+  }
+}
+
+export function getLastLogins(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(LAST_LOGIN_KEY) || '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
 export function isStrongPassword(value: string) {
   return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
 }
@@ -95,12 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = users.find((user) => user.username.toLowerCase() === normalized);
       const email = normalized.includes('@') ? normalized : profile?.email || `${normalized}@dravaint.local`;
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!error) recordLogin(profile?.username ?? normalized);
       return !error;
     }
     const found = users.find((user) => (user.username.toLowerCase() === normalized || user.email.toLowerCase() === normalized) && user.password === password);
     if (!found) return false;
     sessionStorage.setItem(SESSION_KEY, found.username);
     setUsername(found.username);
+    recordLogin(found.username);
     return true;
   }
 
@@ -109,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!profile || supabase) return false;
     sessionStorage.setItem(SESSION_KEY, profile.username);
     setUsername(profile.username);
+    recordLogin(profile.username);
     return true;
   }
 

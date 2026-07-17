@@ -85,6 +85,14 @@ export interface TranslationShape {
     filterAll: string;
     autoSchedule: string;
     exportCsv: string;
+    exportPng: string;
+    jumpToConflict: string;
+    chainSelected: string;
+    chainSelectedHint: string;
+    savedViews: string;
+    viewNamePlaceholder: string;
+    saveView: string;
+    deleteView: string;
   };
   progress: {
     title: string;
@@ -288,6 +296,14 @@ export const translations: Record<Lang, TranslationShape> = {
       filterAll: 'Sve',
       autoSchedule: 'Automatski rasporedi',
       exportCsv: 'Izvoz CSV',
+      exportPng: 'Izvoz PNG',
+      jumpToConflict: 'Na konflikt',
+      chainSelected: 'Poveži odabrane',
+      chainSelectedHint: 'Poveže odabrane naloge Kraj→Početak redoslijedom početka.',
+      savedViews: 'Spremljeni pogledi',
+      viewNamePlaceholder: 'Naziv pogleda…',
+      saveView: 'Spremi pogled',
+      deleteView: 'Obriši pogled',
     },
     progress: {
       title: 'Praćenje napretka',
@@ -489,6 +505,14 @@ export const translations: Record<Lang, TranslationShape> = {
       filterAll: 'All',
       autoSchedule: 'Auto-schedule',
       exportCsv: 'Export CSV',
+      exportPng: 'Export PNG',
+      jumpToConflict: 'Jump to conflict',
+      chainSelected: 'Chain selected',
+      chainSelectedHint: 'Links the selected orders Finish-to-Start in start order.',
+      savedViews: 'Saved views',
+      viewNamePlaceholder: 'View name…',
+      saveView: 'Save view',
+      deleteView: 'Delete view',
     },
     progress: {
       title: 'Progress Monitoring',

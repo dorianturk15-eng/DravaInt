@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-14 — Batch 2: board power features + alert controls
+
+- Machine board: saved views (zoom/sort/filter presets), PNG export for shift handovers,
+  "jump to conflict" navigation, and bulk Finish-to-Start chaining of selected cards.
+- Alert center: separate mute toggles for delay and capacity alerts (Settings → Alerts).
+- Kiosk mode toggle: ≥44px touch targets for shop-floor terminals.
+- Work orders: search across number/product/operations, one-click duplicate of an existing
+  route into the creation form.
+- Administration: per-account last-login timestamps on this workstation.
+- Typography/spacing consolidation: two font weights (600/700), gap values on the
+  4/8/12/16/20/24 scale, decorative letter-spacing removed from small labels.
+
 ## 2026-07-14 — Flat theme cleanup + operations batch
 
 ### UI/UX cleanup (from `ui_ux_cleanup_100.md`)

@@ -61,6 +61,7 @@ export default function WorkOrderCreator() {
 
   const [operations, setOperations] = useState<OperationStep[]>([]);
   const [opForm, setOpForm] = useState({ name: '', machine: '', hours: '' });
+  const [orderSearch, setOrderSearch] = useState('');
 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -184,6 +185,26 @@ export default function WorkOrderCreator() {
   const createdOrders = jobs.filter(
     (j) => (j.operations && j.operations.length > 0) || j.parentId !== undefined || hasChildren(jobs, j.id),
   );
+  const search = orderSearch.trim().toLowerCase();
+  const visibleOrders = search
+    ? createdOrders.filter((job) =>
+        job.order.toLowerCase().includes(search) ||
+        (job.product ?? '').toLowerCase().includes(search) ||
+        (job.operations ?? []).some((op) => op.name.toLowerCase().includes(search) || op.machine.toLowerCase().includes(search)))
+    : createdOrders;
+
+  /** Prefills the creation form with an existing order's product and operations route. */
+  function duplicateOrder(id: number) {
+    const source = jobs.find((job) => job.id === id);
+    if (!source) return;
+    setOrderNumber(`${source.order}-KOPIJA`);
+    setProduct(source.product ?? '');
+    setOperations((source.operations ?? []).map((op) => ({ ...op, id: nextOpId++ })));
+    setCreatorTab('create');
+    setMessage(null);
+    setError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
   const printOrder = createdOrders.find((j) => j.id === printOrderId) ?? null;
   const printOpsTotal = printOrder?.operations?.reduce((s, op) => s + op.hours, 0) ?? 0;
 
@@ -351,8 +372,17 @@ export default function WorkOrderCreator() {
       {error && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10 }}>{error}</p>}
 
       <div className="step-box" style={{ marginTop: 20 }}>
-        <div className="step-title">{t.workOrders.createdOrders}</div>
-        {createdOrders.length === 0 ? (
+        <div className="step-title" style={{ justifyContent: 'space-between' }}>
+          <span>{t.workOrders.createdOrders}</span>
+          <input
+            type="text"
+            value={orderSearch}
+            onChange={(event) => setOrderSearch(event.target.value)}
+            placeholder={lang === 'hr' ? 'Traži po broju, proizvodu ili operaciji…' : 'Search by number, product, or operation…'}
+            style={{ width: 'min(280px, 50%)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}
+          />
+        </div>
+        {visibleOrders.length === 0 ? (
           <p className="subtitle-text" style={{ fontSize: 13 }}>{t.workOrders.noCreatedOrders}</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -367,7 +397,7 @@ export default function WorkOrderCreator() {
                 </tr>
               </thead>
               <tbody>
-                {createdOrders.map((job) => {
+                {visibleOrders.map((job) => {
                   const parent = jobs.find((p) => p.id === job.parentId);
                   return (
                   <tr key={job.id}>
@@ -383,14 +413,22 @@ export default function WorkOrderCreator() {
                       </span>
                     </td>
                     <td>
-                      <button
-                        className="btn btn-blue"
-                        style={{ padding: '4px 10px', fontSize: 11 }}
-                        onClick={() => setPrintOrderId(job.id)}
-                      >
-                        <IconPrint style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
-                        {t.workOrders.print}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn btn-blue btn-sm"
+                          onClick={() => setPrintOrderId(job.id)}
+                        >
+                          <IconPrint style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
+                          {t.workOrders.print}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          title={lang === 'hr' ? 'Kopiraj rutu u novi nalog' : 'Copy this route into a new order'}
+                          onClick={() => duplicateOrder(job.id)}
+                        >
+                          {lang === 'hr' ? 'Dupliciraj' : 'Duplicate'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   );

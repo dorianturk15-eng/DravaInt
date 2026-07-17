@@ -116,6 +116,14 @@ export function MachineBoard() {
         onScrollToday={controller.scrollToToday}
         onAutoSchedule={() => void controller.autoSchedule()}
         onExportCsv={controller.exportCsv}
+        onExportPng={() => void controller.exportPng()}
+        onJumpToConflict={() => controller.jumpToConflict()}
+        onChainSelected={controller.chainSelected}
+        selectionCount={controller.selectedIds.size}
+        views={controller.views}
+        onSaveView={controller.saveView}
+        onApplyView={controller.applyView}
+        onDeleteView={controller.deleteView}
         canUndo={controller.canUndo}
         canRedo={controller.canRedo}
         historyDepth={controller.historyDepth}

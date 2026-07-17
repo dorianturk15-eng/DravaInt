@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import type { TranslationShape } from '../../i18n/translations';
 import type { ZoomPreset } from '../../scheduling/boardGeometry';
 import { ZOOM_ORDER } from '../../scheduling/boardGeometry';
-import type { SortBy } from './useMachineBoardController';
+import type { SortBy, BoardView } from './useMachineBoardController';
 import type { JobStatus } from '../../scheduling/SchedulingContext';
 import { IconRefresh } from '../Icons';
 
@@ -19,6 +20,14 @@ interface BoardToolbarProps {
   onScrollToday: () => void;
   onAutoSchedule: () => void;
   onExportCsv: () => void;
+  onExportPng: () => void;
+  onJumpToConflict: () => void;
+  onChainSelected: () => void;
+  selectionCount: number;
+  views: BoardView[];
+  onSaveView: (name: string) => void;
+  onApplyView: (id: string) => void;
+  onDeleteView: (id: string) => void;
   canUndo: boolean;
   canRedo: boolean;
   historyDepth: number;
@@ -50,6 +59,14 @@ export function BoardToolbar({
   onScrollToday,
   onAutoSchedule,
   onExportCsv,
+  onExportPng,
+  onJumpToConflict,
+  onChainSelected,
+  selectionCount,
+  views,
+  onSaveView,
+  onApplyView,
+  onDeleteView,
   canUndo,
   canRedo,
   historyDepth,
@@ -57,6 +74,8 @@ export function BoardToolbar({
   onUndo,
   onRedo,
 }: BoardToolbarProps) {
+  const [viewName, setViewName] = useState('');
+  const [activeViewId, setActiveViewId] = useState('');
   return (
     <div className="board-toolbar">
       <div className="board-toolbar-group" role="group" aria-label="Zoom">
@@ -102,6 +121,46 @@ export function BoardToolbar({
       <button type="button" className="board-toolbar-btn" onClick={onExportCsv}>
         {t.exportCsv}
       </button>
+      <button type="button" className="board-toolbar-btn" onClick={onExportPng}>
+        {t.exportPng}
+      </button>
+      <button type="button" className="board-toolbar-btn" onClick={onJumpToConflict}>
+        {t.jumpToConflict}
+      </button>
+      <button type="button" className="board-toolbar-btn" onClick={onChainSelected} disabled={selectionCount < 2} title={t.chainSelectedHint}>
+        {t.chainSelected}{selectionCount >= 2 ? ` (${selectionCount})` : ''}
+      </button>
+      <div className="board-toolbar-group board-views-group">
+        <select
+          className="board-toolbar-select"
+          value={activeViewId}
+          onChange={(event) => { setActiveViewId(event.target.value); if (event.target.value) onApplyView(event.target.value); }}
+          aria-label={t.savedViews}
+        >
+          <option value="">{t.savedViews}</option>
+          {views.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}
+        </select>
+        <input
+          type="text"
+          className="board-view-name-input"
+          placeholder={t.viewNamePlaceholder}
+          value={viewName}
+          onChange={(event) => setViewName(event.target.value)}
+        />
+        <button
+          type="button"
+          className="board-toolbar-btn"
+          disabled={!viewName.trim()}
+          onClick={() => { onSaveView(viewName); setViewName(''); }}
+        >
+          {t.saveView}
+        </button>
+        {activeViewId && (
+          <button type="button" className="board-toolbar-btn" onClick={() => { onDeleteView(activeViewId); setActiveViewId(''); }} aria-label={t.deleteView}>
+            ×
+          </button>
+        )}
+      </div>
       <div className="board-toolbar-group">
         <button type="button" className="board-toolbar-btn" onClick={onUndo} disabled={!canUndo} aria-label={t.undo} title={`${t.undo} (${historyDepth})`}>
           <IconRefresh style={{ transform: 'scaleX(-1)' }} />

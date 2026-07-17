@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
 import { SyncDiagnostics } from '../components/SyncDiagnostics';
-import { useAuth } from '../auth/AuthContext';
+import { useAuth, getLastLogins } from '../auth/AuthContext';
 import { useMachines, type MachineType, type MillAxis } from '../machines/MachinesContext';
 import { useRoles } from '../roles/RolesContext';
 import { IconUpload, IconTrash, IconEdit, IconPlus } from '../components/Icons';
@@ -12,6 +12,7 @@ export default function Admin() {
   const { t, lang } = useLanguage();
   const { logo, setLogo } = useLogo();
   const { users, username: currentUsername, addUser, updateUser, deleteUser } = useAuth();
+  const lastLogins = getLastLogins();
   const { machines, addMachine, updateMachine, removeMachine } = useMachines();
   const { roles, addRole, removeRole, setRoleActive } = useRoles();
   const { workers: workersList, addWorker, updateWorker, archiveWorker, displayName } = useWorkers();
@@ -636,6 +637,7 @@ export default function Admin() {
                 <tr>
                   <th>{t.admin.username}</th>
                   <th>{t.admin.password}</th>
+                  <th>{lang === 'hr' ? 'Zadnja prijava' : 'Last login'}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -644,6 +646,7 @@ export default function Admin() {
                   <tr key={u.username}>
                     <td style={{ fontWeight: 600 }}>{u.username}</td>
                     <td style={{ color: 'var(--text-secondary)' }}>{'•'.repeat(Math.min(8, u.password.length))}</td>
+                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{lastLogins[u.username] ? new Date(lastLogins[u.username]).toLocaleString() : '—'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button

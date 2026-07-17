@@ -116,8 +116,12 @@ function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('compact-layout', settings.compactMode);
-    return () => document.documentElement.classList.remove('compact-layout');
-  }, [settings.compactMode]);
+    document.documentElement.classList.toggle('kiosk-layout', settings.kioskMode);
+    return () => {
+      document.documentElement.classList.remove('compact-layout');
+      document.documentElement.classList.remove('kiosk-layout');
+    };
+  }, [settings.compactMode, settings.kioskMode]);
 
   if (!isAuthenticated) return <Login />;
 
@@ -144,7 +148,7 @@ function App() {
   const today = new Date().toISOString().slice(0, 10);
   const leafJobs = jobs.filter((job) => !hasChildren(jobs, job.id));
   const delayThreshold = Date.now() - settings.delayAlertMinutes * 60_000;
-  const delayedJobs = leafJobs.filter((job) => job.status === 'delayed' || (job.status !== 'done' && job.end && new Date(job.end).getTime() < delayThreshold));
+  const delayedJobs = settings.delayAlertsEnabled ? leafJobs.filter((job) => job.status === 'delayed' || (job.status !== 'done' && job.end && new Date(job.end).getTime() < delayThreshold)) : [];
   const materialRisks = settings.materialAlertsEnabled ? leafJobs.filter((job) => job.materialStatus === 'waiting' || job.materialStatus === 'delayed') : [];
   const absentWorkerIds = new Set(absences.filter((absence) => absence.startDate <= today && absence.endDate >= today).map((absence) => absence.workerId));
   workers.filter((worker) => worker.status === 'absent').forEach((worker) => absentWorkerIds.add(worker.id));
@@ -154,7 +158,7 @@ function App() {
   }));
   const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(leafJobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
   const machineLoads = calculateMachineLoads(leafJobs, effectiveSchedule);
-  const overloadedMachines = [...machineLoads].filter(([, hours]) => hours / getWeeklyCapacityHours() * 100 >= settings.capacityAlertPercent);
+  const overloadedMachines = settings.capacityAlertsEnabled ? [...machineLoads].filter(([, hours]) => hours / getWeeklyCapacityHours() * 100 >= settings.capacityAlertPercent) : [];
   const alerts: OperationalAlert[] = [];
   if (!online) alerts.push({ id: 'connection-offline', severity: 'critical', title: lang === 'hr' ? 'Radna stanica je izvan mreže' : 'Workstation is offline', detail: lang === 'hr' ? 'Promjene se čuvaju lokalno i sinkronizirat će se nakon povratka veze.' : 'Changes are stored locally and will sync when the connection returns.' });
   if (pendingChanges > 0) alerts.push({ id: `queue-${pendingChanges}`, severity: 'info', title: lang === 'hr' ? 'Promjene čekaju sinkronizaciju' : 'Changes waiting to sync', detail: lang === 'hr' ? `${pendingChanges} lokalnih promjena nalazi se u sigurnom redu čekanja.` : `${pendingChanges} local changes are safely queued.` });

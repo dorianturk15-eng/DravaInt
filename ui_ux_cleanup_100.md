@@ -66,8 +66,8 @@ consistent theme with the same information density, minus the "premium SaaS demo
 - [x] 45. Confirm the command palette, settings modal, and lock screen all sit above every page-level sticky element with no literal `9999`/`10000`/`20000` escape hatches.
 - [x] 46. Confirm toasts (board toast, sync warnings) render above modals only when that's actually intended, not by accident of a bigger number.
 - [x] 47. Remove any `z-index` on elements that don't need stacking context at all (dead declarations).
-- [ ] 48. Test dropdown/select menus, tooltips, and popovers for correct layering over the new flat surfaces.
-- [ ] 49. Test the settings modal + lock screen + command palette combination for correct layering if somehow triggered together.
+- [x] 48. Test dropdown/select menus, tooltips, and popovers for correct layering over the new flat surfaces.
+- [x] 49. Test the settings modal + lock screen + command palette combination for correct layering if somehow triggered together.
 - [x] 50. Document the final z-index scale in a one-line comment block in `index.css`.
 
 ## Phase 6 — Buttons & interactive elements (51–60)
@@ -78,7 +78,7 @@ consistent theme with the same information density, minus the "premium SaaS demo
 - [x] 54. Fix `.btn-ghost` contrast in dark mode (verify it's legible, not just "transparent + hope").
 - [x] 55. Remove redundant inline `style={{width:'auto', padding:...}}` scattered across pages in favor of a `.btn-sm` utility class.
 - [x] 56. Ensure disabled button states have one consistent visual treatment (opacity + cursor), not per-component variations.
-- [ ] 57. Fix touch target sizing on compact/mobile — audit any button under 40px hit area.
+- [x] 57. Fix touch target sizing on compact/mobile — audit any button under 40px hit area.
 - [x] 58. Standardize the danger-action button treatment (delete/remove) so it's visually consistent everywhere (Admin, MachineSchedule, GanttChart, ProgressMonitoring).
 - [x] 59. Fix double-bordered look where a button sits inside an already-bordered toolbar group (`.board-toolbar-group` + `.board-toolbar-btn` both drawing borders).
 - [ ] 60. Verify keyboard Tab order through toolbars is left-to-right, logical, with no skipped/duplicated stops.
@@ -92,22 +92,22 @@ consistent theme with the same information density, minus the "premium SaaS demo
 - [x] 65. Fix inconsistent row-hover background across `.data-table tr:hover` vs `.board-task-card:hover` vs `.queue-list article:hover`.
 - [ ] 66. Standardize empty-state styling (dashed border + centered text) across all "no data yet" messages instead of one-off implementations.
 - [ ] 67. Standardize conflict/warning badge visual language (the board's `⚠` badges vs Gantt's warning badges vs table inline warnings currently look different).
-- [ ] 68. Fix `.role-chip` vs `.dependency-chip` vs `.queue-operation` chip styles to share one base chip class with color variants.
+- [x] 68. Fix `.role-chip` vs `.dependency-chip` vs `.queue-operation` chip styles to share one base chip class with color variants.
 - [ ] 69. Verify table text truncation (`text-overflow: ellipsis`) is applied consistently to every long-content column, not just some.
 - [x] 70. Audit card padding scale — currently 20/24/25/32px mixed — collapse to 2–3 consistent steps.
 
 ## Phase 8 — Typography & spacing discipline (71–80)
 
 - [x] 71. Audit every one-off `font-size` value in `App.css` (dozens of 7–13px micro-variants) and collapse to a type scale (e.g. 11/12/13/14/16/20/24).
-- [ ] 72. Remove `text-transform: uppercase` + heavy `letter-spacing` from places it doesn't earn its keep (keep only for true section labels, not every small label).
-- [ ] 73. Standardize heading font-weight usage (700 vs 750 vs 800 vs 900 — pick two: one for headings, one for emphasis).
+- [x] 72. Remove `text-transform: uppercase` + heavy `letter-spacing` from places it doesn't earn its keep (keep only for true section labels, not every small label).
+- [x] 73. Standardize heading font-weight usage (700 vs 750 vs 800 vs 900 — pick two: one for headings, one for emphasis).
 - [ ] 74. Fix inconsistent `line-height` on dense table/list rows (some 18px, some 22px, some unset).
 - [ ] 75. Standardize the vertical rhythm between stacked `step-box`es (currently mixes 15/20px margins).
-- [ ] 76. Standardize gap values in flex/grid layouts (currently mixes 4/5/6/7/8/9/10/12/13/14/15/18/20px) to a spacing scale of 4/8/12/16/24.
+- [x] 76. Standardize gap values in flex/grid layouts (currently mixes 4/5/6/7/8/9/10/12/13/14/15/18/20px) to a spacing scale of 4/8/12/16/24.
 - [x] 77. Fix subtitle/secondary text color/opacity so it's consistent between `.subtitle-text` and inline `color: var(--text-secondary)` usages.
 - [x] 78. Verify `--font-title` (Outfit) vs `--font-body` (Inter) usage is intentional and not accidentally applied to body copy.
 - [ ] 79. Remove remaining inline `style={{fontSize: ..., color: ...}}` scattered through page components in favor of the shared classes above.
-- [ ] 80. Spot-check long Croatian labels for wrapping/overflow now that spacing has tightened.
+- [x] 80. Spot-check long Croatian labels for wrapping/overflow now that spacing has tightened.
 
 ## Phase 9 — Dark mode consistency (81–90)
 
@@ -120,7 +120,7 @@ consistent theme with the same information density, minus the "premium SaaS demo
 - [x] 87. Verify the lock screen and login screen fully respect the active theme rather than being independently styled.
 - [x] 88. Verify chart/gauge fill colors (capacity bars, efficiency meters) adapt correctly in dark mode.
 - [x] 89. Verify toast/notification colors have sufficient contrast against dark surfaces.
-- [ ] 90. Do a full page-by-page dark-mode pass after all flattening changes land (regressions are likely after Phase 2–7 edits).
+- [x] 90. Do a full page-by-page dark-mode pass after all flattening changes land (regressions are likely after Phase 2–7 edits).
 
 ## Phase 10 — Motion, accessibility, final quirks (91–100)
 
@@ -128,9 +128,9 @@ consistent theme with the same information density, minus the "premium SaaS demo
 - [x] 92. Fix the connect-handle hit target so it doesn't visually overlap the resize handle at each card edge (currently both anchor at the same edge).
 - [x] 93. Fix conflict popover z-index/positioning so it never renders off the right edge of the viewport for cards near the screen edge.
 - [x] 94. Fix the board toast's fixed bottom-right position so it doesn't overlap the connection-editor popover when both are visible.
-- [ ] 95. Verify the settings modal search field, tabs, and save banner still read cleanly after the blur/gradient removal.
-- [ ] 96. Verify the command palette's result list still has clear keyboard-selected-row styling without relying on the old glow treatment.
+- [x] 95. Verify the settings modal search field, tabs, and save banner still read cleanly after the blur/gradient removal.
+- [x] 96. Verify the command palette's result list still has clear keyboard-selected-row styling without relying on the old glow treatment.
 - [x] 97. Fix any remaining `!important` usage by resolving the underlying specificity conflict instead of overriding it.
-- [ ] 98. Run the app at 1280×720, 1024×768, and mobile width and screenshot-diff each page against the pre-cleanup version for regressions.
+- [x] 98. Run the app at 1280×720, 1024×768, and mobile width and screenshot-diff each page against the pre-cleanup version for regressions.
 - [x] 99. Update `README.md`'s "glass surfaces" / "premium" language to describe the new flat, clean theme accurately.
-- [ ] 100. Record before/after screenshots and a short changelog entry documenting the theme simplification.
+- [x] 100. Record before/after screenshots and a short changelog entry documenting the theme simplification.

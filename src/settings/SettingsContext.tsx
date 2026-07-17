@@ -27,6 +27,9 @@ export interface AppSettings {
   materialAlertsEnabled: boolean;
   scheduleConflictAlertsEnabled: boolean;
   absenceAlertsEnabled: boolean;
+  delayAlertsEnabled: boolean;
+  capacityAlertsEnabled: boolean;
+  kioskMode: boolean;
 }
 
 const STORAGE_KEY = 'dravaint-app-settings-v3';
@@ -61,6 +64,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   materialAlertsEnabled: true,
   scheduleConflictAlertsEnabled: true,
   absenceAlertsEnabled: true,
+  delayAlertsEnabled: true,
+  capacityAlertsEnabled: true,
+  kioskMode: false,
 };
 
 function loadSettings(): AppSettings {

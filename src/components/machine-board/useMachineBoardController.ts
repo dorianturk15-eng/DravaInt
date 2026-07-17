@@ -101,6 +101,24 @@ export interface MachineBoardControllerOptions {
 
 const CLICK_THRESHOLD_PX = 4;
 const HISTORY_LIMIT = 30;
+const BOARD_VIEWS_KEY = 'dravaint-board-views';
+
+export interface BoardView {
+  id: string;
+  name: string;
+  zoom: ZoomPreset;
+  sortBy: SortBy;
+  statusFilter: Job['status'] | 'all';
+}
+
+function loadBoardViews(): BoardView[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BOARD_VIEWS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 function schedulingOptionsFrom(settings: AppSettings) {
   return { holidays: settings.holidays, workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, skipWeekends: true };
@@ -551,6 +569,82 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     });
   }, []);
 
+  /** Cycles the selection through every card that currently has a conflict, scrolling it into view. */
+  const conflictCursorRef = useRef(0);
+  const jumpToConflict = useCallback(() => {
+    const flagged = board.lanes.flatMap((lane) => lane.jobs).filter(({ job }) => Object.keys(getJobConflicts(job)).length > 0);
+    if (flagged.length === 0) return 0;
+    const next = flagged[conflictCursorRef.current % flagged.length];
+    conflictCursorRef.current += 1;
+    setSelectedIds(new Set([next.job.id]));
+    const layout = cardLayouts.get(next.job.id);
+    const container = scrollRef.current;
+    if (layout && container) {
+      container.scrollTo({ left: Math.max(0, layout.x - 200), top: Math.max(0, layout.y - 120), behavior: 'smooth' });
+    }
+    return flagged.length;
+  }, [board.lanes, cardLayouts, getJobConflicts]);
+
+  /** Chains the currently selected cards Finish-to-Start in start-time order (skips edges that
+   *  already exist or would close a cycle). */
+  const chainSelected = useCallback(() => {
+    if (selectedIds.size < 2) return;
+    const ordered = jobs
+      .filter((job) => selectedIds.has(job.id) && job.start)
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    if (ordered.length < 2) return;
+    pushHistory();
+    let working = jobs;
+    for (let index = 1; index < ordered.length; index++) {
+      const predecessor = ordered[index - 1];
+      const successor = ordered[index];
+      if (classifyLinkCandidate(working, predecessor.id, successor.id) !== 'valid') continue;
+      const current = working.find((job) => job.id === successor.id)!;
+      const nextDependencies = [...(current.dependencies ?? []), { jobId: predecessor.id, type: 'FS' as DependencyType, lagHours: 0 }];
+      working = working.map((job) => (job.id === successor.id ? { ...job, dependencies: nextDependencies } : job));
+      void updateJob(successor.id, { dependencies: nextDependencies }).then(showResult);
+    }
+  }, [jobs, pushHistory, selectedIds, showResult, updateJob]);
+
+  const [views, setViews] = useState<BoardView[]>(loadBoardViews);
+  const saveView = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setViews((current) => {
+      const next = [...current.filter((view) => view.name !== trimmed), { id: `${Date.now()}`, name: trimmed, zoom, sortBy, statusFilter }];
+      localStorage.setItem(BOARD_VIEWS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [sortBy, statusFilter, zoom]);
+  const applyView = useCallback((id: string) => {
+    const view = loadBoardViews().find((item) => item.id === id);
+    if (!view) return;
+    setZoom(view.zoom);
+    setSortBy(view.sortBy);
+    setStatusFilter(view.statusFilter);
+  }, []);
+  const deleteView = useCallback((id: string) => {
+    setViews((current) => {
+      const next = current.filter((view) => view.id !== id);
+      localStorage.setItem(BOARD_VIEWS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  /** PNG snapshot of the whole board content for shift-handover printouts. */
+  const exportPng = useCallback(async () => {
+    if (!contentRef.current) return;
+    const { default: html2canvas } = await import('html2canvas');
+    const canvas = await html2canvas(contentRef.current, {
+      backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-page').trim() || '#fff',
+      scale: 1.5,
+    });
+    const link = document.createElement('a');
+    link.download = `dravaint-machine-board-${new Date().toISOString().slice(0, 10)}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }, []);
+
   return {
     board,
     laneOrder,
@@ -567,6 +661,13 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     setStatusFilter,
     autoSchedule,
     exportCsv,
+    exportPng,
+    jumpToConflict,
+    chainSelected,
+    views,
+    saveView,
+    applyView,
+    deleteView,
     historyDepth: history.length,
     futureDepth: future.length,
     originMs,

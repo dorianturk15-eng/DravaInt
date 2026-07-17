@@ -11,7 +11,7 @@ parentheses where this plan continues that backlog instead of duplicating it.
 - [ ] 3. Material shortage board linked to affected work orders. (old 173)
 - [ ] 4. Quality holds and non-conformance records. (old 174)
 - [ ] 5. Maintenance checklists with machine-specific templates. (old 175)
-- [ ] 6. Operator kiosk mode with oversized touch targets. (old 176)
+- [x] 6. Operator kiosk mode with oversized touch targets. (old 176)
 - [ ] 7. Barcode/QR work-order lookup. (old 177)
 - [ ] 8. Live "next operation" queue per machine. (old 178)
 - [ ] 9. Production target vs. actual by shift. (old 179)
@@ -36,8 +36,8 @@ parentheses where this plan continues that backlog instead of duplicating it.
 - [ ] 22. Approval gate before publishing a materially changed baseline. (old 168)
 - [ ] 23. Minimap for very long multi-machine Gantt timelines. (old 169)
 - [ ] 24. Shift-to-Gantt capacity overlays. (old 170)
-- [ ] 25. "Jump to conflict" navigation cycling through all flagged jobs in order.
-- [ ] 26. Bulk dependency creation (select N jobs, chain them FS in sequence in one action).
+- [x] 25. "Jump to conflict" navigation cycling through all flagged jobs in order.
+- [x] 26. Bulk dependency creation (select N jobs, chain them FS in sequence in one action).
 - [ ] 27. What-if duration slider that previews a cascade before committing it.
 - [ ] 28. Per-operator saved column-width/zoom preference, not just per-view presets.
 - [ ] 29. Gantt row grouping by product family, not just by machine.
@@ -45,8 +45,8 @@ parentheses where this plan continues that backlog instead of duplicating it.
 
 ## Phase 4 — Machine Scheduling board enhancements (31–40)
 
-- [ ] 31. Saved board views (zoom + sort + filter) per operator, mirroring the Gantt page's saved presets.
-- [ ] 32. PNG/print export of the board for shift handover printouts.
+- [x] 31. Saved board views (zoom + sort + filter) per operator, mirroring the Gantt page's saved presets.
+- [x] 32. PNG/print export of the board for shift handover printouts.
 - [x] 33. Keyboard nudge (arrow keys move the selected card by one snap increment) as an alternative to pointer drag.
 - [x] 34. Status/operator filter chips in the toolbar so a busy board can be narrowed at a glance.
 - [x] 35. "Auto-schedule" button on the board (reuse the Gantt page's auto-scheduler) for quick fill of unassigned jobs.
@@ -76,8 +76,8 @@ parentheses where this plan continues that backlog instead of duplicating it.
 - [ ] 53. Attach multiple files per operation step (not just one CAD upload per job).
 - [ ] 54. Digital sign-off per operation step (operator marks a step complete with a timestamp/initials).
 - [ ] 55. Cost roll-up per work order (material + labor-hours estimate) surfaced on the printable traveler.
-- [ ] 56. Duplicate-work-order action that copies an existing order's route as a starting point.
-- [ ] 57. Work order search/filter by product, customer, or date range (currently only browsable via the tree).
+- [x] 56. Duplicate-work-order action that copies an existing order's route as a starting point.
+- [x] 57. Work order search/filter by product, customer, or date range (currently only browsable via the tree).
 - [ ] 58. Configurable traveler print template (choose which fields print) instead of one fixed layout.
 - [ ] 59. Linking a work order to a customer/sales-order reference field.
 - [ ] 60. Batch status update (mark N selected work orders as done/delayed at once).
@@ -88,7 +88,7 @@ parentheses where this plan continues that backlog instead of duplicating it.
 - [ ] 62. Per-role default landing page (not just one global default view).
 - [ ] 63. Machine maintenance schedule management (ties into Phase 1 item 5).
 - [ ] 64. Configurable qualification catalog (currently qualifications are free-text strings matched to machine names).
-- [ ] 65. Admin-visible login history / last-active timestamp per account.
+- [x] 65. Admin-visible login history / last-active timestamp per account.
 - [ ] 66. Role permission matrix view (a single screen showing what each role can/can't do, for onboarding new admins).
 - [ ] 67. Company holiday calendar management UI (feeds Phase 5 item 48 and Gantt's holiday-aware CPM).
 - [x] 68. Configurable weekly-capacity-hours value in Settings instead of the hardcoded 40h constant.
@@ -110,7 +110,7 @@ parentheses where this plan continues that backlog instead of duplicating it.
 
 ## Phase 9 — Notifications & alerts (81–90)
 
-- [ ] 81. Per-alert-type mute/snooze instead of only a global enable/disable toggle.
+- [x] 81. Per-alert-type mute/snooze instead of only a global enable/disable toggle.
 - [ ] 82. Notification history log (currently only shows live/current alerts, not what fired earlier today).
 - [ ] 83. Desktop push notifications (via the PWA's service worker) for critical alerts when the tab isn't focused.
 - [ ] 84. Configurable alert severity thresholds per alert type (not just the existing capacity/delay ones).
@@ -128,7 +128,7 @@ parentheses where this plan continues that backlog instead of duplicating it.
 - [x] 93. Configurable offline-queue retry backoff instead of only retrying on `online` event.
 - [ ] 94. Service-worker cache versioning UI so a stale PWA install can self-heal without the user clearing site data manually.
 - [ ] 95. Batch/debounce rapid successive `updateJob` calls (e.g. multi-select drag) into fewer network round-trips.
-- [ ] 96. Add database indexes/queries review pass now that `jobs`/`workers`/`shift_assignments` have grown in shape.
+- [x] 96. Add database indexes/queries review pass now that `jobs`/`workers`/`shift_assignments` have grown in shape.
 - [ ] 97. End-to-end smoke test script covering login → create work order → schedule → drag → connect → publish shift, runnable in CI.
 - [x] 98. Expand Vitest coverage to the machine board's conflict/cycle classification logic (currently covered by geometry/CPM units only).
 - [x] 99. Add a `CHANGELOG.md` so future feature batches are documented in one place instead of scattered plan files.
