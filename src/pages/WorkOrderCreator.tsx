@@ -210,7 +210,7 @@ export default function WorkOrderCreator() {
 
   return (
     <>
-    <div className="wizard-container">
+    <div className="wizard-container no-print">
       <h2 style={{ marginBottom: 5 }}>{t.workOrders.title}</h2>
       <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.workOrders.subtitle}</p>
 

@@ -149,7 +149,7 @@ export default function Dashboard() {
       </div>
 
       {/* Split visual columns: Capacity Heatmap & Routing Node Map */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 20, marginBottom: 25 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))', gap: 20, marginBottom: 25 }}>
 
         {/* Capacity Heatmap */}
         <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0 }}>
@@ -264,6 +264,7 @@ export default function Dashboard() {
         {recent.length === 0 ? (
           <p className="subtitle-text" style={{ margin: 0 }}>{t.dashboard.noJobs}</p>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -295,6 +296,7 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
