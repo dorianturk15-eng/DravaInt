@@ -16,6 +16,12 @@ function addDays(value: string, days: number) {
   return isoDate(date);
 }
 
+function mondayOf(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return isoDate(date);
+}
+
 function getIsoWeek(value: string) {
   const date = new Date(`${value}T12:00:00`);
   date.setHours(0, 0, 0, 0);
@@ -53,8 +59,9 @@ export default function ShiftSchedule() {
   const activeDefinitions = useMemo(() => definitions.filter((definition) => definition.isActive), [definitions]);
   const today = isoDate(new Date());
 
-  const [startDate, setStartDate] = useState(() => localStorage.getItem('shift-board-start') || today);
+  const [startDate, setStartDate] = useState(() => mondayOf(localStorage.getItem('shift-board-start') || today));
   const [weekCount, setWeekCount] = useState(4);
+  const [showWeekend, setShowWeekend] = useState(false);
   const [department, setDepartment] = useState(() => localStorage.getItem('shift-board-department') || 'Alatnica');
   const [participantIds, setParticipantIds] = useState<number[]>(() => activeWorkers.map((worker) => worker.id));
   const [drafts, setDrafts] = useState<ShiftScheduleRecord[]>([]);
@@ -233,7 +240,7 @@ export default function ShiftSchedule() {
     setAbsenceWorker('');
   }
 
-  const weekdays = useMemo(() => Array.from({ length: 5 }, (_, index) => addDays(startDate, index)), [startDate]);
+  const weekdays = useMemo(() => Array.from({ length: showWeekend ? 7 : 5 }, (_, index) => addDays(startDate, index)), [startDate, showWeekend]);
 
   return (
     <div className="wizard-container shift-planner-page">
@@ -248,9 +255,10 @@ export default function ShiftSchedule() {
 
       <section className="planner-command-card glass-panel">
         <div className="planner-fields">
-          <label>{lang === 'hr' ? 'Početak plana' : 'Plan start'}<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
+          <label>{lang === 'hr' ? 'Početak plana' : 'Plan start'}<input type="date" value={startDate} onChange={(event) => event.target.value && setStartDate(mondayOf(event.target.value))} /></label>
           <label>{lang === 'hr' ? 'Broj tjedana' : 'Weeks'}<input type="number" min={1} max={12} value={weekCount} onChange={(event) => setWeekCount(Number(event.target.value) || 1)} /></label>
           <label>{lang === 'hr' ? 'Odjel' : 'Department'}<select value={department} onChange={(event) => setDepartment(event.target.value)}><option>Alatnica</option><option>Brizganje</option><option>Montaža</option><option>Kontrola kvalitete</option></select></label>
+          <label className="checkbox-field"><input type="checkbox" checked={showWeekend} onChange={(event) => setShowWeekend(event.target.checked)} /> {lang === 'hr' ? 'Prikaži vikend' : 'Show weekend'}</label>
         </div>
         <div className="planner-actions">
           <button className="btn btn-blue" disabled={isGenerating} onClick={() => void generateSchedule()}><IconRefresh />{isGenerating ? (lang === 'hr' ? 'Generiranje…' : 'Generating…') : (lang === 'hr' ? 'Generiraj' : 'Generate')}</button>
@@ -290,7 +298,7 @@ export default function ShiftSchedule() {
 
       <div className="shift-board-scroll">
         {drafts.map((schedule) => {
-          const dates = Array.from({ length: 5 }, (_, day) => addDays(schedule.startDate, day));
+          const dates = Array.from({ length: showWeekend ? 7 : 5 }, (_, day) => addDays(schedule.startDate, day));
           return <section className="shift-week-board glass-panel" key={schedule.id}>
             <header className="week-board-header"><div><span>{schedule.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'}</span><small>{schedule.startDate} — {schedule.endDate} · v{schedule.version || 1}</small></div><div className="week-board-actions"><span className={`schedule-state state-${schedule.status}`}>{schedule.status}</span><button className="btn btn-ghost" disabled={schedule.status === 'published'} onClick={() => void publishOne(schedule)}>{schedule.status === 'published' ? (lang === 'hr' ? 'Objavljeno' : 'Published') : (lang === 'hr' ? 'Objavi' : 'Publish')}</button></div></header>
             <div className="shift-board-grid" style={{ '--shift-columns': dates.length } as React.CSSProperties}>
