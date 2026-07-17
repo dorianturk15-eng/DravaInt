@@ -281,6 +281,7 @@ const FALLBACK_JOBS: Job[] = [
     status: 'inProgress',
     progress: 45,
     color: COLORS[0],
+    priority: 'urgent',
   },
   {
     id: 43,
@@ -460,6 +461,7 @@ const FALLBACK_JOBS: Job[] = [
     progress: 0,
     color: COLORS[0],
     materialStatus: 'waiting',
+    priority: 'high',
     comments: 'Velika serija (200 kom), rok 24.7. Čeka se sirovina. Tokarenje je dodijeljeno Nikoli V. koji je trenutno odsutan — sada se prijavljuje i na razini operacije rute.',
     operations: [
       { id: 1, name: 'Pila', machine: 'Pila', hours: 2, operator: 'Ivana K.', operatorId: 7 },
@@ -480,6 +482,7 @@ const FALLBACK_JOBS: Job[] = [
     progress: 30,
     color: COLORS[1],
     materialStatus: 'delayed',
+    priority: 'high',
     comments: 'Kupac je zvao - kasni isporuka! Rok je prošao, a status nikad nije ručno promijenjen na "kašnjenje".',
   },
   {
@@ -523,6 +526,7 @@ const FALLBACK_JOBS: Job[] = [
     status: 'planned',
     progress: 0,
     color: COLORS[4],
+    priority: 'low',
     comments: 'Nizak prioritet - može pričekati do kraja mjeseca.',
   },
 ];

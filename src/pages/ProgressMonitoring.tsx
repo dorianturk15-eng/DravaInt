@@ -3,6 +3,8 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { IconTrash, IconList, IconBoard } from '../components/Icons';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
 import { hasChildren } from '../scheduling/hierarchy';
+import { priorityLabel, priorityMeta, priorityRank } from '../scheduling/priority';
+import { isJobOverdue } from '../scheduling/status';
 
 const STATUSES: JobStatus[] = ['planned', 'inProgress', 'done', 'delayed'];
 
@@ -22,7 +24,14 @@ export default function ProgressMonitoring() {
     const machineMatch = (job.machine || '').toLowerCase().includes(q);
     const operatorMatch = (job.operator || '').toLowerCase().includes(q);
     return orderMatch || machineMatch || operatorMatch;
-  });
+  }).sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
+
+  // Auto-flag shown when a job's dates say it is overdue but its manual status hasn't been updated.
+  const overdueBadge = (
+    <span style={{ marginLeft: 8, background: 'var(--danger-color)', color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+      {lang === 'hr' ? 'KAŠNJENJE (auto)' : 'LATE (auto)'}
+    </span>
+  );
 
   // Client-side physics confetti burst
   function triggerConfetti() {
@@ -154,6 +163,10 @@ export default function ProgressMonitoring() {
                       <span className={`status-pill status-${job.status}`}>
                         {t.progress.statusOptions[job.status]}
                       </span>
+                      <span style={{ background: priorityMeta(job.priority).color, color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+                        {priorityLabel(job.priority, lang)}
+                      </span>
+                      {job.status !== 'delayed' && isJobOverdue(job) && overdueBadge}
                     </div>
                   </td>
                   <td style={{ minWidth: 180 }}>
@@ -202,7 +215,13 @@ export default function ProgressMonitoring() {
                 </div>
                 {columnJobs.map((job) => (
                   <div className="board-card" key={job.id} style={{ borderLeft: `3px solid ${status === 'done' ? 'var(--success-color)' : status === 'delayed' ? 'var(--danger-color)' : 'var(--primary-color)'}`, cursor: 'pointer' }} onClick={() => setDetailJobId(job.id)}>
-                    <div className="board-card-title" style={{ fontWeight: 700, color: 'var(--primary-color)' }}>{job.order || job.machine}</div>
+                    <div className="board-card-title" style={{ fontWeight: 700, color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {job.order || job.machine}
+                      <span style={{ background: priorityMeta(job.priority).color, color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700 }}>
+                        {priorityLabel(job.priority, lang)}
+                      </span>
+                      {job.status !== 'delayed' && isJobOverdue(job) && overdueBadge}
+                    </div>
                     <div className="board-card-meta">
                       {job.machine}
                       {job.operator ? ` · ${job.operator}` : ''}

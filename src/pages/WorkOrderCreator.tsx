@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash, IconPrint } from '../components/Icons';
-import { useScheduling, type OperationStep } from '../scheduling/SchedulingContext';
+import { useScheduling, type OperationStep, type JobPriority } from '../scheduling/SchedulingContext';
 import { hasChildren } from '../scheduling/hierarchy';
 import { useLogo } from '../logo/LogoContext';
 import { useWorkers } from '../workers/WorkersContext';
+import { priorityLabel, priorityMeta } from '../scheduling/priority';
 
 let nextOpId = 1;
 
@@ -55,12 +56,13 @@ export default function WorkOrderCreator() {
   const [orderNumber, setOrderNumber] = useState('');
   const [product, setProduct] = useState('');
   const [operatorId, setOperatorId] = useState('');
+  const [priority, setPriority] = useState<JobPriority>('normal');
   const [comments, setComments] = useState('');
   const [startDateTime, setStartDateTime] = useState('');
   const [parentId, setParentId] = useState('');
 
   const [operations, setOperations] = useState<OperationStep[]>([]);
-  const [opForm, setOpForm] = useState({ name: '', machine: '', hours: '' });
+  const [opForm, setOpForm] = useState({ name: '', machine: '', hours: '', operatorId: '' });
   const [orderSearch, setOrderSearch] = useState('');
 
   const [message, setMessage] = useState<string | null>(null);
@@ -95,8 +97,16 @@ export default function WorkOrderCreator() {
   function addOperation() {
     const hours = parseFloat(opForm.hours);
     if (!opForm.name || !opForm.machine || !hours || hours <= 0) return;
-    setOperations((prev) => [...prev, { id: nextOpId++, name: opForm.name, machine: opForm.machine, hours }]);
-    setOpForm({ name: '', machine: '', hours: '' });
+    const opWorker = activeWorkers.find((worker) => worker.id === Number(opForm.operatorId));
+    setOperations((prev) => [...prev, {
+      id: nextOpId++,
+      name: opForm.name,
+      machine: opForm.machine,
+      hours,
+      operator: opWorker ? displayName(opWorker) : undefined,
+      operatorId: opWorker?.id ?? null,
+    }]);
+    setOpForm({ name: '', machine: '', hours: '', operatorId: '' });
   }
 
   function removeOperation(id: number) {
@@ -136,6 +146,7 @@ export default function WorkOrderCreator() {
       comments: comments.trim(),
       materialStatus: 'ready' as const,
       setupHours: 0,
+      priority,
     };
     const conflicts = getJobConflicts(draft);
     addJob(draft);
@@ -144,6 +155,7 @@ export default function WorkOrderCreator() {
     setOrderNumber('');
     setProduct('');
     setOperatorId('');
+    setPriority('normal');
     setComments('');
     setStartDateTime('');
     setParentId('');
@@ -243,7 +255,16 @@ export default function WorkOrderCreator() {
             <label>{lang === 'hr' ? 'Dodijeljeni operater' : 'Assigned operator'}</label>
             <select value={operatorId} onChange={(e) => setOperatorId(e.target.value)}>
               <option value="">{lang === 'hr' ? 'Nije dodijeljen' : 'Unassigned'}</option>
-              {activeWorkers.map((worker) => <option key={worker.id} value={worker.id}>{displayName(worker)} · {worker.qualifications.join(', ') || worker.roleName}</option>)}
+              {activeWorkers.map((worker) => <option key={worker.id} value={worker.id}>{displayName(worker)} · {worker.qualifications.length ? worker.qualifications.join(', ') : (lang === 'hr' ? 'nema upisanih kvalifikacija' : 'no qualifications set')}</option>)}
+            </select>
+          </div>
+          <div>
+            <label>{lang === 'hr' ? 'Prioritet' : 'Priority'}</label>
+            <select value={priority} onChange={(e) => setPriority(e.target.value as JobPriority)}>
+              <option value="low">{lang === 'hr' ? 'Nizak' : 'Low'}</option>
+              <option value="normal">{lang === 'hr' ? 'Normalan' : 'Normal'}</option>
+              <option value="high">{lang === 'hr' ? 'Visok' : 'High'}</option>
+              <option value="urgent">{lang === 'hr' ? 'Hitno' : 'Urgent'}</option>
             </select>
           </div>
           <div>
@@ -320,6 +341,13 @@ export default function WorkOrderCreator() {
               onChange={(e) => setOpForm({ ...opForm, hours: e.target.value })}
             />
           </div>
+          <div>
+            <label>{lang === 'hr' ? 'Operater (korak)' : 'Operator (step)'}</label>
+            <select value={opForm.operatorId} onChange={(e) => setOpForm({ ...opForm, operatorId: e.target.value })}>
+              <option value="">{lang === 'hr' ? 'Nije dodijeljen' : 'Unassigned'}</option>
+              {activeWorkers.map((worker) => <option key={worker.id} value={worker.id}>{displayName(worker)}</option>)}
+            </select>
+          </div>
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
             <button className="btn btn-blue" onClick={addOperation} style={{ width: '100%' }}>
               <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
@@ -342,6 +370,7 @@ export default function WorkOrderCreator() {
                     <div className="flow-name">{op.name}</div>
                     <div className="flow-meta">{op.machine}</div>
                     <div className="flow-meta">{op.hours} h</div>
+                    {op.operator && <div className="flow-meta">👤 {op.operator}</div>}
                   </div>
                   {i < operations.length - 1 && (
                     <span className="flow-arrow">
@@ -392,6 +421,7 @@ export default function WorkOrderCreator() {
                   <th>{t.workOrders.orderNumber}</th>
                   <th>{t.workOrders.product}</th>
                   <th>{t.workOrders.buildRoute}</th>
+                  <th>{lang === 'hr' ? 'Prioritet' : 'Priority'}</th>
                   <th>{t.common.status}</th>
                   <th></th>
                 </tr>
@@ -407,6 +437,11 @@ export default function WorkOrderCreator() {
                     </td>
                     <td>{job.product || '-'}</td>
                     <td>{job.operations?.map((op) => op.name).join(' → ') || '-'}</td>
+                    <td>
+                      <span style={{ background: priorityMeta(job.priority).color, color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                        {priorityLabel(job.priority, lang)}
+                      </span>
+                    </td>
                     <td>
                       <span className={`status-pill status-${job.status}`}>
                         {t.progress.statusOptions[job.status]}
