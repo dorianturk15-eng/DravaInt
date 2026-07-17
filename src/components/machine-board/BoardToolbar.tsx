@@ -34,6 +34,7 @@ interface BoardToolbarProps {
   futureDepth: number;
   onUndo: () => void;
   onRedo: () => void;
+  compact?: boolean;
 }
 
 const ZOOM_LABEL_KEY: Record<ZoomPreset, keyof TranslationShape['machineBoard']> = {
@@ -73,9 +74,41 @@ export function BoardToolbar({
   futureDepth,
   onUndo,
   onRedo,
+  compact,
 }: BoardToolbarProps) {
   const [viewName, setViewName] = useState('');
   const [activeViewId, setActiveViewId] = useState('');
+
+  const statusFilterGroup = (
+    <div className="board-toolbar-group board-toolbar-scroll" role="group" aria-label={t.conflicts}>
+      <button type="button" className={`board-toolbar-btn${statusFilter === 'all' ? ' active' : ''}`} onClick={() => onStatusFilterChange('all')}>
+        {t.filterAll}
+      </button>
+      {STATUSES.map((status) => (
+        <button
+          key={status}
+          type="button"
+          className={`board-toolbar-btn${statusFilter === status ? ' active' : ''}`}
+          onClick={() => onStatusFilterChange(statusFilter === status ? 'all' : status)}
+        >
+          {statusLabels[status]}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <div className="board-toolbar board-toolbar-compact">
+        {statusFilterGroup}
+        <select className="board-toolbar-select" value={sortBy} onChange={(event) => onSortChange(event.target.value as SortBy)}>
+          <option value="name">{t.sortByName}</option>
+          <option value="load">{t.sortByLoad}</option>
+        </select>
+      </div>
+    );
+  }
+
   return (
     <div className="board-toolbar">
       <div className="board-toolbar-group" role="group" aria-label="Zoom">
@@ -90,21 +123,7 @@ export function BoardToolbar({
           </button>
         ))}
       </div>
-      <div className="board-toolbar-group" role="group" aria-label={t.conflicts}>
-        <button type="button" className={`board-toolbar-btn${statusFilter === 'all' ? ' active' : ''}`} onClick={() => onStatusFilterChange('all')}>
-          {t.filterAll}
-        </button>
-        {STATUSES.map((status) => (
-          <button
-            key={status}
-            type="button"
-            className={`board-toolbar-btn${statusFilter === status ? ' active' : ''}`}
-            onClick={() => onStatusFilterChange(statusFilter === status ? 'all' : status)}
-          >
-            {statusLabels[status]}
-          </button>
-        ))}
-      </div>
+      {statusFilterGroup}
       <select className="board-toolbar-select" value={sortBy} onChange={(event) => onSortChange(event.target.value as SortBy)}>
         <option value="name">{t.sortByName}</option>
         <option value="load">{t.sortByLoad}</option>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { useScheduling } from '../../scheduling/SchedulingContext';
 import { useMachines } from '../../machines/MachinesContext';
@@ -27,14 +27,28 @@ import { MachineLane } from './MachineLane';
 import { TaskCard } from './TaskCard';
 import { ConnectionLayer, type RenderedConnector } from './ConnectionLayer';
 import { BoardToolbar } from './BoardToolbar';
+import { MachineBoardMobile } from './MachineBoardMobile';
 
 const DEPENDENCY_TYPES = ['FS', 'SS', 'FF', 'SF'] as const;
+
+function useNarrowViewport(maxWidth: number): boolean {
+  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia?.(`(max-width: ${maxWidth}px)`).matches ?? false);
+  useEffect(() => {
+    const media = window.matchMedia(`(max-width: ${maxWidth}px)`);
+    const apply = () => setIsNarrow(media.matches);
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [maxWidth]);
+  return isNarrow;
+}
 
 export function MachineBoard() {
   const { t, lang } = useLanguage();
   const { jobs, updateJob, removeJob, restoreBackup, getJobConflicts } = useScheduling();
   const { machines } = useMachines();
   const { settings } = useSettings();
+  const isMobile = useNarrowViewport(680);
   const [openConflictId, setOpenConflictId] = useState<number | null>(null);
 
   const controller = useMachineBoardController({
@@ -130,6 +144,7 @@ export function MachineBoard() {
         futureDepth={controller.futureDepth}
         onUndo={controller.undo}
         onRedo={controller.redo}
+        compact={isMobile}
       />
 
       {controller.cycle && (
@@ -139,10 +154,22 @@ export function MachineBoard() {
         </div>
       )}
 
-      {controller.connectMode && (
+      {controller.connectMode && !isMobile && (
         <p className="subtitle-text" style={{ fontSize: 12, margin: '8px 0 0' }}>{t.machineBoard.connectModeHint}</p>
       )}
 
+      {isMobile ? (
+        <MachineBoardMobile
+          lanes={controller.laneOrder}
+          machineByName={machineByName}
+          statusLabels={t.progress.statusOptions}
+          t={t.machineBoard}
+          removeLabel={t.common.remove}
+          locale={controller.locale}
+          getJobConflicts={getJobConflicts}
+          onRemove={(id) => void controller.removeJob(id)}
+        />
+      ) : (
       <div className="board-scroll" ref={controller.scrollRef}>
         <div
           className="board-content"
@@ -220,8 +247,9 @@ export function MachineBoard() {
           })}
         </div>
       </div>
+      )}
 
-      {controller.selectedConnection && !controller.editingConnection && (
+      {controller.selectedConnection && !controller.editingConnection && !isMobile && (
         <div className="dependency-editor" style={{ marginTop: 10 }}>
           <strong>{jobById.get(controller.selectedConnection.successorId)?.order || jobById.get(controller.selectedConnection.successorId)?.machine}</strong>
           <button
