@@ -113,7 +113,7 @@ export default function WorkOrderCreator() {
     setOperations((prev) => prev.filter((op) => op.id !== id));
   }
 
-  function createOrder() {
+  async function createOrder() {
     setMessage(null);
     setError(null);
     if (!orderNumber.trim() || !startDateTime) {
@@ -149,9 +149,20 @@ export default function WorkOrderCreator() {
       priority,
     };
     const conflicts = getJobConflicts(draft);
-    addJob(draft);
+    // Await the write and honour its result: a DB rejection (double-booking DR001, RLS denial, a
+    // schema mismatch) or a version conflict must NOT show the green "Order created" banner. Only a
+    // real success (or a safely-queued offline write) clears the form.
+    const result = await addJob(draft);
+    if (!result.ok && (result.reason === 'rejected' || result.reason === 'version-conflict')) {
+      setError(result.reason === 'rejected'
+        ? (result.message || (lang === 'hr' ? 'Baza je odbila nalog (npr. dvostruka rezervacija termina). Nalog nije spremljen.' : 'The database rejected the order (e.g. a double-booked slot). Nothing was saved.'))
+        : (lang === 'hr' ? 'Nalog je u međuvremenu izmijenjen na drugom terminalu. Osvježite i pokušajte ponovno.' : 'This order was changed on another terminal meanwhile. Refresh and try again.'));
+      return; // keep the form intact so the planner can correct and resubmit
+    }
 
-    setMessage(t.workOrders.created);
+    setMessage(result.ok
+      ? t.workOrders.created
+      : (lang === 'hr' ? 'Izvan mreže — nalog je spremljen u red čekanja i sinkronizirat će se po povratku veze.' : 'Offline — the order was queued and will sync when the connection returns.'));
     setOrderNumber('');
     setProduct('');
     setOperatorId('');
@@ -162,7 +173,7 @@ export default function WorkOrderCreator() {
     setOperations([]);
     setCadFile(null);
     setCadError(null);
-    if (conflicts.machineOverlap || conflicts.operatorOverlap || conflicts.shiftOutside || conflicts.hoursExceeded || conflicts.unqualified) {
+    if (result.ok && (conflicts.machineOverlap || conflicts.operatorOverlap || conflicts.shiftOutside || conflicts.hoursExceeded || conflicts.unqualified)) {
       setMessage(lang === 'hr' ? 'Nalog je kreiran uz upozorenja rasporeda. Provjerite vremenski plan.' : 'Order created with scheduling warnings. Review the timeline.');
     }
   }

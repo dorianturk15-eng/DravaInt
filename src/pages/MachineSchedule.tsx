@@ -14,6 +14,7 @@ export default function MachineSchedule() {
   const formRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState({ machine: '', order: '', operator: '', operatorId: null as number | null, start: '', end: '' });
+  const [feedback, setFeedback] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     const onQuickCreate = (event: Event) => {
@@ -25,9 +26,20 @@ export default function MachineSchedule() {
     return () => window.removeEventListener(QUICK_CREATE_EVENT, onQuickCreate);
   }, []);
 
-  function handleAdd() {
+  async function handleAdd() {
     if (!form.machine || !form.order) return;
-    addJob(form);
+    setFeedback(null);
+    // Honour the write result: a rejected/version-conflict write must not silently look successful.
+    const result = await addJob(form);
+    if (!result.ok && (result.reason === 'rejected' || result.reason === 'version-conflict')) {
+      setFeedback({ tone: 'error', text: result.reason === 'rejected'
+        ? (result.message || (lang === 'hr' ? 'Baza je odbila nalog (npr. zauzet termin). Nalog nije spremljen.' : 'The database rejected the job (e.g. a booked slot). Nothing was saved.'))
+        : (lang === 'hr' ? 'Nalog je izmijenjen drugdje. Pokušajte ponovno.' : 'The job changed elsewhere. Please try again.') });
+      return; // keep the form so it can be corrected
+    }
+    setFeedback({ tone: 'ok', text: result.ok
+      ? (lang === 'hr' ? 'Nalog dodan.' : 'Job added.')
+      : (lang === 'hr' ? 'Izvan mreže — nalog je u redu čekanja.' : 'Offline — job queued to sync later.') });
     setForm({ machine: '', order: '', operator: '', operatorId: null, start: '', end: '' });
   }
 
@@ -94,6 +106,8 @@ export default function MachineSchedule() {
           </div>
         </div>
       </div>
+
+      {feedback && <p role={feedback.tone === 'error' ? 'alert' : 'status'} style={{ color: feedback.tone === 'error' ? 'var(--danger-color)' : 'var(--success-color)', fontSize: 13, marginTop: 12 }}>{feedback.text}</p>}
 
       <div className="action-bar">
         <button className="btn btn-green" onClick={handleAdd}>

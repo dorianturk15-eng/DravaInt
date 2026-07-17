@@ -740,7 +740,12 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       if (!targetIds.has(current.id)) replays.push(removeJob(current.id));
     }
 
-    await Promise.all(replays);
+    const results = await Promise.all(replays);
+    // Surface partial failures instead of optimistically showing the restored state as if every
+    // replayed write persisted. The realtime channel will reconcile local state to the server truth
+    // shortly; log so a failed undo/redo replay isn't completely invisible.
+    const failed = results.filter((result): result is UpdateResult => Boolean(result) && (result as UpdateResult).ok === false);
+    if (failed.length) console.warn(`[restoreBackup] ${failed.length} replayed change(s) did not persist:`, failed.map((f) => (f as Extract<UpdateResult, { ok: false }>).reason));
     setJobs(newJobs);
   }
 

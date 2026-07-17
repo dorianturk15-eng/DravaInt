@@ -17,6 +17,21 @@ export default function ProgressMonitoring() {
 
   // Custom states
   const [detailJobId, setDetailJobId] = useState<number | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // Wraps updateJob so a rejected DB write / version conflict is surfaced instead of silently
+  // lost — the input would otherwise snap back on the next refetch with no explanation.
+  async function applyUpdate(jobId: number, patch: Parameters<typeof updateJob>[1]) {
+    const result = await updateJob(jobId, patch);
+    if (!result.ok && (result.reason === 'rejected' || result.reason === 'version-conflict')) {
+      setUpdateError(result.reason === 'rejected'
+        ? (result.message || (lang === 'hr' ? 'Baza je odbila izmjenu.' : 'The database rejected the change.'))
+        : (lang === 'hr' ? 'Nalog je izmijenjen na drugom terminalu — osvježite prikaz.' : 'This order changed on another terminal — refresh to see the latest.'));
+    } else {
+      setUpdateError(null);
+    }
+    return result;
+  }
 
   const filteredJobs = jobs.filter((job) => {
     const q = searchQuery.toLowerCase();
@@ -87,7 +102,7 @@ export default function ProgressMonitoring() {
   }
 
   function handleStatusChange(jobId: number, status: JobStatus) {
-    updateJob(jobId, { status });
+    void applyUpdate(jobId, { status });
     if (status === 'done') {
       triggerConfetti();
     }
@@ -98,6 +113,7 @@ export default function ProgressMonitoring() {
       <h2 style={{ marginBottom: 5, fontFamily: 'var(--font-title)', fontWeight: 800 }}>{t.progress.title}</h2>
       <p className="subtitle-text" style={{ margin: '0 0 8px 0', fontSize: 13 }}>{t.progress.subtitle}</p>
       <p className="subtitle-text" style={{ margin: '0 0 15px 0', fontSize: 12 }}>{t.progress.sharedNote}</p>
+      {updateError && <p role="alert" style={{ color: 'var(--danger-color)', fontSize: 13, margin: '0 0 12px 0' }}>{updateError}</p>}
 
       <div style={{ display: 'flex', gap: 15, flexWrap: 'wrap', marginBottom: 20, alignItems: 'center' }}>
         <div className="view-toggle" style={{ marginBottom: 0 }}>
@@ -181,7 +197,7 @@ export default function ProgressMonitoring() {
                         value={job.progress}
                         style={{ width: 60, padding: 4 }}
                         onChange={(e) =>
-                          updateJob(job.id, {
+                          void applyUpdate(job.id, {
                             progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
                           })
                         }
