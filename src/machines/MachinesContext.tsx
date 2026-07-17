@@ -22,6 +22,9 @@ const FALLBACK_MACHINES: Machine[] = [
   { id: 1, name: 'CNC-1', type: 'mill', axis: 3 },
   { id: 2, name: 'CNC-2', type: 'mill', axis: 5 },
   { id: 3, name: 'Tokarilica-1', type: 'lathe', axis: null },
+  { id: 4, name: 'Tokarilica-2', type: 'lathe', axis: null },
+  // Spare lathe, not currently scheduled - genuinely idle rather than merely light.
+  { id: 5, name: 'Tokarilica-3', type: 'lathe', axis: null },
 ];
 
 const FALLBACK_STORAGE_KEY = 'dravaint-machines-fallback';

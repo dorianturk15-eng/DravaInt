@@ -40,6 +40,13 @@ const DEFAULT_WORKERS: Worker[] = [
   { id: 4, firstName: 'Krunoslav', lastName: 'S.', email: 'krunoslav@dravaint.local', roleId: null, roleName: 'managers', appUserId: null, isActive: true, status: 'available', qualifications: ['CNC-1', 'CNC-2', 'Tokarilica-1'] },
   { id: 5, firstName: 'Dorian', lastName: 'T.', email: 'dorian@dravaint.local', roleId: null, roleName: 'boss', appUserId: null, isActive: true, status: 'available', qualifications: ['QA'] },
   { id: 6, firstName: 'Božidar', lastName: 'B.', email: 'bozidar@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'break', qualifications: ['CNC-1'] },
+  { id: 7, firstName: 'Ivana', lastName: 'K.', email: 'ivana@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'available', qualifications: ['Pila', 'Tokarilica-1'] },
+  { id: 8, firstName: 'Tomislav', lastName: 'P.', email: 'tomislav@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'available', qualifications: [] },
+  { id: 9, firstName: 'Nikola', lastName: 'V.', email: 'nikola@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'absent', qualifications: ['Tokarilica-2'] },
+  { id: 10, firstName: 'Marija', lastName: 'H.', email: 'marija@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'available', qualifications: ['Kontrola kvalitete'] },
+  { id: 11, firstName: 'Petra', lastName: 'J.', email: 'petra@dravaint.local', roleId: null, roleName: 'managers', appUserId: null, isActive: true, status: 'available', qualifications: ['CNC-1', 'CNC-2', 'Tokarilica-1', 'Tokarilica-2', 'Pila', 'Kontrola kvalitete'] },
+  { id: 12, firstName: 'Filip', lastName: 'R.', email: 'filip@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'available', qualifications: ['CNC-2'] },
+  { id: 13, firstName: 'Stjepan', lastName: 'D.', email: 'stjepan@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: false, status: 'available', qualifications: ['CNC-1'] },
 ];
 
 function loadWorkers(): Worker[] {
