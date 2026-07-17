@@ -9,6 +9,7 @@ import {
   IconRefresh,
 } from '../components/Icons';
 import { useWorkers } from '../workers/WorkersContext';
+import { useMachines } from '../machines/MachinesContext';
 import { useShifts } from '../shifts/ShiftsContext';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../settings/SettingsContext';
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const { settings } = useSettings();
   const { jobs: allJobs } = useScheduling();
   const { activeWorkers, displayName } = useWorkers();
+  const { machines } = useMachines();
   const { schedules, definitions } = useShifts();
   const jobs = allJobs.filter((j) => !hasChildren(allJobs, j.id));
 
@@ -60,8 +62,9 @@ export default function Dashboard() {
   const exceptionCount = delayedCount + materialRisks + Number(hasMachineOverlap) + overloadedMachineCount;
 
   const uniqueMachines = [...machineLoads.keys()];
-  // Ensure we display at least some standard machines if list is empty
-  const machinesList = uniqueMachines.length > 0 ? uniqueMachines : ['CNC-1', 'CNC-2', 'Tokarilica-1', 'Glodalica-2'];
+  // Fall back to the registered machine list (idle machines still deserve a 0h row);
+  // never invent machine names — a fresh database genuinely has none.
+  const machinesList = uniqueMachines.length > 0 ? uniqueMachines : machines.map((machine) => machine.name);
 
   const definitionHours = new Map(definitions.map((definition) => {
     const [startHour, startMinute] = definition.startTime.split(':').map(Number);
@@ -82,12 +85,7 @@ export default function Dashboard() {
   const [routingOrderId, setRoutingOrderId] = useState<number | null>(null);
   const routingJob = jobsWithOps.find((j) => j.id === routingOrderId) ?? jobsWithOps[0];
   const routingIndex = routingJob ? jobsWithOps.findIndex((j) => j.id === routingJob.id) : -1;
-  const demoOps = routingJob?.operations || [
-    { id: '1', name: lang === 'hr' ? 'Piljenje' : 'Cutting', machine: 'CNC-1', hours: 2 },
-    { id: '2', name: lang === 'hr' ? 'Glodanje' : 'Milling', machine: 'Glodalica-2', hours: 4 },
-    { id: '3', name: lang === 'hr' ? 'Bušenje' : 'Drilling', machine: 'Tokarilica-1', hours: 1.5 },
-    { id: '4', name: lang === 'hr' ? 'Kontrola' : 'Quality Check', machine: 'Inspekcija', hours: 1 },
-  ];
+  const routingOps = routingJob?.operations ?? [];
   const stepRoutingOrder = (delta: number) => {
     if (jobsWithOps.length === 0) return;
     const nextIndex = (routingIndex + delta + jobsWithOps.length) % jobsWithOps.length;
@@ -177,6 +175,11 @@ export default function Dashboard() {
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+            {machinesList.length === 0 && (
+              <small style={{ color: 'var(--text-secondary)' }}>
+                {lang === 'hr' ? 'Nema registriranih strojeva — dodajte ih u Administraciji.' : 'No machines registered yet — add them in Administration.'}
+              </small>
+            )}
             {machinesList.map((m) => {
               const hours = Math.round((machineLoads.get(m) || 0) * 10) / 10;
               const loadPercent = Math.min(100, Math.round((hours / weeklyCapacityHours) * 100));
@@ -220,12 +223,19 @@ export default function Dashboard() {
               <small>{routingIndex + 1} / {jobsWithOps.length}</small>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
+          {!routingJob && (
+            <div style={{ padding: '10px 0' }}>
+              <small style={{ color: 'var(--text-secondary)' }}>
+                {lang === 'hr' ? 'Još nema naloga s definiranom rutom — kreirajte radni nalog s operacijama.' : 'No work orders with a routing yet — create a work order with operations.'}
+              </small>
+            </div>
+          )}
+          {routingJob && <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
             <svg width="100%" height="90" viewBox="0 0 450 90" style={{ maxWidth: 450 }}>
-              {demoOps.map((op, i) => {
+              {routingOps.map((op, i) => {
                 const x = 50 + i * 110;
                 const y = 40;
-                const isLast = i === demoOps.length - 1;
+                const isLast = i === routingOps.length - 1;
                 const statusColor = routingJob?.status === 'done' ? 'var(--success-color)' : i === 1 ? '#3b82f6' : '#cbd5e1';
 
                 return (
@@ -267,13 +277,18 @@ export default function Dashboard() {
                 );
               })}
             </svg>
-          </div>
+          </div>}
         </div>
 
       </div>
 
       <div className="step-box allocation-panel">
         <div className="section-title-row"><div className="step-title">{lang === 'hr' ? 'Ravnoteža operatera i smjena' : 'Operator and shift balance'}</div><span>{lang === 'hr' ? `Prosjek ${averageWorkerHours.toFixed(1)} h` : `Average ${averageWorkerHours.toFixed(1)}h`}</span></div>
+        {workerLoads.length === 0 && (
+          <small style={{ color: 'var(--text-secondary)' }}>
+            {lang === 'hr' ? 'Nema registriranih radnika — dodajte ih u Administraciji.' : 'No workers registered yet — add them in Administration.'}
+          </small>
+        )}
         <div className="allocation-grid">{workerLoads.map(({ worker, hours, jobs: jobCount }) => {
           const variance = averageWorkerHours ? (hours - averageWorkerHours) / averageWorkerHours * 100 : 0;
           const warning = Math.abs(variance) > 25;

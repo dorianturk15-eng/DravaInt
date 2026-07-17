@@ -571,7 +571,9 @@ const SchedulingContext = createContext<SchedulingContextValue | null>(null);
 
 export function SchedulingProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<Job[]>(() => {
-    if (supabase) return FALLBACK_JOBS;
+    // In Supabase mode start empty: the demo FALLBACK_JOBS reference workers/machines that don't
+    // exist in a live database, and flashing them as if real invites edits against phantom rows.
+    if (supabase) return [];
     const loaded = loadFallbackJobs();
     nextFallbackId = Math.max(nextFallbackId, ...loaded.map((j) => j.id + 1));
     return loaded;
@@ -583,7 +585,8 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
 
     async function loadJobs() {
       const { data, error } = await supabase!.from('jobs').select('*').is('deleted_at', null).order('id');
-      if (!error && data) setJobs((data as JobRow[]).map(rowToJob));
+      if (error) console.warn('[scheduling] jobs load failed:', error.message);
+      else if (data) setJobs((data as JobRow[]).map(rowToJob));
       setLoading(false);
     }
     loadJobs();

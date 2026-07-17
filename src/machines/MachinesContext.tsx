@@ -64,7 +64,9 @@ const MachinesContext = createContext<MachinesContextValue | null>(null);
 
 export function MachinesProvider({ children }: { children: ReactNode }) {
   const [machines, setMachines] = useState<Machine[]>(() => {
-    if (supabase) return FALLBACK_MACHINES;
+    // In Supabase mode start empty: the demo FALLBACK_MACHINES don't exist in a live database,
+    // and offering them as picker options lets users write job rows referencing phantom machines.
+    if (supabase) return [];
     const loaded = loadFallbackMachines();
     nextFallbackId = Math.max(nextFallbackId, ...loaded.map((m) => m.id + 1));
     return loaded;
@@ -75,7 +77,8 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
 
     async function loadMachines() {
       const { data, error } = await supabase!.from('machines').select('*').order('id');
-      if (!error && data) setMachines(data as MachineRow[]);
+      if (error) console.warn('[machines] load failed:', error.message);
+      else if (data) setMachines(data as MachineRow[]);
     }
     loadMachines();
 
