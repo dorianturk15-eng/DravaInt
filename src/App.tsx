@@ -18,7 +18,7 @@ import { useConnectivity } from './hooks/useConnectivity';
 import { CommandPalette, type CommandItem } from './components/CommandPalette';
 import { NotificationCenter, type OperationalAlert } from './components/NotificationCenter';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
-import { calculateMachineLoads, getWeeklyCapacityHours } from './scheduling/capacity';
+import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from './scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput } from './scheduling/cpm';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -156,8 +156,11 @@ function App() {
     if (!job.machine || job.machine !== candidate.machine || !job.start || !job.end || !candidate.start || !candidate.end) return false;
     return new Date(job.start).getTime() < new Date(candidate.end).getTime() && new Date(candidate.start).getTime() < new Date(job.end).getTime();
   }));
-  const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(leafJobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
-  const machineLoads = calculateMachineLoads(leafJobs, effectiveSchedule);
+  // Capacity alert is scoped to the current week so it reflects this week's load, not an all-time sum.
+  const capacityWindow = weekWindow();
+  const weekLeafJobs = leafJobs.filter((job) => jobIntersectsWeek(job, capacityWindow));
+  const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(weekLeafJobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
+  const machineLoads = calculateMachineLoads(weekLeafJobs, effectiveSchedule);
   const overloadedMachines = settings.capacityAlertsEnabled ? [...machineLoads].filter(([, hours]) => hours / getWeeklyCapacityHours() * 100 >= settings.capacityAlertPercent) : [];
   const alerts: OperationalAlert[] = [];
   if (!online) alerts.push({ id: 'connection-offline', severity: 'critical', title: lang === 'hr' ? 'Radna stanica je izvan mreže' : 'Workstation is offline', detail: lang === 'hr' ? 'Promjene se čuvaju lokalno i sinkronizirat će se nakon povratka veze.' : 'Changes are stored locally and will sync when the connection returns.' });

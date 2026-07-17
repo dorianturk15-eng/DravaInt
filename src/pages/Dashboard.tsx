@@ -12,7 +12,7 @@ import { useWorkers } from '../workers/WorkersContext';
 import { useShifts } from '../shifts/ShiftsContext';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../settings/SettingsContext';
-import { calculateMachineLoads, getWeeklyCapacityHours } from '../scheduling/capacity';
+import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from '../scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput } from '../scheduling/cpm';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
@@ -47,9 +47,16 @@ export default function Dashboard() {
   }));
   const todayLabel = new Intl.DateTimeFormat(lang === 'hr' ? 'hr-HR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
-  const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(jobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
-  const machineLoads = calculateMachineLoads(jobs, effectiveSchedule);
+  // Capacity heatmap is scoped to a single week (default: current), so it reflects load for the
+  // week being viewed instead of summing every job ever assigned — including completed history.
+  const [capacityWeekOffset, setCapacityWeekOffset] = useState(0);
+  const capacityWindow = weekWindow(new Date(), capacityWeekOffset);
+  const weekJobs = jobs.filter((job) => jobIntersectsWeek(job, capacityWindow));
+
+  const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(weekJobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
+  const machineLoads = calculateMachineLoads(weekJobs, effectiveSchedule);
   const weeklyCapacityHours = getWeeklyCapacityHours();
+  const capacityWeekLabel = new Intl.DateTimeFormat(lang === 'hr' ? 'hr-HR' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(capacityWindow.start));
   const overloadedMachineCount = [...machineLoads.values()].filter((hours) => hours / weeklyCapacityHours * 100 >= settings.capacityAlertPercent).length;
   const exceptionCount = delayedCount + materialRisks + Number(hasMachineOverlap) + overloadedMachineCount;
 
@@ -162,8 +169,13 @@ export default function Dashboard() {
 
         {/* Capacity Heatmap */}
         <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0 }}>
-          <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)' }}>
-            📊 {lang === 'hr' ? 'Kapacitet Strojeva (Tjedni opterećenje)' : 'Machine Capacities (Weekly Load)'}
+          <div className="step-title" style={{ fontSize: 16, marginBottom: 12, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <span>📊 {lang === 'hr' ? 'Kapacitet Strojeva (Tjedni opterećenje)' : 'Machine Capacities (Weekly Load)'}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500 }}>
+              <button type="button" className="routing-order-nav" onClick={() => setCapacityWeekOffset((o) => o - 1)} aria-label={lang === 'hr' ? 'Prethodni tjedan' : 'Previous week'}>‹</button>
+              <span style={{ minWidth: 92, textAlign: 'center' }}>{capacityWeekOffset === 0 ? (lang === 'hr' ? 'Ovaj tjedan' : 'This week') : `${lang === 'hr' ? 'Tjedan' : 'Week'} ${capacityWeekLabel}`}</span>
+              <button type="button" className="routing-order-nav" onClick={() => setCapacityWeekOffset((o) => o + 1)} aria-label={lang === 'hr' ? 'Sljedeći tjedan' : 'Next week'}>›</button>
+            </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
             {machinesList.map((m) => {
@@ -175,7 +187,7 @@ export default function Dashboard() {
                 <div key={m}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}>
                     <span style={{ fontWeight: 600 }}>{m}</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{hours}h / 40h ({loadPercent}%)</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{hours}h / {weeklyCapacityHours}h ({loadPercent}%)</span>
                   </div>
                   <div className="progress-bar-track" style={{ height: 10 }}>
                     <div

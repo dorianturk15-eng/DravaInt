@@ -11,6 +11,32 @@ export function getWeeklyCapacityHours(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : WEEKLY_CAPACITY_HOURS;
 }
 
+export interface WeekWindow {
+  start: number;
+  end: number;
+}
+
+/** Monday 00:00 → next Monday 00:00 for the week containing `ref` (optionally shifted by whole weeks). */
+export function weekWindow(ref: Date = new Date(), weekOffset = 0): WeekWindow {
+  const d = new Date(ref);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1) + weekOffset * 7;
+  const monday = new Date(d.setDate(diff));
+  monday.setHours(0, 0, 0, 0);
+  return { start: monday.getTime(), end: monday.getTime() + 7 * 24 * 60 * 60 * 1000 };
+}
+
+/** True when a job's scheduled window intersects the given week. Routed orders carry a zero-duration
+ * parent window at their start, so a start inside the week counts. */
+export function jobIntersectsWeek(job: Job, win: WeekWindow): boolean {
+  if (!job.start) return false;
+  const start = new Date(job.start).getTime();
+  if (isNaN(start)) return false;
+  const rawEnd = job.end ? new Date(job.end).getTime() : start;
+  const end = isNaN(rawEnd) ? start : Math.max(rawEnd, start);
+  return start < win.end && end >= win.start;
+}
+
 function add(loads: Map<string, number>, machine: string, hours: number) {
   const name = machine.trim();
   if (!name || !Number.isFinite(hours) || hours <= 0) return;
