@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { IconPrint, IconRefresh } from '../components/Icons';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
-import { useShifts, type ShiftAssignment, type ShiftDefinition, type ShiftScheduleRecord } from '../shifts/ShiftsContext';
+import { useShifts, type PublicationSnapshot, type ShiftAssignment, type ShiftDefinition, type ShiftScheduleRecord } from '../shifts/ShiftsContext';
 import { downloadShiftSchedulePdf } from '../shifts/shiftPdf';
 import { useWorkers } from '../workers/WorkersContext';
 
@@ -50,7 +50,16 @@ function shiftDuration(start: string, end: string) {
   return minutes / 60;
 }
 
-function downloadCsv(schedules: ShiftScheduleRecord[], workerName: (id: number) => string, shiftName: (id: number) => string) {
+/** A stable fingerprint of a set of assignments, order-independent, used to tell
+ *  whether a working copy still matches what was published. */
+function assignmentSignature(assignments: ShiftAssignment[]) {
+  return assignments
+    .map((assignment) => `${assignment.date}|${assignment.shiftDefinitionId}|${assignment.workerId}`)
+    .sort()
+    .join(';');
+}
+
+function downloadCsv(schedules: Array<{ weekNumber: number; assignments: ShiftAssignment[] }>, workerName: (id: number) => string, shiftName: (id: number) => string) {
   const rows = [['Week', 'Date', 'Shift', 'Worker', 'Override', 'Notes']];
   schedules.forEach((schedule) => schedule.assignments.forEach((assignment) => rows.push([
     String(schedule.weekNumber), assignment.date, shiftName(assignment.shiftDefinitionId), workerName(assignment.workerId), assignment.isOverride ? 'Yes' : 'No', assignment.notes,
@@ -69,7 +78,7 @@ export default function ShiftSchedule() {
   const { username } = useAuth();
   const { activeWorkers, displayName } = useWorkers();
   const { logo } = useLogo();
-  const { definitions, schedules, absences, saveSchedule, generateSchedule: generateRemoteSchedule, saveAbsence, exportIcs } = useShifts();
+  const { definitions, schedules, publications, absences, saveSchedule, publishSchedule, generateSchedule: generateRemoteSchedule, saveAbsence, exportIcs } = useShifts();
   const today = isoDate(new Date());
 
   // All active shifts get a lane, including the third/overnight shift. (Whether
@@ -98,6 +107,9 @@ export default function ShiftSchedule() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState('');
   const [isPrinting, setIsPrinting] = useState(false);
+  const [viewingSnapshot, setViewingSnapshot] = useState<PublicationSnapshot | null>(null);
+  const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
+  const [printingSnapshotId, setPrintingSnapshotId] = useState<number | null>(null);
 
   useEffect(() => {
     if (participantIds.length === 0 && activeWorkers.length) setParticipantIds(activeWorkers.map((worker) => worker.id));
@@ -109,10 +121,37 @@ export default function ShiftSchedule() {
   const definitionById = useMemo(() => new Map(definitions.map((definition) => [definition.id, definition])), [definitions]);
   const maxWeeklyHours = Number(localStorage.getItem('cfg-max-hours')) || 48;
   const dayCount = showWeekend ? FULL_WEEK_COUNT : WORKDAY_COUNT;
-  const publishedSchedules = useMemo(
-    () => schedules.filter((schedule) => schedule.status === 'published').sort((a, b) => b.startDate.localeCompare(a.startDate)),
-    [schedules],
-  );
+  /** Publication history grouped into one entry per week+department, each holding
+   *  its version lineage newest-first. This is the immutable audit trail. */
+  const publicationGroups = useMemo(() => {
+    const byWeek = new Map<string, PublicationSnapshot[]>();
+    for (const snapshot of publications) {
+      const key = `${snapshot.year}|${snapshot.weekNumber}|${snapshot.department}`;
+      const list = byWeek.get(key) ?? [];
+      list.push(snapshot);
+      byWeek.set(key, list);
+    }
+    return [...byWeek.entries()]
+      .map(([key, snapshots]) => {
+        const versions = [...snapshots].sort((a, b) => b.version - a.version);
+        return { key, latest: versions[0], versions };
+      })
+      .sort((a, b) => b.latest.startDate.localeCompare(a.latest.startDate));
+  }, [publications]);
+
+  /** The most recent snapshot for a live schedule's week, or null if never published. */
+  function latestSnapshotFor(schedule: ShiftScheduleRecord) {
+    return publications
+      .filter((snapshot) => snapshot.year === schedule.year && snapshot.weekNumber === schedule.weekNumber && snapshot.department === schedule.department)
+      .reduce<PublicationSnapshot | null>((latest, snapshot) => (!latest || snapshot.version > latest.version ? snapshot : latest), null);
+  }
+
+  /** Whether a working copy has diverged from what was last published. */
+  function isModifiedSincePublish(schedule: ShiftScheduleRecord) {
+    const snapshot = latestSnapshotFor(schedule);
+    if (!snapshot) return false;
+    return assignmentSignature(schedule.assignments) !== assignmentSignature(snapshot.assignments);
+  }
 
   function nameForWorker(id: number) {
     const worker = workerById.get(id);
@@ -267,28 +306,50 @@ export default function ShiftSchedule() {
   }
 
   async function publishOne(schedule: ShiftScheduleRecord) {
-    const published = await saveSchedule({ ...schedule, status: 'published' });
-    setDrafts((current) => current.map((item) => item.id === schedule.id ? published : item));
+    const { record } = await publishSchedule(schedule, {
+      publishedBy: username ?? '',
+      dayCount,
+      participantIds: participantIds.filter((id) => schedule.assignments.some((assignment) => assignment.workerId === id)),
+    });
+    setDrafts((current) => current.map((item) => item.id === schedule.id ? record : item));
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2200);
   }
 
   /**
-   * Published weeks are locked. An edit writes straight back to the same
-   * shift_schedules row — the table is unique per week+department, so there is
-   * nowhere to stage a private copy — which means a published week has to be
-   * withdrawn to draft before it can change. Otherwise the crew would see
-   * half-finished edits appear on the live schedule.
+   * Published weeks are locked. Editing withdraws the live row back to draft so
+   * the crew never sees half-finished edits on the published schedule. This is
+   * now non-destructive: the version that was published stays frozen in the
+   * publication archive, so a later re-publish simply appends v2 and the audit
+   * trail of what was actually printed is preserved.
    */
   async function unlockForEditing(schedule: ShiftScheduleRecord) {
     const reverted = await saveSchedule({ ...schedule, status: 'draft' });
     setDrafts((current) => current.map((item) => item.id === schedule.id ? reverted : item));
   }
 
-  function openFromArchive(schedule: ShiftScheduleRecord) {
-    setDrafts([schedule]);
-    setDepartment(schedule.department);
-    setStartDate(schedule.startDate);
+  /**
+   * Open a published week in the planner to revise it. We load the live working
+   * copy (which may already carry unpublished edits), falling back to a draft
+   * reconstructed from the snapshot if the live row is gone. The snapshot itself
+   * is never edited — saving/re-publishing produces a new version.
+   */
+  function openFromArchive(snapshot: PublicationSnapshot) {
+    const live = schedules.find((schedule) => schedule.year === snapshot.year && schedule.weekNumber === snapshot.weekNumber && schedule.department === snapshot.department);
+    const working: ShiftScheduleRecord = live ?? {
+      id: snapshot.scheduleId,
+      weekNumber: snapshot.weekNumber,
+      year: snapshot.year,
+      startDate: snapshot.startDate,
+      endDate: snapshot.endDate,
+      department: snapshot.department,
+      status: 'draft',
+      version: snapshot.version,
+      assignments: snapshot.assignments.map((assignment) => ({ ...assignment })),
+    };
+    setDrafts([working]);
+    setDepartment(snapshot.department);
+    setStartDate(snapshot.startDate);
     setView('planner');
   }
 
@@ -327,6 +388,36 @@ export default function ShiftSchedule() {
     }
   }
 
+  /** Reprint the exact document that was published — using the snapshot's own
+   *  roster and day range, not whatever the planner is currently showing. */
+  async function printSnapshot(snapshot: PublicationSnapshot) {
+    if (printingSnapshotId !== null) return;
+    setPrintingSnapshotId(snapshot.id);
+    setGenerationError('');
+    try {
+      await downloadShiftSchedulePdf({
+        schedules: [{ ...snapshot, status: 'published' }],
+        participantIds: snapshot.participantIds,
+        dayCount: snapshot.dayCount,
+        lang,
+        logo,
+        companyName: 'Drava International d.o.o.',
+        preparedBy: snapshot.publishedBy,
+        workerName: nameForWorker,
+        workerGroup: (id) => workerById.get(id)?.roleName ?? '',
+        lanesFor,
+        weeklyHours,
+        definitionById,
+      });
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : (lang === 'hr' ? 'Izrada PDF-a nije uspjela.' : 'PDF export failed.'));
+    } finally {
+      setPrintingSnapshotId(null);
+    }
+  }
+
+  const dateTimeLabel = (iso: string) => new Date(iso).toLocaleString(lang === 'hr' ? 'hr-HR' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
   return (
     <div className="wizard-container shift-planner-page">
       <div className="page-heading-row no-print">
@@ -340,36 +431,61 @@ export default function ShiftSchedule() {
 
       <div className="shift-view-tabs no-print" role="tablist">
         <button type="button" role="tab" aria-selected={view === 'planner'} className={view === 'planner' ? 'active' : ''} onClick={() => setView('planner')}>{lang === 'hr' ? 'Planer' : 'Planner'}</button>
-        <button type="button" role="tab" aria-selected={view === 'archive'} className={view === 'archive' ? 'active' : ''} onClick={() => setView('archive')}>{lang === 'hr' ? 'Objavljeni rasporedi' : 'Published schedules'}<span className="tab-count">{publishedSchedules.length}</span></button>
+        <button type="button" role="tab" aria-selected={view === 'archive'} className={view === 'archive' ? 'active' : ''} onClick={() => setView('archive')}>{lang === 'hr' ? 'Objavljeni rasporedi' : 'Published schedules'}<span className="tab-count">{publicationGroups.length}</span></button>
       </div>
 
       {view === 'archive' ? (
         <section className="glass-panel archive-panel no-print">
           <div className="section-title-row">
             <h3>{lang === 'hr' ? 'Arhiva objavljenih rasporeda' : 'Published schedule archive'}</h3>
-            <span>{publishedSchedules.length}</span>
+            <span>{publicationGroups.length}</span>
           </div>
-          {publishedSchedules.length === 0 ? (
+          <p className="archive-intro">{lang === 'hr' ? 'Svaka objava sprema trajnu snimku — točno ono što je izdano i ispisano. Snimke se ne mijenjaju; izmjena tjedna stvara novu verziju.' : 'Every publish saves a permanent snapshot — exactly what was issued and printed. Snapshots are never altered; editing a week creates a new version.'}</p>
+          {generationError && <div className="inline-error" role="alert">{generationError}</div>}
+          {publicationGroups.length === 0 ? (
             <p className="archive-empty">{lang === 'hr' ? 'Još nema objavljenih rasporeda. Objavite tjedan u planeru i pojavit će se ovdje.' : 'No published schedules yet. Publish a week in the planner and it will show up here.'}</p>
           ) : (
             <div className="archive-list">
-              {publishedSchedules.map((schedule) => (
-                <article className="archive-row" key={schedule.id}>
-                  <div className="archive-week">
-                    <strong>{schedule.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'} {schedule.year}</strong>
-                    <small>{schedule.startDate} — {schedule.endDate}</small>
-                  </div>
-                  <div className="archive-meta">
-                    <span className="role-chip">{schedule.department}</span>
-                    <span>{schedule.assignments.length} {lang === 'hr' ? 'dodjela' : 'assignments'}</span>
-                    <span>v{schedule.version || 1}</span>
-                  </div>
-                  <div className="archive-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => openFromArchive(schedule)}>{lang === 'hr' ? 'Otvori' : 'Open'}</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => downloadCsv([schedule], nameForWorker, nameForShift)}>CSV</button>
-                  </div>
-                </article>
-              ))}
+              {publicationGroups.map(({ key, latest, versions }) => {
+                const expanded = expandedWeeks[key] ?? false;
+                const shown = expanded ? versions : versions.slice(0, 1);
+                return (
+                  <article className="archive-group" key={key}>
+                    <header className="archive-group-head">
+                      <div className="archive-week">
+                        <strong>{latest.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'} {latest.year}</strong>
+                        <small>{latest.startDate} — {latest.endDate}</small>
+                      </div>
+                      <div className="archive-meta">
+                        <span className="role-chip">{latest.department}</span>
+                        {versions.length > 1
+                          ? <button type="button" className="text-button" onClick={() => setExpandedWeeks((current) => ({ ...current, [key]: !expanded }))}>{expanded ? (lang === 'hr' ? 'Sakrij verzije' : 'Hide versions') : `${versions.length} ${lang === 'hr' ? 'verzija — prikaži sve' : 'versions — show all'}`}</button>
+                          : <span>{lang === 'hr' ? '1 verzija' : '1 version'}</span>}
+                      </div>
+                    </header>
+                    <div className="archive-versions">
+                      {shown.map((snapshot) => {
+                        const isCurrent = snapshot.version === latest.version;
+                        return (
+                          <div className={`archive-version${isCurrent ? ' is-current' : ''}`} key={snapshot.id}>
+                            <div className="archive-version-info">
+                              <span className={`version-badge${isCurrent ? ' current' : ''}`}>v{snapshot.version}</span>
+                              {isCurrent && <span className="current-tag">{lang === 'hr' ? 'aktualno' : 'current'}</span>}
+                              <span className="archive-version-meta">{dateTimeLabel(snapshot.publishedAt)} · {snapshot.publishedBy} · {snapshot.assignments.length} {lang === 'hr' ? 'dodjela' : 'assignments'}</span>
+                            </div>
+                            <div className="archive-actions">
+                              <button className="btn btn-ghost btn-sm" onClick={() => setViewingSnapshot(snapshot)}>{lang === 'hr' ? 'Pregled' : 'View'}</button>
+                              <button className="btn btn-ghost btn-sm" disabled={printingSnapshotId !== null} onClick={() => void printSnapshot(snapshot)}>{printingSnapshotId === snapshot.id ? '…' : 'PDF'}</button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => downloadCsv([snapshot], nameForWorker, nameForShift)}>CSV</button>
+                              {isCurrent && <button className="btn btn-ghost btn-sm" onClick={() => openFromArchive(snapshot)}>{lang === 'hr' ? 'Uredi u planeru' : 'Edit in planner'}</button>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -425,17 +541,21 @@ export default function ShiftSchedule() {
             {drafts.map((schedule) => {
               const dates = Array.from({ length: dayCount }, (_, day) => addDays(schedule.startDate, day));
               const locked = schedule.status === 'published';
+              const snapshot = latestSnapshotFor(schedule);
+              const modified = !locked && snapshot !== null && isModifiedSincePublish(schedule);
               return <section className={`shift-week-board glass-panel${locked ? ' is-locked' : ''}`} key={schedule.id}>
                 <header className="week-board-header">
-                  <div><span>{schedule.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'}</span><small>{schedule.startDate} — {schedule.endDate} · v{schedule.version || 1}</small></div>
+                  <div><span>{schedule.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'}</span><small>{schedule.startDate} — {schedule.endDate}{snapshot ? ` · ${lang === 'hr' ? 'objavljeno' : 'published'} v${snapshot.version} · ${dateTimeLabel(snapshot.publishedAt)}` : ` · ${lang === 'hr' ? 'neobjavljeno' : 'unpublished'}`}</small></div>
                   <div className="week-board-actions">
                     <span className={`schedule-state state-${schedule.status}`}>{schedule.status === 'published' ? (lang === 'hr' ? 'objavljeno' : 'published') : (lang === 'hr' ? 'nacrt' : 'draft')}</span>
+                    {modified && <span className="schedule-state state-modified" title={lang === 'hr' ? 'Izmijenjeno nakon objave — ponovno objavite za novu verziju' : 'Changed since publish — re-publish for a new version'}>{lang === 'hr' ? 'izmijenjeno' : 'modified'}</span>}
                     {locked
                       ? <button className="btn btn-ghost" onClick={() => void unlockForEditing(schedule)}>{lang === 'hr' ? 'Uredi' : 'Edit'}</button>
-                      : <button className="btn btn-ghost" onClick={() => void publishOne(schedule)}>{lang === 'hr' ? 'Objavi' : 'Publish'}</button>}
+                      : <button className="btn btn-ghost" onClick={() => void publishOne(schedule)}>{snapshot ? (lang === 'hr' ? `Objavi v${snapshot.version + 1}` : `Publish v${snapshot.version + 1}`) : (lang === 'hr' ? 'Objavi' : 'Publish')}</button>}
                   </div>
                 </header>
-                {locked && <p className="lock-banner">{lang === 'hr' ? 'Objavljeni raspored je zaključan. „Uredi” ga vraća u nacrt dok ga ponovno ne objavite.' : 'This published schedule is locked. “Edit” returns it to draft until you publish it again.'}</p>}
+                {locked && <p className="lock-banner">{lang === 'hr' ? 'Objavljeni raspored je zaključan. „Uredi” ga vraća u nacrt dok ga ponovno ne objavite. Objavljena verzija ostaje trajno sačuvana u arhivi.' : 'This published schedule is locked. “Edit” returns it to draft until you publish it again — the published version stays permanently in the archive.'}</p>}
+                {modified && <p className="lock-banner modified-banner">{lang === 'hr' ? `Izmijenjeno nakon objave v${snapshot?.version}. Objavite ponovno da izdate v${(snapshot?.version ?? 0) + 1}; prethodna verzija ostaje u arhivi.` : `Changed since publishing v${snapshot?.version}. Re-publish to issue v${(snapshot?.version ?? 0) + 1}; the previous version stays in the archive.`}</p>}
                 <div className="shift-board-grid" style={{ '--shift-columns': dates.length } as React.CSSProperties}>
                   <div className="shift-grid-corner">{department}</div>
                   {dates.map((date) => <div className={`shift-day-header${isWeekend(date) ? ' is-weekend' : ''}`} key={date}><strong>{dayLabel(date)}</strong><span>{date.slice(5)}</span></div>)}
@@ -467,6 +587,50 @@ export default function ShiftSchedule() {
           <p className="board-help no-print">{lang === 'hr' ? 'Povucite radnika u drugu ćeliju za ručnu izmjenu. Dvostruki klik otvara brzo pretraživo prebacivanje.' : 'Drag a worker to another cell for a manual override. Double-click for quick reassignment.'}</p>
         </>
       )}
+
+      {viewingSnapshot && (() => {
+        const snapshot = viewingSnapshot;
+        const record: ShiftScheduleRecord = { ...snapshot, status: 'published' };
+        const dates = Array.from({ length: snapshot.dayCount }, (_, day) => addDays(snapshot.startDate, day));
+        return (
+          <div className="snapshot-modal-overlay no-print" role="dialog" aria-modal="true" onClick={() => setViewingSnapshot(null)}>
+            <div className="snapshot-modal glass-panel" onClick={(event) => event.stopPropagation()}>
+              <header className="snapshot-modal-head">
+                <div>
+                  <span className="eyebrow">{lang === 'hr' ? 'Objavljena snimka — samo za čitanje' : 'Published snapshot — read only'}</span>
+                  <h3>{snapshot.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'} {snapshot.year} · v{snapshot.version}</h3>
+                  <small>{snapshot.department} · {snapshot.startDate} — {snapshot.endDate} · {lang === 'hr' ? 'objavio' : 'published by'} {snapshot.publishedBy} · {dateTimeLabel(snapshot.publishedAt)}</small>
+                </div>
+                <div className="snapshot-modal-actions">
+                  <button className="btn btn-ghost btn-sm" disabled={printingSnapshotId !== null} onClick={() => void printSnapshot(snapshot)}>{printingSnapshotId === snapshot.id ? '…' : 'PDF'}</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setViewingSnapshot(null)}>{lang === 'hr' ? 'Zatvori' : 'Close'}</button>
+                </div>
+              </header>
+              <div className="shift-week-board is-locked snapshot-board">
+                <div className="shift-board-grid" style={{ '--shift-columns': dates.length } as React.CSSProperties}>
+                  <div className="shift-grid-corner">{snapshot.department}</div>
+                  {dates.map((date) => <div className={`shift-day-header${isWeekend(date) ? ' is-weekend' : ''}`} key={date}><strong>{dayLabel(date)}</strong><span>{date.slice(5)}</span></div>)}
+                  {lanesFor(record).map((definition) => [
+                    <div className="shift-lane-label" key={`label-${definition.id}`} style={{ '--shift-color': definition.color } as React.CSSProperties}><span className="shift-color-dot" /> <strong>{lang === 'hr' ? definition.nameHr : definition.nameEn}</strong><small>{definition.startTime}–{definition.endTime}</small></div>,
+                    ...dates.map((date) => {
+                      const assignments = snapshot.assignments.filter((assignment) => assignment.date === date && assignment.shiftDefinitionId === definition.id);
+                      return <div key={`${date}-${definition.id}`} className={`shift-drop-cell${assignments.length === 0 ? ' empty-cell' : ''}${isWeekend(date) ? ' is-weekend' : ''}`}>
+                        {assignments.map((assignment) => {
+                          const worker = workerById.get(assignment.workerId);
+                          return <div key={assignment.id} className={`assignment-chip${assignment.isOverride ? ' is-override' : ''}`}>
+                            <span className="mini-avatar">{worker?.firstName[0]}{worker?.lastName[0]}</span><span>{nameForWorker(assignment.workerId)}</span>{assignment.isOverride && <b>•</b>}
+                          </div>;
+                        })}
+                      </div>;
+                    }),
+                  ])}
+                </div>
+                <footer className="week-board-footer"><span>{snapshot.assignments.length} {lang === 'hr' ? 'dodjela' : 'assignments'}</span><span>{snapshot.assignments.filter((assignment) => assignment.isOverride).length} {lang === 'hr' ? 'ručnih izmjena' : 'overrides'}</span></footer>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -42,14 +42,54 @@ export interface Absence {
   notes: string;
 }
 
+/**
+ * An immutable, append-only record of exactly what was published for one week.
+ *
+ * The live {@link ShiftScheduleRecord} is a *mutable* working copy — publishing
+ * flips its status and editing flips it back — so on its own it can never answer
+ * "what did the crew actually get on 17 July?". Every publish therefore appends
+ * one of these frozen snapshots: a deep copy of the assignments as they went out,
+ * the roster and day range that were printed, who published it, and when. These
+ * are never mutated or deleted, so the archive is a payroll/dispute-grade audit
+ * trail of every version that was ever published, even after later edits.
+ */
+export interface PublicationSnapshot {
+  id: number;
+  /** The live schedule this was published from (may since have been edited). */
+  scheduleId: number;
+  weekNumber: number;
+  year: number;
+  startDate: string;
+  endDate: string;
+  department: string;
+  /** Monotonic publication number for this week+department: 1, 2, 3… */
+  version: number;
+  /** ISO timestamp the snapshot was taken. */
+  publishedAt: string;
+  /** Username of whoever pressed Publish. */
+  publishedBy: string;
+  /** Day columns as printed (5 for Mon–Fri, 7 with the weekend included). */
+  dayCount: number;
+  /** Roster order as published — preserved so a reprint matches the original. */
+  participantIds: number[];
+  assignments: ShiftAssignment[];
+}
+
+export interface PublishMeta {
+  publishedBy: string;
+  dayCount: number;
+  participantIds: number[];
+}
+
 interface ShiftsContextValue {
   definitions: ShiftDefinition[];
   schedules: ShiftScheduleRecord[];
+  publications: PublicationSnapshot[];
   absences: Absence[];
   loading: boolean;
   saveSchedule: (schedule: Omit<ShiftScheduleRecord, 'id' | 'version'> & { id?: number; version?: number }) => Promise<ShiftScheduleRecord>;
   generateSchedule: (startDate: string, weekCount: number, workerIds: number[], department: string) => Promise<ShiftScheduleRecord[] | null>;
-  publishSchedule: (id: number) => Promise<void>;
+  publishSchedule: (schedule: ShiftScheduleRecord, meta: PublishMeta) => Promise<{ record: ShiftScheduleRecord; snapshot: PublicationSnapshot }>;
   saveDefinition: (definition: Omit<ShiftDefinition, 'id'> & { id?: number }) => Promise<void>;
   saveAbsence: (absence: Omit<Absence, 'id'>) => Promise<void>;
   exportIcs: (workerId: number, workerName: string) => void;
@@ -57,6 +97,7 @@ interface ShiftsContextValue {
 
 const STORAGE_KEY = 'dravaint-shifts-v2';
 const ABSENCE_KEY = 'dravaint-absences-v1';
+const PUBLICATION_KEY = 'dravaint-shift-publications-v1';
 
 const DEFAULT_DEFINITIONS: ShiftDefinition[] = [
   { id: 1, nameHr: 'Prva smjena', nameEn: 'First shift', startTime: '06:00', endTime: '14:00', color: '#2563eb', isActive: true },
@@ -83,6 +124,7 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
   const cached = loadLocal(STORAGE_KEY, { definitions: DEFAULT_DEFINITIONS, schedules: [] as ShiftScheduleRecord[] });
   const [definitions, setDefinitions] = useState<ShiftDefinition[]>(cached.definitions);
   const [schedules, setSchedules] = useState<ShiftScheduleRecord[]>(cached.schedules);
+  const [publications, setPublications] = useState<PublicationSnapshot[]>(() => loadLocal(PUBLICATION_KEY, []));
   const [absences, setAbsences] = useState<Absence[]>(() => loadLocal(ABSENCE_KEY, []));
   const [loading, setLoading] = useState(Boolean(supabase));
 
@@ -129,6 +171,7 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
   }, [loadRemote]);
 
   useEffect(() => persist(definitions, schedules), [definitions, schedules]);
+  useEffect(() => localStorage.setItem(PUBLICATION_KEY, JSON.stringify(publications)), [publications]);
   useEffect(() => localStorage.setItem(ABSENCE_KEY, JSON.stringify(absences)), [absences]);
 
   async function saveSchedule(input: Omit<ShiftScheduleRecord, 'id' | 'version'> & { id?: number; version?: number }) {
@@ -151,10 +194,40 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
     return nextSchedule;
   }
 
-  async function publishSchedule(id: number) {
-    const target = schedules.find((schedule) => schedule.id === id);
-    if (!target) return;
-    await saveSchedule({ ...target, status: 'published' });
+  /**
+   * Publish a week: persist the working copy as `published`, then append an
+   * immutable snapshot of exactly what went out. The snapshot is what the
+   * archive shows and reprints, so it must be a deep copy — later edits to the
+   * live row must not reach back and mutate published history.
+   */
+  async function publishSchedule(schedule: ShiftScheduleRecord, meta: PublishMeta) {
+    const record = await saveSchedule({ ...schedule, status: 'published' });
+    // Monotonic publication version, scoped to this exact week+department.
+    const priorVersions = publications.filter((snapshot) =>
+      snapshot.year === record.year && snapshot.weekNumber === record.weekNumber && snapshot.department === record.department);
+    const version = priorVersions.reduce((max, snapshot) => Math.max(max, snapshot.version), 0) + 1;
+    const snapshot: PublicationSnapshot = {
+      id: Math.max(0, ...publications.map((item) => item.id)) + 1,
+      scheduleId: record.id,
+      weekNumber: record.weekNumber,
+      year: record.year,
+      startDate: record.startDate,
+      endDate: record.endDate,
+      department: record.department,
+      version,
+      publishedAt: new Date().toISOString(),
+      publishedBy: meta.publishedBy || '—',
+      dayCount: meta.dayCount,
+      // Deep copies: the snapshot must be independent of the mutable live row.
+      participantIds: [...meta.participantIds],
+      assignments: record.assignments.map((assignment) => ({ ...assignment })),
+    };
+    setPublications((current) => [...current, snapshot]);
+    // NOTE: snapshots are persisted to localStorage only. A production Supabase
+    // backing would add an append-only `shift_publications` table here; the app
+    // currently runs local-first (no such migration exists), so we keep the
+    // audit trail client-side rather than write to a table that isn't defined.
+    return { record, snapshot };
   }
 
   async function generateSchedule(startDate: string, weekCount: number, workerIds: number[], department: string) {
@@ -204,7 +277,7 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
     URL.revokeObjectURL(url);
   }
 
-  const value: ShiftsContextValue = { definitions, schedules, absences, loading, saveSchedule, generateSchedule, publishSchedule, saveDefinition, saveAbsence, exportIcs };
+  const value: ShiftsContextValue = { definitions, schedules, publications, absences, loading, saveSchedule, generateSchedule, publishSchedule, saveDefinition, saveAbsence, exportIcs };
   return <ShiftsContext.Provider value={value}>{children}</ShiftsContext.Provider>;
 }
 
