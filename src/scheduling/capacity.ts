@@ -1,5 +1,5 @@
 import type { Job } from './SchedulingContext';
-import type { EffectiveSchedule } from './cpm';
+import { splitMachineChain, type EffectiveSchedule } from './cpm';
 
 export const WEEKLY_CAPACITY_HOURS = 40;
 
@@ -56,7 +56,7 @@ export function calculateMachineLoads(jobs: Job[], effective?: Map<number, Effec
       job.operations.forEach((operation) => add(loads, operation.machine, operation.hours));
       return;
     }
-    const machines = job.machine.split(' → ').map((machine) => machine.trim()).filter(Boolean);
+    const machines = splitMachineChain(job.machine);
     if (!machines.length) return;
     const eff = effective?.get(job.id);
     const scheduledHours = eff

@@ -325,6 +325,17 @@ export function getWorkerQualifications(operatorName: string): string[] {
   return Array.isArray(worker?.qualifications) ? worker!.qualifications : [];
 }
 
+/**
+ * Splits a job's `machine` field — which may be a routing chain like "Tokarilica-1 → CNC-2" — into
+ * its individual machine names. Normalises on the '→' arrow regardless of surrounding whitespace, so
+ * both "A → B" and "A→B" yield ["A","B"]. The app previously used two different separators ('→' here,
+ * ' → ' in capacity.ts / GanttChart.tsx); a chain typed without spaces silently double-counted as a
+ * single phantom machine. This is the shared source of truth for that split.
+ */
+export function splitMachineChain(machine: string | undefined | null): string[] {
+  return (machine || '').split('→').map((name) => name.trim()).filter(Boolean);
+}
+
 interface MachineInterval {
   machine: string;
   start: number;
@@ -372,7 +383,7 @@ function machineIntervals(job: Job): MachineInterval[] {
   if (job.operations?.length) {
     return operationIntervals(job).filter((i) => i.machine).map(({ machine, start, end }) => ({ machine, start, end }));
   }
-  const machines = (job.machine || '').split('→').map((m) => m.trim()).filter(Boolean);
+  const machines = splitMachineChain(job.machine);
   if (!machines.length || !job.start || !job.end) return [];
   const start = new Date(job.start).getTime();
   const end = new Date(job.end).getTime();

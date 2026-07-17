@@ -5,7 +5,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
 import { useScheduling, type DependencyType } from '../scheduling/SchedulingContext';
 import { buildGanttTasks, jobIdFromTaskId, hasChildren, computeOperationSchedule } from '../scheduling/hierarchy';
-import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, computeScheduleSlack, cascadeDependents, toLocalDateTimeString } from '../scheduling/cpm';
+import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, computeScheduleSlack, cascadeDependents, toLocalDateTimeString, splitMachineChain } from '../scheduling/cpm';
 import { useSettings } from '../settings/SettingsContext';
 import { useMachines } from '../machines/MachinesContext';
 import type { Job } from '../scheduling/SchedulingContext';
@@ -300,9 +300,7 @@ export default function GanttChart() {
     machines.forEach((machine) => list.add(machine.name));
     jobs.forEach((j) => {
       if (j.machine) {
-        j.machine.split(' → ').forEach((m) => {
-          if (m.trim()) list.add(m.trim());
-        });
+        splitMachineChain(j.machine).forEach((m) => list.add(m));
       }
       if (j.operations) {
         j.operations.forEach((op) => {
@@ -312,7 +310,7 @@ export default function GanttChart() {
     });
     if (list.size === 0) list.add('General / Unassigned');
     const values = Array.from(list);
-    const workload = (machine: string) => jobs.filter((job) => job.machine.split(' → ').includes(machine) || job.operations?.some((operation) => operation.machine === machine)).reduce((hours, job) => hours + Math.max(0, (new Date(job.end).getTime() - new Date(job.start).getTime()) / 3_600_000), 0);
+    const workload = (machine: string) => jobs.filter((job) => splitMachineChain(job.machine).includes(machine) || job.operations?.some((operation) => operation.machine === machine)).reduce((hours, job) => hours + Math.max(0, (new Date(job.end).getTime() - new Date(job.start).getTime()) / 3_600_000), 0);
     return values.sort((a, b) => machineSort === 'name' ? a.localeCompare(b) : machineSort === 'jobs' ? jobs.filter((job) => job.machine.includes(b)).length - jobs.filter((job) => job.machine.includes(a)).length : workload(b) - workload(a));
   }, [jobs, machineSort, machines]);
 
@@ -386,7 +384,7 @@ export default function GanttChart() {
     const normalizedSearch = search.trim().toLowerCase();
     const matchingJobs = jobs.filter((j) => {
       if (normalizedSearch && !`${j.order} ${j.operator} ${j.product ?? ''} ${j.machine}`.toLowerCase().includes(normalizedSearch)) return false;
-      if (j.machine && j.machine.split(' → ').map((m) => m.trim()).includes(machineName)) {
+      if (j.machine && splitMachineChain(j.machine).includes(machineName)) {
         return true;
       }
       if (j.operations?.some((op) => op.machine.trim() === machineName)) {
@@ -990,7 +988,7 @@ export default function GanttChart() {
   }
 
   function machineEfficiency(machine: string) {
-    const laneJobs = jobs.filter((job) => job.machine.split(' → ').includes(machine) || job.operations?.some((operation) => operation.machine === machine));
+    const laneJobs = jobs.filter((job) => splitMachineChain(job.machine).includes(machine) || job.operations?.some((operation) => operation.machine === machine));
     if (!laneJobs.length) return 0;
     const start = Math.min(...laneJobs.map((job) => new Date(job.start).getTime()));
     const end = Math.max(...laneJobs.map((job) => new Date(job.end).getTime()));

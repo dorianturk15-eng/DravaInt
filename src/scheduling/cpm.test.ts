@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { addWorkingTime, cascadeDependents, computeCriticalPath, computeEffectiveSchedule, computeScheduleSlack, findDependencyCycle, toLocalDateTimeString, type ScheduleInput } from './cpm';
+import { addWorkingTime, cascadeDependents, computeCriticalPath, computeEffectiveSchedule, computeScheduleSlack, findDependencyCycle, splitMachineChain, toLocalDateTimeString, type ScheduleInput } from './cpm';
 
 const date = (hours: number) => `2026-07-13T${String(hours).padStart(2, '0')}:00`;
+
+describe('splitMachineChain', () => {
+  it('splits a routing chain the same way regardless of spacing around the arrow', () => {
+    expect(splitMachineChain('Tokarilica-1 → CNC-2')).toEqual(['Tokarilica-1', 'CNC-2']);
+    // Without spaces the old ' → ' split silently kept one phantom machine — now normalised.
+    expect(splitMachineChain('Tokarilica-1→CNC-2')).toEqual(['Tokarilica-1', 'CNC-2']);
+    expect(splitMachineChain('CNC-1')).toEqual(['CNC-1']);
+    expect(splitMachineChain('')).toEqual([]);
+    expect(splitMachineChain(undefined)).toEqual([]);
+  });
+});
 
 describe('CPM scheduling', () => {
   it('applies all four dependency relationship types exactly', () => {
