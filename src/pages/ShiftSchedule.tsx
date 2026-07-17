@@ -112,8 +112,15 @@ export default function ShiftSchedule() {
   const [printingSnapshotId, setPrintingSnapshotId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (participantIds.length === 0 && activeWorkers.length) setParticipantIds(activeWorkers.map((worker) => worker.id));
-  }, [activeWorkers, participantIds.length]);
+    // Prune selections for workers that no longer exist (e.g. a stale localStorage
+    // seed cached before the live Supabase workers list loaded) — passing their ids
+    // to generate_shift_schedule would hit a foreign-key violation server-side.
+    setParticipantIds((current) => {
+      const pruned = current.filter((id) => activeWorkers.some((worker) => worker.id === id));
+      if (pruned.length === 0) return activeWorkers.map((worker) => worker.id);
+      return pruned.length === current.length ? current : pruned;
+    });
+  }, [activeWorkers]);
 
   useEffect(() => localStorage.setItem('shift-board-weekend', String(showWeekend)), [showWeekend]);
 
@@ -178,7 +185,12 @@ export default function ShiftSchedule() {
   }
 
   async function generateSchedule() {
-    if (!scheduleDefinitions.length || !participantIds.length) return;
+    if (!scheduleDefinitions.length || !participantIds.length) {
+      setGenerationError(!scheduleDefinitions.length
+        ? (lang === 'hr' ? 'Nema aktivnih smjena — dodajte ih u postavkama smjena.' : 'No active shift definitions — add them in the shift settings.')
+        : (lang === 'hr' ? 'Nema radnika u bazi — dodajte radnike u Adminu prije generiranja.' : 'No workers in the database — add workers via Admin before generating.'));
+      return;
+    }
     setGenerationError('');
     setIsGenerating(true);
     const weekStart = mondayOf(startDate);
@@ -186,7 +198,12 @@ export default function ShiftSchedule() {
     try {
       remoteSchedules = await generateRemoteSchedule(weekStart, Math.min(12, Math.max(1, weekCount)), participantIds, department);
     } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : (lang === 'hr' ? 'Generiranje nije uspjelo.' : 'Schedule generation failed.'));
+      // Supabase/PostgREST errors are not always Error instances — read .message off
+      // plain error objects too so the real Postgres error reaches the user.
+      const message = error instanceof Error
+        ? error.message
+        : (typeof error === 'object' && error !== null && 'message' in error ? String((error as { message: unknown }).message) : '');
+      setGenerationError(message || (lang === 'hr' ? 'Generiranje nije uspjelo.' : 'Schedule generation failed.'));
       setIsGenerating(false);
       return;
     }
