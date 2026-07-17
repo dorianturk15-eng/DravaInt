@@ -106,8 +106,9 @@ export interface ShiftPdfInput {
   /** The person generating the document — printed as "prepared by". */
   preparedBy?: string;
   workerName: (id: number) => string;
-  /** Optional secondary line for a worker (role / qualification). */
-  workerSubtitle?: (id: number) => string;
+  /** Grouping key (e.g. trade / role) used only to order and visually separate
+   *  workers with a divider rule — never printed on the document. */
+  workerGroup?: (id: number) => string;
   /** Shift lanes present in a given schedule (regular + any retired lane still used). */
   lanesFor: (schedule: ShiftScheduleRecord) => ShiftDefinition[];
   /** Localised weekly-hours total for a worker within a schedule. */
@@ -121,6 +122,9 @@ const L = {
     docName: 'Raspored smjena',
     plant: 'Proizvodni pogon',
     week: 'tjedan',
+    weekAbbr: 'Tj.',
+    weeksLabel: 'Tjedni',
+    partial: 'Djelomično',
     workersOf: 'radnika',
     department: 'Odjel',
     docLabel: 'Dokument',
@@ -145,6 +149,9 @@ const L = {
     docName: 'Shift schedule',
     plant: 'Production plant',
     week: 'week',
+    weekAbbr: 'Wk',
+    weeksLabel: 'Weeks',
+    partial: 'Partial',
     workersOf: 'workers',
     department: 'Department',
     docLabel: 'Document',
@@ -232,13 +239,13 @@ function drawLogo(doc: jsPDF, input: ShiftPdfInput, x: number, y: number) {
  * engineering drawings — stating what the document is, when it was created, by
  * whom, and its approval status. Anchored top-right.
  */
-function drawTitleBlock(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, x: number, y: number, w: number) {
+function drawTitleBlock(doc: jsPDF, input: ShiftPdfInput, statusText: string, x: number, y: number, w: number) {
   const t = L[input.lang];
   const rows: Array<[string, string]> = [
     [t.docLabel, t.docName],
     [t.createdLabel, docStamp()],
     [t.byLabel, input.preparedBy?.trim() || '—'],
-    [t.status, `${schedule.status === 'published' ? t.published : t.draft} · v${schedule.version || 1}`],
+    [t.status, statusText],
   ];
   const rowH = 6.6;
   const labelW = 26;
@@ -282,11 +289,32 @@ function drawTitleBlock(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftSchedul
   return height;
 }
 
+const DM = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`;
+
+/** Aggregate approval status across the weeks shown on the sheet. */
+function statusFor(weeks: ShiftScheduleRecord[], lang: 'hr' | 'en'): string {
+  const t = L[lang];
+  const published = weeks.filter((w) => w.status === 'published').length;
+  if (published === weeks.length) return t.published;
+  if (published === 0) return t.draft;
+  return `${t.partial} · ${published}/${weeks.length}`;
+}
+
+/** Title-bar range descriptor, e.g. "Tjedni 29–32 · 13.07.—08.08.2026." */
+function rangeFor(weeks: ShiftScheduleRecord[], lang: 'hr' | 'en'): string {
+  const t = L[lang];
+  const first = weeks[0];
+  const last = weeks[weeks.length - 1];
+  const dates = `${DM(first.startDate)} — ${DM(last.endDate)}${last.year}.`;
+  if (weeks.length === 1) return `${first.weekNumber}. ${t.week}   ·   ${dates}`;
+  return `${t.weeksLabel} ${first.weekNumber}–${last.weekNumber}   ·   ${dates}`;
+}
+
 /**
  * Render the header band (letterhead + title + document title block) and return
- * the y where body content should begin.
+ * the y where body content should begin. Spans all the weeks on this sheet.
  */
-function drawHeader(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, rosterCount: number): number {
+function drawHeader(doc: jsPDF, input: ShiftPdfInput, weeks: ShiftScheduleRecord[], rosterCount: number): number {
   const t = L[input.lang];
   const y = MARGIN_TOP;
 
@@ -300,11 +328,11 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRec
   doc.setFont(FONT, 'normal');
   doc.setFontSize(9);
   setInk(doc, MUTED);
-  doc.text(`${t.plant} · ${schedule.department}`, textX, y + 12.5);
+  doc.text(`${t.plant} · ${weeks[0].department}`, textX, y + 12.5);
 
   // --- Document title block, right ---
   const blockW = 86;
-  drawTitleBlock(doc, input, schedule, PAGE_W - MARGIN_X - blockW, y, blockW);
+  drawTitleBlock(doc, input, statusFor(weeks, input.lang), PAGE_W - MARGIN_X - blockW, y, blockW);
 
   // --- Document title + range, left, below the letterhead ---
   doc.setFont(FONT, 'bold');
@@ -315,10 +343,7 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRec
   doc.setFont(FONT, 'normal');
   doc.setFontSize(10.5);
   setInk(doc, MUTED);
-  const [, sm, sd] = schedule.startDate.split('-');
-  const [, em, ed] = schedule.endDate.split('-');
-  const range = `${sd}.${sm}. — ${ed}.${em}.${schedule.year}.`;
-  doc.text(`${schedule.weekNumber}. ${t.week} ${schedule.year}   ·   ${range}   ·   ${rosterCount} ${t.workersOf}`, MARGIN_X, y + 36);
+  doc.text(`${rangeFor(weeks, input.lang)}   ·   ${rosterCount} ${t.workersOf}`, MARGIN_X, y + 36);
 
   const ruleY = y + 40;
   // Letterhead rule: heavy rule + hairline just beneath — reads as "official".
@@ -332,182 +357,223 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRec
   return ruleY + 6;
 }
 
-interface Column { x: number; w: number; date?: string; label: string; sub?: string }
+// ---- Multi-week roster grid ----
+//
+// Rather than repeating "06:00–14:00" in every cell, each day shows a compact
+// colour-coded shift number (1 = first shift, 2 = second …); the legend spells
+// the times out once. That frees enough width to lay several week-blocks side
+// by side on one sheet — workers down the left, weeks across.
 
-function buildColumns(dates: string[], lang: 'hr' | 'en'): Column[] {
-  const nameW = 58;
-  const hoursW = 20;
-  const dayW = (CONTENT_W - nameW - hoursW) / dates.length;
-  const t = L[lang];
-  const cols: Column[] = [{ x: MARGIN_X, w: nameW, label: t.worker }];
-  dates.forEach((date, index) => {
-    cols.push({
-      x: MARGIN_X + nameW + index * dayW,
-      w: dayW,
-      date,
-      label: dayName(date, lang),
-      sub: `${date.slice(8)}.${date.slice(5, 7)}.`,
-    });
-  });
-  cols.push({ x: MARGIN_X + nameW + dates.length * dayW, w: hoursW, label: t.hours });
-  return cols;
+const NAME_W = 46;
+const WEEK_HOURS_W = 11;
+const WEEK_TIER_H = 6;
+const DAY_TIER_H = 8;
+const GRID_HEAD_H = WEEK_TIER_H + DAY_TIER_H;
+const BODY_ROW_H = 7.8;
+
+interface WeekBlock {
+  schedule: ShiftScheduleRecord;
+  dates: string[];
+  x: number;
+  w: number;
 }
 
-const HEADER_ROW_H = 11;
-const BODY_ROW_H = 9.6;
+function datesOf(schedule: ShiftScheduleRecord, dayCount: number): string[] {
+  return Array.from({ length: dayCount }, (_, day) => {
+    const d = new Date(`${schedule.startDate}T12:00:00`);
+    d.setDate(d.getDate() + day);
+    return d.toISOString().slice(0, 10);
+  });
+}
 
-function drawTableHeader(doc: jsPDF, cols: Column[], y: number): number {
+/** Shift definitions in play across all weeks, ordered by start time — index+1
+ *  is the code printed in cells and the legend, stable across the whole sheet. */
+function orderedShiftDefs(input: ShiftPdfInput, weeks: ShiftScheduleRecord[]): ShiftDefinition[] {
+  const defs = new Map<number, ShiftDefinition>();
+  weeks.forEach((week) => input.lanesFor(week).forEach((def) => defs.set(def.id, def)));
+  return [...defs.values()].sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id - b.id);
+}
+
+/** Roster present in any week, grouped by the (unprinted) group key so members
+ *  of a trade sit together; a divider rule separates groups on the page. */
+function buildRoster(input: ShiftPdfInput, weeks: ShiftScheduleRecord[]): Array<{ id: number; group: string }> {
+  const present = input.participantIds.filter((id) =>
+    weeks.some((week) => week.assignments.some((a) => a.workerId === id)));
+  return present
+    .map((id, order) => ({ id, group: input.workerGroup?.(id) ?? '', order }))
+    .sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order)
+    .map(({ id, group }) => ({ id, group }));
+}
+
+/** Vertical hairlines separating the name column and each week block. */
+function drawVerticals(doc: jsPDF, blocks: WeekBlock[], yTop: number, yBottom: number) {
+  setDraw(doc, HAIRLINE);
+  doc.setLineWidth(0.2);
+  doc.line(MARGIN_X + NAME_W, yTop, MARGIN_X + NAME_W, yBottom);
+  blocks.forEach((b) => doc.line(b.x + b.w, yTop, b.x + b.w, yBottom));
+}
+
+function drawGridHeader(doc: jsPDF, input: ShiftPdfInput, blocks: WeekBlock[], y: number): number {
+  const t = L[input.lang];
+  const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
+  const dayCount = blocks[0].dates.length;
+
   // Booktabs top rule.
   setDraw(doc, RULE);
   doc.setLineWidth(0.5);
-  doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
+  doc.line(MARGIN_X, y, tableRight, y);
 
-  // Weekend column tint runs the full header+intent height behind the labels.
-  cols.forEach((col) => {
-    if (col.date && isWeekend(col.date)) {
-      setFill(doc, WEEKEND_FILL);
-      doc.rect(col.x, y, col.w, HEADER_ROW_H, 'F');
-    }
-  });
+  // Worker column label, vertically centred across both tiers.
+  doc.setFont(FONT, 'bold');
+  doc.setFontSize(8);
+  setInk(doc, INK);
+  doc.setCharSpace(0.3);
+  doc.text(t.worker.toUpperCase(), MARGIN_X + 2, y + GRID_HEAD_H / 2 + 1);
+  doc.setCharSpace(0);
 
-  cols.forEach((col, index) => {
-    const isName = index === 0;
-    const isHours = index === cols.length - 1;
-    const centreX = col.x + col.w / 2;
+  blocks.forEach((block) => {
+    const dayW = (block.w - WEEK_HOURS_W) / dayCount;
+    // Week tier: one label per block ("Tj. 29 · 13.07.–17.07.").
+    const cx = block.x + block.w / 2;
+    const full = `${t.weekAbbr} ${block.schedule.weekNumber} · ${DM(block.dates[0])}–${DM(block.dates[dayCount - 1])}`;
     doc.setFont(FONT, 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(7.6);
     setInk(doc, INK);
-    doc.setCharSpace(0.3);
-    if (isName) {
-      doc.text(col.label.toUpperCase(), col.x + 2, y + 7);
-    } else if (isHours) {
-      const txt = col.label.toUpperCase();
-      doc.text(txt, col.x + col.w - 2 - doc.getTextWidth(txt) - 0.3 * (txt.length - 1), y + 7);
-    } else {
-      const dayTxt = col.label.toUpperCase();
-      doc.text(dayTxt, centreX - (doc.getTextWidth(dayTxt) + 0.3 * (dayTxt.length - 1)) / 2, y + 5);
-      doc.setCharSpace(0);
-      doc.setFont(FONT, 'normal');
-      doc.setFontSize(8);
-      setInk(doc, MUTED);
-      if (col.sub) doc.text(col.sub, centreX - doc.getTextWidth(col.sub) / 2, y + 9.2);
-    }
+    doc.setCharSpace(0.2);
+    const label2 = doc.getTextWidth(full) > block.w - 4 ? `${t.weekAbbr} ${block.schedule.weekNumber}` : full;
+    doc.text(label2, cx - doc.getTextWidth(label2) / 2, y + 4.1);
     doc.setCharSpace(0);
+
+    // Day tier: single-letter day headers, weekend columns tinted.
+    block.dates.forEach((date, di) => {
+      const dx = block.x + di * dayW;
+      if (isWeekend(date)) {
+        setFill(doc, WEEKEND_FILL);
+        doc.rect(dx, y + WEEK_TIER_H, dayW, DAY_TIER_H, 'F');
+      }
+      const letter = dayName(date, input.lang).charAt(0).toUpperCase();
+      doc.setFont(FONT, 'bold');
+      doc.setFontSize(7);
+      setInk(doc, isWeekend(date) ? MUTED : INK);
+      doc.text(letter, dx + dayW / 2 - doc.getTextWidth(letter) / 2, y + WEEK_TIER_H + 5.4);
+    });
+    // Hours sub-column header ("h" is understood in both languages).
+    const hx = block.x + dayCount * dayW + WEEK_HOURS_W / 2;
+    doc.setFont(FONT, 'bold');
+    doc.setFontSize(7);
+    setInk(doc, MUTED);
+    doc.text('h', hx - doc.getTextWidth('h') / 2, y + WEEK_TIER_H + 5.4);
   });
 
-  const bottom = y + HEADER_ROW_H;
-  // Thin rule under the header row.
+  // Thin rule between the week tier and the day tier.
+  setDraw(doc, HAIRLINE);
+  doc.setLineWidth(0.2);
+  doc.line(MARGIN_X + NAME_W, y + WEEK_TIER_H, tableRight, y + WEEK_TIER_H);
+
+  const bottom = y + GRID_HEAD_H;
   setDraw(doc, RULE);
-  doc.setLineWidth(0.3);
-  doc.line(MARGIN_X, bottom, PAGE_W - MARGIN_X, bottom);
+  doc.setLineWidth(0.35);
+  doc.line(MARGIN_X, bottom, tableRight, bottom);
   return bottom;
 }
 
-function drawRow(
+function drawGridRow(
   doc: jsPDF,
   input: ShiftPdfInput,
-  schedule: ShiftScheduleRecord,
-  cols: Column[],
+  blocks: WeekBlock[],
+  codes: Map<number, number>,
   workerId: number,
   rowNumber: number,
   y: number,
   zebra: boolean,
 ) {
-  const t = L[input.lang];
+  const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
+  const dayCount = blocks[0].dates.length;
+
   if (zebra) {
     setFill(doc, ZEBRA_FILL);
-    doc.rect(MARGIN_X, y, CONTENT_W, BODY_ROW_H, 'F');
+    doc.rect(MARGIN_X, y, tableRight - MARGIN_X, BODY_ROW_H, 'F');
   }
-  // Weekend tint on top of zebra.
-  cols.forEach((col) => {
-    if (col.date && isWeekend(col.date)) {
-      setFill(doc, WEEKEND_FILL);
-      doc.rect(col.x, y, col.w, BODY_ROW_H, 'F');
-    }
+  // Weekend tint per weekend day column.
+  blocks.forEach((block) => {
+    const dayW = (block.w - WEEK_HOURS_W) / dayCount;
+    block.dates.forEach((date, di) => {
+      if (isWeekend(date)) {
+        setFill(doc, WEEKEND_FILL);
+        doc.rect(block.x + di * dayW, y, dayW, BODY_ROW_H, 'F');
+      }
+    });
   });
 
-  const midY = y + BODY_ROW_H / 2 + 1.3;
+  const midY = y + BODY_ROW_H / 2 + 1.2;
 
-  // Worker cell: row number (muted) + name (the row's anchor, bold) with an
-  // optional role line beneath it.
-  const nameCol = cols[0];
-  const subtitle = input.workerSubtitle?.(workerId);
+  // Worker cell: row number (muted) + name (bold, the row's anchor). The group
+  // is used only to order/separate rows and is never printed.
   doc.setFont(FONT, 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(7.4);
   setInk(doc, MUTED);
   const idx = `${rowNumber}.`;
-  doc.text(idx, nameCol.x + 2, subtitle ? midY - 1.2 : midY);
-  const idxW = doc.getTextWidth(idx);
-  const nameX = nameCol.x + 2 + idxW + 2;
-
+  doc.text(idx, MARGIN_X + 2, midY);
+  const nameX = MARGIN_X + 2 + doc.getTextWidth(idx) + 2;
   doc.setFont(FONT, 'bold');
-  doc.setFontSize(9.8);
+  doc.setFontSize(9.2);
   setInk(doc, INK);
   let name = input.workerName(workerId);
-  while (doc.getTextWidth(name) > nameCol.w - (nameX - nameCol.x) - 2 && name.length > 4) name = `${name.slice(0, -2)}…`;
-  doc.text(name, nameX, subtitle ? midY - 1.2 : midY);
+  while (doc.getTextWidth(name) > MARGIN_X + NAME_W - nameX - 1.5 && name.length > 4) name = `${name.slice(0, -2)}…`;
+  doc.text(name, nameX, midY);
 
-  if (subtitle) {
-    doc.setFont(FONT, 'normal');
-    doc.setFontSize(6.8);
-    setInk(doc, MUTED);
-    let sub = subtitle;
-    while (doc.getTextWidth(sub) > nameCol.w - (nameX - nameCol.x) - 2 && sub.length > 2) sub = `${sub.slice(0, -2)}…`;
-    doc.text(sub, nameX, midY + 2.6);
-  }
-
-  // Day cells.
-  cols.slice(1, -1).forEach((col) => {
-    const assignment = schedule.assignments.find((item) => item.workerId === workerId && item.date === col.date);
-    const definition = assignment ? input.definitionById.get(assignment.shiftDefinitionId) : undefined;
-    const centreX = col.x + col.w / 2;
-    if (definition) {
-      const swatch = hexToRgb(definition.color);
-      // Colour swatch dot.
-      setFill(doc, swatch);
-      doc.circle(col.x + 3.4, y + BODY_ROW_H / 2, 1.15, 'F');
-      doc.setFont(FONT, 'normal');
-      doc.setFontSize(8.5);
-      setInk(doc, INK);
-      const timeTxt = `${definition.startTime}–${definition.endTime}`;
-      doc.text(timeTxt, centreX - doc.getTextWidth(timeTxt) / 2 + 1.6, midY);
-    } else {
-      doc.setFont(FONT, 'normal');
-      doc.setFontSize(9);
-      setInk(doc, HAIRLINE);
-      doc.text(t.off, centreX - doc.getTextWidth(t.off) / 2, midY);
-    }
+  // Per-week cells: compact colour-coded shift number, plus a weekly-hours total.
+  blocks.forEach((block) => {
+    const dayW = (block.w - WEEK_HOURS_W) / dayCount;
+    block.dates.forEach((date, di) => {
+      const cx = block.x + di * dayW + dayW / 2;
+      const assignment = block.schedule.assignments.find((a) => a.workerId === workerId && a.date === date);
+      const definition = assignment ? input.definitionById.get(assignment.shiftDefinitionId) : undefined;
+      if (definition) {
+        const code = String(codes.get(definition.id) ?? '•');
+        const c = hexToRgb(definition.color);
+        doc.setFont(FONT, 'bold');
+        doc.setFontSize(8.6);
+        doc.setTextColor(c.r, c.g, c.b);
+        doc.text(code, cx - doc.getTextWidth(code) / 2, midY);
+      } else {
+        doc.setFont(FONT, 'normal');
+        doc.setFontSize(8);
+        setInk(doc, HAIRLINE);
+        doc.text('·', cx - doc.getTextWidth('·') / 2, midY);
+      }
+    });
+    const hours = input.weeklyHours(block.schedule, workerId);
+    const hoursTxt = hours > 0 ? String(hours) : '–';
+    doc.setFont(FONT, hours > 0 ? 'bold' : 'normal');
+    doc.setFontSize(8.4);
+    setInk(doc, hours > 0 ? INK : HAIRLINE);
+    doc.text(hoursTxt, block.x + block.w - 2 - doc.getTextWidth(hoursTxt), midY);
   });
-
-  // Hours (tabular).
-  const hoursCol = cols[cols.length - 1];
-  doc.setFont(FONT, 'bold');
-  doc.setFontSize(9.5);
-  setInk(doc, INK);
-  const hoursTxt = `${input.weeklyHours(schedule, workerId)} h`;
-  doc.text(hoursTxt, hoursCol.x + hoursCol.w - 2 - doc.getTextWidth(hoursTxt), midY);
-
-  return y + BODY_ROW_H;
 }
 
-function drawLegendAndFootnote(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, y: number) {
+function drawLegendAndFootnote(doc: jsPDF, input: ShiftPdfInput, defs: ShiftDefinition[], codes: Map<number, number>, y: number) {
   const t = L[input.lang];
-  const lanes = input.lanesFor(schedule);
 
   label(doc, t.legend, MARGIN_X, y, 7.5, MUTED);
   let cursorY = y + 5.5;
   let cursorX = MARGIN_X;
-  doc.setFont(FONT, 'normal');
-  doc.setFontSize(9);
-  lanes.forEach((definition) => {
+  defs.forEach((definition) => {
+    const code = String(codes.get(definition.id) ?? '•');
     const name = input.lang === 'hr' ? definition.nameHr : definition.nameEn;
     const text = `${name} · ${definition.startTime}–${definition.endTime}`;
-    const chunkW = 5 + doc.getTextWidth(text) + 10;
+    doc.setFont(FONT, 'bold');
+    doc.setFontSize(9);
+    const chunkW = doc.getTextWidth(code) + 2.5 + doc.getTextWidth(text) + 11;
     if (cursorX + chunkW > PAGE_W - MARGIN_X) { cursorX = MARGIN_X; cursorY += 6; }
-    setFill(doc, hexToRgb(definition.color));
-    doc.circle(cursorX + 1.4, cursorY - 1.2, 1.15, 'F');
+    // Colour-coded number, then the shift name and times.
+    const c = hexToRgb(definition.color);
+    doc.setTextColor(c.r, c.g, c.b);
+    doc.text(code, cursorX, cursorY);
+    doc.setFont(FONT, 'normal');
+    doc.setFontSize(9);
     setInk(doc, INK);
-    doc.text(text, cursorX + 4, cursorY);
+    doc.text(text, cursorX + doc.getTextWidth(code) + 2.5, cursorY);
     cursorX += chunkW;
   });
 
@@ -517,9 +583,10 @@ function drawLegendAndFootnote(doc: jsPDF, input: ShiftPdfInput, schedule: Shift
   doc.setFontSize(8.5);
   setInk(doc, MUTED);
   doc.text(t.footnote, MARGIN_X, cursorY);
+}
 
-  // Signature block pinned near the bottom. The preparer is known (printed above
-  // the left rule); the approver signs by hand.
+function drawSignatures(doc: jsPDF, input: ShiftPdfInput) {
+  const t = L[input.lang];
   const sigY = PAGE_H - MARGIN_BOTTOM - 6;
   const colW = 78;
   const gap = 14;
@@ -544,44 +611,72 @@ function drawLegendAndFootnote(doc: jsPDF, input: ShiftPdfInput, schedule: Shift
   doc.text(t.approvedBy, MARGIN_X + colW + gap, sigY + 4);
 }
 
-function renderSchedule(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, isFirstPage: boolean) {
-  const dates = Array.from({ length: input.dayCount }, (_, day) => {
-    const d = new Date(`${schedule.startDate}T12:00:00`);
-    d.setDate(d.getDate() + day);
-    return d.toISOString().slice(0, 10);
-  });
-  const roster = input.participantIds.filter((workerId) =>
-    schedule.assignments.some((assignment) => assignment.workerId === workerId));
+function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
+  const dayCount = input.dayCount;
+  const weeks = [...input.schedules].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const roster = buildRoster(input, weeks);
+  const defs = orderedShiftDefs(input, weeks);
+  const codes = new Map(defs.map((def, index) => [def.id, index + 1]));
 
-  if (!isFirstPage) doc.addPage('a4', 'landscape');
+  // How many week-blocks fit across the sheet, and how wide each is once the
+  // available width is shared out (kept within sensible min/max bounds).
+  const availW = CONTENT_W - NAME_W;
+  const minBlockW = dayCount * 6.2 + WEEK_HOURS_W;
+  const maxBlockW = dayCount * 13 + WEEK_HOURS_W;
+  const weeksPerPage = Math.max(1, Math.floor(availW / minBlockW));
 
-  let y = drawHeader(doc, input, schedule, roster.length);
-  const cols = buildColumns(dates, input.lang);
-  y = drawTableHeader(doc, cols, y);
+  const chunks: ShiftScheduleRecord[][] = [];
+  for (let i = 0; i < weeks.length; i += weeksPerPage) chunks.push(weeks.slice(i, i + weeksPerPage));
+  if (chunks.length === 0) chunks.push(weeks);
 
-  // Reserve space for legend + signatures at the foot of the page.
-  const bodyLimit = PAGE_H - MARGIN_BOTTOM - 34;
+  let firstPage = true;
+  chunks.forEach((chunkWeeks) => {
+    const blockW = Math.min(maxBlockW, Math.max(minBlockW, availW / chunkWeeks.length));
+    const blocks: WeekBlock[] = chunkWeeks.map((schedule, i) => ({
+      schedule,
+      dates: datesOf(schedule, dayCount),
+      x: MARGIN_X + NAME_W + i * blockW,
+      w: blockW,
+    }));
+    const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
+    const bodyLimit = PAGE_H - MARGIN_BOTTOM - 30;
 
-  roster.forEach((workerId, index) => {
-    if (y + BODY_ROW_H > bodyLimit) {
-      // Overflowed the sheet: close the current table and continue on a fresh
-      // page with a repeated header. Rare, but keeps large crews intact.
+    let rowStart = 0;
+    do {
+      if (!firstPage) doc.addPage('a4', 'landscape');
+      firstPage = false;
+
+      let y = drawHeader(doc, input, chunkWeeks, roster.length);
+      const gridTop = y;
+      y = drawGridHeader(doc, input, blocks, y);
+
+      let prevGroup: string | null = null;
+      let drawn = 0;
+      while (rowStart < roster.length && y + BODY_ROW_H <= bodyLimit) {
+        const { id, group } = roster[rowStart];
+        if (prevGroup !== null && group !== prevGroup) {
+          // Divider between trades — a rule, never a printed label.
+          setDraw(doc, RULE);
+          doc.setLineWidth(0.4);
+          doc.line(MARGIN_X, y, tableRight, y);
+        }
+        drawGridRow(doc, input, blocks, codes, id, rowStart + 1, y, drawn % 2 === 1);
+        prevGroup = group;
+        y += BODY_ROW_H;
+        rowStart += 1;
+        drawn += 1;
+      }
+
+      // Booktabs bottom rule + vertical separators over the whole grid.
       setDraw(doc, RULE);
       doc.setLineWidth(0.5);
-      doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
-      doc.addPage('a4', 'landscape');
-      y = drawHeader(doc, input, schedule, roster.length);
-      y = drawTableHeader(doc, cols, y);
-    }
-    y = drawRow(doc, input, schedule, cols, workerId, index + 1, y, index % 2 === 1);
+      doc.line(MARGIN_X, y, tableRight, y);
+      drawVerticals(doc, blocks, gridTop, y);
+
+      drawLegendAndFootnote(doc, input, defs, codes, y + 9);
+      drawSignatures(doc, input);
+    } while (rowStart < roster.length);
   });
-
-  // Booktabs bottom rule.
-  setDraw(doc, RULE);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
-
-  drawLegendAndFootnote(doc, input, schedule, y + 10);
 }
 
 /** Build the PDF document (without saving) so callers can save, preview, or test it. */
@@ -600,7 +695,7 @@ export async function buildShiftSchedulePdf(input: ShiftPdfInput): Promise<jsPDF
     input.participantIds.some((workerId) => schedule.assignments.some((a) => a.workerId === workerId)));
   const schedules = printable.length ? printable : input.schedules;
 
-  schedules.forEach((schedule, index) => renderSchedule(doc, input, schedule, index === 0));
+  renderDocument(doc, { ...input, schedules });
 
   // Page numbers are stamped last, once the total is known.
   const total = doc.getNumberOfPages();

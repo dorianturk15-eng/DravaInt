@@ -56,10 +56,24 @@ describe('buildShiftSchedulePdf', () => {
     expect(bytes.length).toBeGreaterThan(2000);
   });
 
-  it('renders one page per week', async () => {
-    const second = { ...schedule, id: 11, weekNumber: 30, startDate: '2026-07-20', endDate: '2026-07-26' };
-    const doc = await buildShiftSchedulePdf(makeInput({ schedules: [schedule, second] }));
-    expect(doc.getNumberOfPages()).toBe(2);
+  it('packs several weeks onto a single sheet', async () => {
+    const ranges = [['2026-07-20', '2026-07-26'], ['2026-07-27', '2026-08-02'], ['2026-08-03', '2026-08-09']];
+    const more = ranges.map(([startDate, endDate], i) => ({
+      ...schedule, id: 11 + i, weekNumber: 30 + i, startDate, endDate,
+    }));
+    const doc = await buildShiftSchedulePdf(makeInput({ schedules: [schedule, ...more] }));
+    // Four 5-day weeks and a small roster fit side by side on one A4 landscape.
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
+
+  it('spreads too many weeks across extra sheets', async () => {
+    // Ten weeks can't share one sheet's width; the generator paginates by week.
+    const many = Array.from({ length: 10 }, (_, n) => ({
+      ...schedule, id: 20 + n, weekNumber: 29 + n,
+      startDate: '2026-07-13', endDate: '2026-07-19',
+    }));
+    const doc = await buildShiftSchedulePdf(makeInput({ schedules: many }));
+    expect(doc.getNumberOfPages()).toBeGreaterThan(1);
   });
 
   it('adds two weekend columns when dayCount is 7', async () => {

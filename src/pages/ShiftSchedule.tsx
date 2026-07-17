@@ -315,7 +315,7 @@ export default function ShiftSchedule() {
         companyName: 'Drava International d.o.o.',
         preparedBy: username ?? undefined,
         workerName: nameForWorker,
-        workerSubtitle: (id) => workerById.get(id)?.roleName ?? '',
+        workerGroup: (id) => workerById.get(id)?.roleName ?? '',
         lanesFor,
         weeklyHours,
         definitionById,
