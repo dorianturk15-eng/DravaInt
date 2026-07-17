@@ -84,9 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ['profiles'],
     enabled: Boolean(supabase),
     queryFn: async () => {
-      const { data, error } = await supabase!.from('profiles').select('id,username,email,role,rfid_code').order('username');
+      // rfid_code is intentionally NOT selected: it is an authentication credential and is column-
+      // revoked from the `authenticated` role in schema.sql. RFID login is disabled in Supabase mode
+      // anyway (loginWithRfid short-circuits), so the client never needs badge numbers here.
+      const { data, error } = await supabase!.from('profiles').select('id,username,email,role').order('username');
       if (error) throw error;
-      return data.map((profile) => ({ id: profile.id, username: profile.username, email: profile.email ?? '', role: profile.role ?? 'workers', password: '', rfid: profile.rfid_code ?? undefined }));
+      return data.map((profile): StoredUser => ({ id: profile.id, username: profile.username, email: profile.email ?? '', role: profile.role ?? 'workers', password: '' }));
     },
   });
   const users = supabase ? (profilesQuery.data ?? []) : fallbackUsers;

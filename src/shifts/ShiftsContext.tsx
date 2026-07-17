@@ -134,7 +134,9 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
       supabase.from('shift_definitions').select('*').order('start_time'),
       supabase.from('shift_schedules').select('*').order('start_date', { ascending: false }),
       supabase.from('shift_assignments').select('*').order('date'),
-      supabase.from('absences').select('*').order('start_date'),
+      // Read through the masking view: it nulls health-sensitive type/notes for non-planners (GDPR).
+      // Writes still target the base `absences` table (see saveAbsence).
+      supabase.from('absences_visible').select('*').order('start_date'),
     ]);
     if (definitionsResult.data) {
       setDefinitions(definitionsResult.data.map((row) => ({

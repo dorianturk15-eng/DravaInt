@@ -216,6 +216,7 @@ create table if not exists public.jobs (
   comments text not null default '',
   setup_hours numeric(8,2) not null default 0,
   material_status text not null default 'ready' check (material_status in ('ready','waiting','delayed')),
+  priority text not null default 'normal' check (priority in ('low','normal','high','urgent')),
   version int not null default 1,
   deleted_at timestamptz,
   created_by uuid references auth.users(id) on delete set null default auth.uid(),
@@ -274,6 +275,12 @@ do $$ declare table_name text; begin
   end loop;
 end $$;
 
+-- LIMITATION (improvements-plan item #10, server side): this guard compares `machine` by exact
+-- string and evaluates a single tstzrange per row. Routed orders carry a zero-duration parent
+-- window (their real work lives in the `operations` JSONB), so this trigger neither protects nor
+-- false-flags them — DB-level double-booking is effectively unenforced for routed work. A correct
+-- fix requires modelling operations as rows (a job_operations table, item #13); the client-side
+-- cpm.getJobConflicts() already covers routed overlaps in the meantime.
 create or replace function public.validate_job_assignment()
 returns trigger language plpgsql as $$
 begin
@@ -363,8 +370,13 @@ alter table public.jobs enable row level security;
 alter table public.app_settings enable row level security;
 alter table public.audit_logs enable row level security;
 
+-- NOTE: audit_logs is deliberately excluded here. It holds before/after row images of every
+-- table and must stay admin-only (see audit_admin_read below). Adding it to this read-all loop
+-- would OR an unrestricted `using (true)` select policy on top of audit_admin_read and expose the
+-- full audit trail to every worker. absences is also excluded: its health-sensitive columns are
+-- masked via the public.absences_visible view (GDPR); direct table select is revoked below.
 do $$ declare table_name text; begin
-  foreach table_name in array array['profiles','roles','departments','workers','machines','worker_qualifications','shift_definitions','rotation_templates','shift_schedules','shift_assignments','absences','jobs','app_settings','audit_logs'] loop
+  foreach table_name in array array['profiles','roles','departments','workers','machines','worker_qualifications','shift_definitions','rotation_templates','shift_schedules','shift_assignments','jobs','app_settings'] loop
     execute format('drop policy if exists authenticated_read on public.%I',table_name);
     execute format('create policy authenticated_read on public.%I for select to authenticated using (true)',table_name);
   end loop;
@@ -388,6 +400,39 @@ drop policy if exists worker_progress_update on public.jobs;
 create policy worker_progress_update on public.jobs for update to authenticated using (operator_id in (select id from public.workers where app_user_id=auth.uid())) with check (operator_id in (select id from public.workers where app_user_id=auth.uid()));
 drop policy if exists audit_admin_read on public.audit_logs;
 create policy audit_admin_read on public.audit_logs for select to authenticated using (public.current_app_role() in ('admin','boss'));
+
+-- ---------------------------------------------------------------------------
+-- Column-level credential hardening (RLS is row-level only; PostgREST honours
+-- column privileges, so we revoke table-level SELECT and re-grant safe columns).
+--   * profiles.rfid_code   — a badge is an authentication credential; a logged-in
+--                            worker must not be able to enumerate everyone's badges.
+--   * workers.calendar_token — a capability token for the shift-calendar feed.
+-- Admin management of these values happens through the service-role edge
+-- functions (admin-users, shift-calendar), which bypass these grants.
+revoke select on public.profiles from authenticated;
+grant select (id, username, email, role, is_active, created_at, updated_at) on public.profiles to authenticated;
+revoke select on public.workers from authenticated;
+grant select (id, first_name, last_name, email, role_id, app_user_id, department_id, is_active, status, qualifications, deleted_at, created_at, updated_at) on public.workers to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Absence health data (GDPR): `type` (sick/maternity/…) and `notes` are sensitive.
+-- Direct table SELECT is revoked; everyone reads through this masking view, which
+-- reveals type/notes only to planners/admin and nulls them for ordinary workers
+-- (who still need worker + date range for the "today's absence" alert). The view
+-- is SECURITY DEFINER (owner-run) so it can read the base table after the revoke.
+revoke select on public.absences from authenticated;
+create or replace view public.absences_visible with (security_barrier=true) as
+  select
+    a.id,
+    a.worker_id,
+    a.start_date,
+    a.end_date,
+    case when public.current_app_role() in ('admin','boss','managers','level between admin and managers') then a.type else null end as type,
+    case when public.current_app_role() in ('admin','boss','managers','level between admin and managers') then a.notes else '' end as notes,
+    a.approved_by,
+    a.created_at
+  from public.absences a;
+grant select on public.absences_visible to authenticated;
 
 do $$ declare table_name text; begin
   foreach table_name in array array['profiles','roles','workers','machines','jobs','shift_definitions','shift_schedules','shift_assignments','absences'] loop

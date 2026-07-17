@@ -42,7 +42,8 @@ Local preview data stays in that browser. Do not use demo mode as a shared produ
 
 1. Create a Supabase project and copy `.env.local.example` to `.env.local`.
 2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env.local`.
-3. Run `supabase/schema.sql` in the Supabase SQL Editor. It creates the complete normalized schema, indexes, triggers, views, RLS policies, role claims hook, realtime publication, seeded roles/shifts, and schedule-generation RPC.
+3. Run `supabase/schema.sql` in the Supabase SQL Editor. It creates the complete normalized schema, indexes, triggers, views, RLS policies, role claims hook, realtime publication, seeded roles/shifts, and schedule-generation RPC. `schema.sql` is idempotent and always reflects the current desired state — a fresh project only needs this file.
+   - **Already-deployed projects:** apply the incremental migrations in `supabase/migrations/` (in filename order) instead of assuming a fresh `schema.sql` run picks up new columns/policies. `0001_now_tier_security_and_schema.sql` adds the `jobs.priority` column, closes the `audit_logs` read-all RLS hole, column-restricts `profiles.rfid_code` / `workers.calendar_token`, and masks absence health data behind the `absences_visible` view. Each migration is idempotent and safe to re-run.
 4. Deploy the server-only functions from the repository root:
 
    ```bash
