@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { discardOfflineQueueItem, flushOfflineQueue, getOfflineQueueItems, OFFLINE_QUEUE_EVENT, type OfflineQueueItem } from '../sync/offlineQueue';
+import { clearParkedMutations, discardOfflineQueueItem, flushOfflineQueue, getOfflineQueueItems, getParkedMutations, OFFLINE_QUEUE_EVENT, type OfflineQueueItem, type ParkedMutation } from '../sync/offlineQueue';
 import { supabase } from '../supabase/client';
 
 interface StorageHealth { usage: number; quota: number; }
@@ -19,6 +19,7 @@ function loadSyncError(): SyncError | null {
 export function SyncDiagnostics({ language }: { language: 'hr' | 'en' }) {
   const { online, pendingChanges } = useConnectivity();
   const [queue, setQueue] = useState<OfflineQueueItem[]>([]);
+  const [parked, setParked] = useState<ParkedMutation[]>([]);
   const [storage, setStorage] = useState<StorageHealth>({ usage: 0, quota: 0 });
   const [serviceWorker, setServiceWorker] = useState<'active' | 'waiting' | 'unavailable' | 'development'>('development');
   const [lastError, setLastError] = useState<SyncError | null>(loadSyncError);
@@ -28,6 +29,7 @@ export function SyncDiagnostics({ language }: { language: 'hr' | 'en' }) {
 
   const refresh = useCallback(async () => {
     try { setQueue(await getOfflineQueueItems()); } catch { setQueue([]); }
+    setParked(getParkedMutations());
     if (navigator.storage?.estimate) {
       const estimate = await navigator.storage.estimate();
       setStorage({ usage: estimate.usage ?? 0, quota: estimate.quota ?? 0 });
@@ -77,5 +79,10 @@ export function SyncDiagnostics({ language }: { language: 'hr' | 'en' }) {
 
     <div className="queue-toolbar"><div><strong>{hr ? 'Promjene na čekanju' : 'Pending changes'}</strong><small>{hr ? 'Ponovno pokušajte slanje ili odbacite samo promjenu koju više ne želite primijeniti.' : 'Retry delivery or discard only a change that should no longer be applied.'}</small></div><button className="btn btn-blue" onClick={() => void retry()} disabled={busy || !online || !supabase || queue.length === 0}>{busy ? (hr ? 'Sinkronizacija…' : 'Syncing…') : (hr ? 'Pokušaj ponovno' : 'Retry all')}</button></div>
     {queue.length ? <div className="queue-list">{queue.map((item) => <article key={item.id}><span className={`queue-operation operation-${item.operation}`}>{item.operation}</span><div><strong>{item.table}</strong><small>{new Date(item.createdAt).toLocaleString(hr ? 'hr-HR' : 'en-GB')} · #{item.id}</small></div><code>{Object.keys(item.payload ?? item.match ?? {}).slice(0, 4).join(', ') || 'record'}</code><button onClick={() => item.id && void discard(item.id)}>{hr ? 'Odbaci' : 'Discard'}</button></article>)}</div> : <div className="queue-empty"><span>✓</span><strong>{hr ? 'Nema promjena na čekanju' : 'No pending changes'}</strong><small>{hr ? 'Lokalni i udaljeni podaci su usklađeni.' : 'Local and remote data are aligned.'}</small></div>}
+
+    {parked.length > 0 && <div className="parked-mutations">
+      <div className="queue-toolbar"><div><strong>{hr ? 'Odbijene promjene (sukob verzija)' : 'Rejected changes (version conflict)'}</strong><small>{hr ? 'Ove izmjene nisu primijenjene jer je zapis u međuvremenu izmijenjen na poslužitelju ili ih je baza odbila. Provjerite i po potrebi ponovno unesite.' : 'These edits were not applied because the record changed on the server meanwhile, or the database rejected them. Review and re-enter if still needed.'}</small></div><button className="btn btn-ghost" onClick={() => { clearParkedMutations(); setParked([]); }}>{hr ? 'Očisti' : 'Clear'}</button></div>
+      <div className="queue-list">{parked.map((entry, index) => <article key={index}><span className={`queue-operation operation-${entry.item.operation}`}>{entry.item.operation}</span><div><strong>{entry.item.table}</strong><small>{new Date(entry.at).toLocaleString(hr ? 'hr-HR' : 'en-GB')}</small></div><code>{entry.reason}</code></article>)}</div>
+    </div>}
   </section>;
 }

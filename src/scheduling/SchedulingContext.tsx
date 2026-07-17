@@ -675,7 +675,10 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       const { error, data } = await query.select('id');
       if (error) {
         if (error.code === SLOT_TAKEN_ERRCODE) return { ok: false, reason: 'rejected', message: error.message };
-        await enqueueMutation({ table: 'jobs', operation: 'update', payload: dbPatch, match: { id } });
+        // Carry the expected version into the queued match so the offline replay is optimistically
+        // locked too — a reconnecting terminal won't overwrite a newer edit made by someone else.
+        const replayMatch: Record<string, string | number> = expectedVersion !== undefined ? { id, version: expectedVersion } : { id };
+        await enqueueMutation({ table: 'jobs', operation: 'update', payload: dbPatch, match: replayMatch });
         return { ok: false, reason: 'offline', message: error.message };
       }
       if (!data || data.length === 0) {
