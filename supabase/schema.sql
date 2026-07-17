@@ -344,6 +344,14 @@ from public.jobs where deleted_at is null and operator_id is not null group by o
 
 create or replace function public.current_app_role() returns text stable security definer set search_path = public language sql as $$ select role from public.profiles where id=auth.uid() and is_active $$;
 
+-- Pre-login username→email resolution. profiles is only readable by `authenticated`,
+-- so the login form cannot look up the email for a typed username (chicken-and-egg).
+-- SECURITY DEFINER lets anon resolve exactly one email for an exact, active username —
+-- a deliberate, narrow disclosure that keeps username login working; no other columns leak.
+create or replace function public.login_email_for_username(candidate text) returns text stable security definer set search_path = public language sql as $$ select email from public.profiles where lower(username)=lower(trim(candidate)) and is_active limit 1 $$;
+revoke all on function public.login_email_for_username(text) from public;
+grant execute on function public.login_email_for_username(text) to anon, authenticated;
+
 create or replace function public.custom_access_token_hook(event jsonb)
 returns jsonb stable language plpgsql as $$
 declare claims jsonb; app_role text;

@@ -117,7 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!normalized || !password) return false;
     if (supabase) {
       const profile = users.find((user) => user.username.toLowerCase() === normalized);
-      const email = normalized.includes('@') ? normalized : profile?.email || `${normalized}@dravaint.local`;
+      let email = normalized.includes('@') ? normalized : profile?.email || '';
+      if (!email) {
+        // Pre-login the profiles query is empty (RLS: authenticated-only), so resolve the
+        // username server-side; the legacy @dravaint.local guess remains the last resort.
+        const { data: resolved } = await supabase.rpc('login_email_for_username', { candidate: normalized });
+        email = (typeof resolved === 'string' && resolved) || `${normalized}@dravaint.local`;
+      }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (!error) recordLogin(profile?.username ?? normalized);
       return !error;
