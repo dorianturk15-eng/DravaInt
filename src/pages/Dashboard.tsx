@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
 import { hasChildren } from '../scheduling/hierarchy';
@@ -70,14 +71,22 @@ export default function Dashboard() {
   }));
   const averageWorkerHours = workerLoads.length ? workerLoads.reduce((sum, item) => sum + item.hours, 0) / workerLoads.length : 0;
 
-  // Routing Node Map (either from the latest order operations, or a standard workflow demo)
-  const lastJobWithOps = jobs.find((j) => j.operations && j.operations.length > 0);
-  const demoOps = lastJobWithOps?.operations || [
+  // Routing Node Map: lets the user step through the routing of any work order that has operations
+  const jobsWithOps = jobs.filter((j) => j.operations && j.operations.length > 0);
+  const [routingOrderId, setRoutingOrderId] = useState<number | null>(null);
+  const routingJob = jobsWithOps.find((j) => j.id === routingOrderId) ?? jobsWithOps[0];
+  const routingIndex = routingJob ? jobsWithOps.findIndex((j) => j.id === routingJob.id) : -1;
+  const demoOps = routingJob?.operations || [
     { id: '1', name: lang === 'hr' ? 'Piljenje' : 'Cutting', machine: 'CNC-1', hours: 2 },
     { id: '2', name: lang === 'hr' ? 'Glodanje' : 'Milling', machine: 'Glodalica-2', hours: 4 },
     { id: '3', name: lang === 'hr' ? 'Bušenje' : 'Drilling', machine: 'Tokarilica-1', hours: 1.5 },
     { id: '4', name: lang === 'hr' ? 'Kontrola' : 'Quality Check', machine: 'Inspekcija', hours: 1 },
   ];
+  const stepRoutingOrder = (delta: number) => {
+    if (jobsWithOps.length === 0) return;
+    const nextIndex = (routingIndex + delta + jobsWithOps.length) % jobsWithOps.length;
+    setRoutingOrderId(jobsWithOps[nextIndex].id);
+  };
 
   // Icons
   const IconCheck = () => (
@@ -188,11 +197,16 @@ export default function Dashboard() {
         {/* Live Routing Node Map */}
         <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0 }}>
           <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)' }}>
-            ⛓️ {lang === 'hr' ? 'Dijagram Aktivnog Toga Procesa' : 'Active Routing Process Map'}
+            ⛓️ {lang === 'hr' ? 'Dijagram Toga Procesa' : 'Routing Process Map'}
           </div>
-          {lastJobWithOps && (
-            <div style={{ fontSize: 11, background: 'var(--bg-step)', padding: '6px 12px', borderRadius: 4, display: 'inline-block', marginBottom: 15, fontWeight: 'bold', color: 'var(--primary-color)' }}>
-              {lang === 'hr' ? 'Aktivni nalog:' : 'Active Order:'} {lastJobWithOps.order}
+          {routingJob && (
+            <div className="routing-order-switcher">
+              <button type="button" className="routing-order-nav" onClick={() => stepRoutingOrder(-1)} disabled={jobsWithOps.length < 2} aria-label={lang === 'hr' ? 'Prethodni nalog' : 'Previous order'}>‹</button>
+              <select value={routingJob.id} onChange={(event) => setRoutingOrderId(Number(event.target.value))} aria-label={lang === 'hr' ? 'Odaberi nalog' : 'Select order'}>
+                {jobsWithOps.map((job) => <option key={job.id} value={job.id}>{job.order}</option>)}
+              </select>
+              <button type="button" className="routing-order-nav" onClick={() => stepRoutingOrder(1)} disabled={jobsWithOps.length < 2} aria-label={lang === 'hr' ? 'Sljedeći nalog' : 'Next order'}>›</button>
+              <small>{routingIndex + 1} / {jobsWithOps.length}</small>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
@@ -201,7 +215,7 @@ export default function Dashboard() {
                 const x = 50 + i * 110;
                 const y = 40;
                 const isLast = i === demoOps.length - 1;
-                const statusColor = lastJobWithOps?.status === 'done' ? 'var(--success-color)' : i === 1 ? '#3b82f6' : '#cbd5e1';
+                const statusColor = routingJob?.status === 'done' ? 'var(--success-color)' : i === 1 ? '#3b82f6' : '#cbd5e1';
 
                 return (
                   <g key={op.id}>
@@ -226,7 +240,7 @@ export default function Dashboard() {
                       fill="var(--bg-card)"
                       stroke={statusColor}
                       strokeWidth="3"
-                      style={i === 1 && lastJobWithOps?.status !== 'done' ? { animation: 'pulse-glow 1.5s infinite' } : {}}
+                      style={i === 1 && routingJob?.status !== 'done' ? { animation: 'pulse-glow 1.5s infinite' } : {}}
                     />
                     <text x={x} y={y + 4} fontSize="9" fontWeight="bold" textAnchor="middle" fill="var(--text-primary)">
                       {i + 1}

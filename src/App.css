@@ -1240,6 +1240,13 @@ select {
   transform: scale(0.96);
 }
 
+.routing-order-switcher { display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
+.routing-order-switcher select { width: auto; margin-top: 0; padding: 5px 8px; font-size: 11px; font-weight: 700; color: var(--primary-color); background: var(--bg-step); border-radius: 4px; }
+.routing-order-switcher small { color: var(--text-secondary); font-size: 10px; }
+.routing-order-nav { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; font-size: 14px; line-height: 1; color: var(--text-secondary); background: var(--bg-step); border: 1px solid var(--border-color); border-radius: 50%; cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+.routing-order-nav:hover:not(:disabled) { color: var(--text-primary); border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color)); transform: translateY(-1px); }
+.routing-order-nav:disabled { opacity: .4; cursor: default; }
+
 /* Advanced Gantt workspace */
 .allocation-panel { margin-bottom: 20px; padding: 20px; }.allocation-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 8px; margin-top: 12px; }.allocation-card { display: grid; grid-template-columns: 34px 1fr auto 7px; align-items: center; gap: 8px; padding: 9px; border: 1px solid var(--border-color); border-radius: var(--radius-inner); background: var(--bg-step); }.allocation-card strong,.allocation-card small { display: block; }.allocation-card > div:nth-child(2) strong { font-size: 11px; }.allocation-card small { margin-top: 2px; color: var(--text-secondary); font-size: 10px; }.allocation-value { text-align: right; }.allocation-value > strong { font-size: 12px; }.allocation-warning { border-color: color-mix(in srgb,#f59e0b 48%,var(--border-color)); box-shadow: inset 3px 0 #f59e0b; }
 .gantt-command-deck { display: grid; grid-template-columns: minmax(220px,1fr) auto; gap: 8px; margin: 18px 0 12px; padding: 13px; }
