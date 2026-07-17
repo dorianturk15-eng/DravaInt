@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import { IconPrint, IconRefresh } from '../components/Icons';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
@@ -65,6 +66,7 @@ function downloadCsv(schedules: ShiftScheduleRecord[], workerName: (id: number) 
 
 export default function ShiftSchedule() {
   const { lang, t } = useLanguage();
+  const { username } = useAuth();
   const { activeWorkers, displayName } = useWorkers();
   const { logo } = useLogo();
   const { definitions, schedules, absences, saveSchedule, generateSchedule: generateRemoteSchedule, saveAbsence, exportIcs } = useShifts();
@@ -310,8 +312,10 @@ export default function ShiftSchedule() {
         dayCount,
         lang,
         logo,
-        companyName: 'DravaInt',
+        companyName: 'Drava International d.o.o.',
+        preparedBy: username ?? undefined,
         workerName: nameForWorker,
+        workerSubtitle: (id) => workerById.get(id)?.roleName ?? '',
         lanesFor,
         weeklyHours,
         definitionById,

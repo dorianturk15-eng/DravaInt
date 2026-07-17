@@ -101,9 +101,13 @@ export interface ShiftPdfInput {
   lang: 'hr' | 'en';
   /** Data-URL logo, or null. SVG logos are ignored (jsPDF can't embed vector). */
   logo: string | null;
-  /** Company / letterhead line under the logo. */
+  /** Company / letterhead line beside the logo. */
   companyName?: string;
+  /** The person generating the document — printed as "prepared by". */
+  preparedBy?: string;
   workerName: (id: number) => string;
+  /** Optional secondary line for a worker (role / qualification). */
+  workerSubtitle?: (id: number) => string;
   /** Shift lanes present in a given schedule (regular + any retired lane still used). */
   lanesFor: (schedule: ShiftScheduleRecord) => ShiftDefinition[];
   /** Localised weekly-hours total for a worker within a schedule. */
@@ -114,13 +118,17 @@ export interface ShiftPdfInput {
 const L = {
   hr: {
     title: 'RASPORED SMJENA',
+    docName: 'Raspored smjena',
+    plant: 'Proizvodni pogon',
     week: 'tjedan',
+    workersOf: 'radnika',
     department: 'Odjel',
+    docLabel: 'Dokument',
+    createdLabel: 'Izrađeno',
+    byLabel: 'Izradio',
     status: 'Status',
     published: 'Objavljeno',
     draft: 'Nacrt',
-    generated: 'Dokument izrađen',
-    workers: 'Radnika',
     worker: 'Radnik',
     hours: 'Sati',
     off: '—',
@@ -128,18 +136,23 @@ const L = {
     footnote: 'Treća smjena se ne planira. Noćni rad evidentira se kao prekovremeni sati radnika.',
     preparedBy: 'Izradio',
     approvedBy: 'Odobrio',
+    placeDate: 'Mjesto i datum',
     page: 'Stranica',
     of: 'od',
   },
   en: {
     title: 'SHIFT SCHEDULE',
+    docName: 'Shift schedule',
+    plant: 'Production plant',
     week: 'week',
+    workersOf: 'workers',
     department: 'Department',
+    docLabel: 'Document',
+    createdLabel: 'Created',
+    byLabel: 'Prepared by',
     status: 'Status',
     published: 'Published',
     draft: 'Draft',
-    generated: 'Document generated',
-    workers: 'Workers',
     worker: 'Worker',
     hours: 'Hours',
     off: '—',
@@ -147,6 +160,7 @@ const L = {
     footnote: 'The third shift is not scheduled. Overnight work is logged as the worker’s overtime.',
     preparedBy: 'Prepared by',
     approvedBy: 'Approved by',
+    placeDate: 'Place and date',
     page: 'Page',
     of: 'of',
   },
@@ -182,83 +196,146 @@ function drawPageFooter(doc: jsPDF, lang: 'hr' | 'en', pageNo: number, totalPage
   doc.text(pageText, PAGE_W - MARGIN_X - doc.getTextWidth(pageText), y);
 }
 
-/**
- * Render the header band (letterhead + title + metadata) and return the y where
- * body content should begin.
- */
-function drawHeader(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, rosterCount: number): number {
-  const t = L[input.lang];
-  let y = MARGIN_TOP;
+const LOGO_BOX = 20;
 
-  // Logo, top-right, height-constrained. Placed first so the title can measure
-  // the space that remains.
+/** Company logo top-left, or a typographic monogram tile if none is set. */
+function drawLogo(doc: jsPDF, input: ShiftPdfInput, x: number, y: number) {
   const format = input.logo ? rasterFormat(input.logo) : null;
   if (input.logo && format) {
     try {
       const props = doc.getImageProperties(input.logo);
-      const maxH = 15;
-      const maxW = 52;
-      let h = maxH;
-      let w = (props.width / props.height) * h;
-      if (w > maxW) { w = maxW; h = (props.height / props.width) * w; }
-      doc.addImage(input.logo, format, PAGE_W - MARGIN_X - w, y, w, h);
+      // Fit within the box, preserving aspect ratio, top-left aligned.
+      let w = LOGO_BOX;
+      let h = (props.height / props.width) * w;
+      if (h > LOGO_BOX) { h = LOGO_BOX; w = (props.width / props.height) * h; }
+      doc.addImage(input.logo, format, x, y + (LOGO_BOX - h) / 2, w, h);
+      return;
     } catch {
-      // A malformed logo shouldn't sink the whole document.
+      // Fall through to the monogram if the logo can't be embedded.
     }
   }
-
-  // Company line + document title, left.
-  setInk(doc, MUTED);
-  label(doc, input.companyName ?? 'DravaInt', MARGIN_X, y + 3.5, 9, MUTED);
-
+  // Monogram tile: initials of the company name on a solid ink square. Reads as
+  // a deliberate mark rather than a missing-image box.
+  const initials = (input.companyName ?? 'DravaInt')
+    .split(/\s+/).map((word) => word[0]).join('').slice(0, 2).toUpperCase() || 'DI';
+  setFill(doc, INK);
+  doc.rect(x, y, LOGO_BOX, LOGO_BOX, 'F');
   doc.setFont(FONT, 'bold');
-  doc.setFontSize(23);
-  setInk(doc, INK);
-  doc.text(t.title, MARGIN_X, y + 13.5);
+  doc.setFontSize(15);
+  doc.setTextColor(255, 255, 255);
+  const tw = doc.getTextWidth(initials);
+  doc.text(initials, x + LOGO_BOX / 2 - tw / 2, y + LOGO_BOX / 2 + 2.6);
+}
 
-  doc.setFont(FONT, 'normal');
-  doc.setFontSize(11.5);
-  setInk(doc, MUTED);
-  const subtitle = `${schedule.weekNumber}. ${t.week} ${schedule.year}   ·   ${schedule.startDate} — ${schedule.endDate}`;
-  doc.text(subtitle, MARGIN_X, y + 20);
-
-  y += 25;
-
-  // Letterhead rule: a heavy rule with a hairline just beneath it — a small
-  // typographic flourish that reads as "official document".
-  setDraw(doc, RULE);
-  doc.setLineWidth(0.7);
-  doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
-  setDraw(doc, HAIRLINE);
-  doc.setLineWidth(0.2);
-  doc.line(MARGIN_X, y + 1, PAGE_W - MARGIN_X, y + 1);
-
-  y += 7;
-
-  // Metadata row: four label/value pairs spread across the measure.
-  const meta: Array<[string, string]> = [
-    [t.department, schedule.department],
+/**
+ * A bordered "title block" — the kind on controlled factory documents and
+ * engineering drawings — stating what the document is, when it was created, by
+ * whom, and its approval status. Anchored top-right.
+ */
+function drawTitleBlock(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, x: number, y: number, w: number) {
+  const t = L[input.lang];
+  const rows: Array<[string, string]> = [
+    [t.docLabel, t.docName],
+    [t.createdLabel, docStamp()],
+    [t.byLabel, input.preparedBy?.trim() || '—'],
     [t.status, `${schedule.status === 'published' ? t.published : t.draft} · v${schedule.version || 1}`],
-    [t.workers, String(rosterCount)],
-    [t.generated, docStamp()],
   ];
-  const colW = CONTENT_W / meta.length;
-  meta.forEach(([key, value], index) => {
-    const x = MARGIN_X + index * colW;
-    label(doc, key, x, y, 7.5, MUTED);
+  const rowH = 6.6;
+  const labelW = 26;
+  const height = rowH * rows.length;
+
+  rows.forEach(([key, value], index) => {
+    const rowY = y + index * rowH;
+    // Label cell tint.
+    setFill(doc, WEEKEND_FILL);
+    doc.rect(x, rowY, labelW, rowH, 'F');
+    // Label.
     doc.setFont(FONT, 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(6.4);
+    setInk(doc, MUTED);
+    doc.setCharSpace(0.3);
+    doc.text(key.toUpperCase(), x + 2, rowY + rowH / 2 + 1.1);
+    doc.setCharSpace(0);
+    // Value.
+    doc.setFont(FONT, 'normal');
+    doc.setFontSize(8.6);
     setInk(doc, INK);
-    doc.text(value, x, y + 5.5);
+    let value2 = value;
+    while (doc.getTextWidth(value2) > w - labelW - 4 && value2.length > 2) value2 = `${value2.slice(0, -2)}…`;
+    doc.text(value2, x + labelW + 2.5, rowY + rowH / 2 + 1.1);
+    // Inner horizontal separators.
+    if (index > 0) {
+      setDraw(doc, HAIRLINE);
+      doc.setLineWidth(0.2);
+      doc.line(x, rowY, x + w, rowY);
+    }
   });
 
-  return y + 12;
+  // Vertical divider between label and value columns.
+  setDraw(doc, HAIRLINE);
+  doc.setLineWidth(0.2);
+  doc.line(x + labelW, y, x + labelW, y + height);
+  // Outer border.
+  setDraw(doc, RULE);
+  doc.setLineWidth(0.4);
+  doc.rect(x, y, w, height);
+  return height;
+}
+
+/**
+ * Render the header band (letterhead + title + document title block) and return
+ * the y where body content should begin.
+ */
+function drawHeader(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, rosterCount: number): number {
+  const t = L[input.lang];
+  const y = MARGIN_TOP;
+
+  // --- Letterhead: logo + company name, left ---
+  drawLogo(doc, input, MARGIN_X, y);
+  const textX = MARGIN_X + LOGO_BOX + 5;
+  doc.setFont(FONT, 'bold');
+  doc.setFontSize(13);
+  setInk(doc, INK);
+  doc.text(input.companyName ?? 'DravaInt', textX, y + 7);
+  doc.setFont(FONT, 'normal');
+  doc.setFontSize(9);
+  setInk(doc, MUTED);
+  doc.text(`${t.plant} · ${schedule.department}`, textX, y + 12.5);
+
+  // --- Document title block, right ---
+  const blockW = 86;
+  drawTitleBlock(doc, input, schedule, PAGE_W - MARGIN_X - blockW, y, blockW);
+
+  // --- Document title + range, left, below the letterhead ---
+  doc.setFont(FONT, 'bold');
+  doc.setFontSize(21);
+  setInk(doc, INK);
+  doc.text(t.title, MARGIN_X, y + 30);
+
+  doc.setFont(FONT, 'normal');
+  doc.setFontSize(10.5);
+  setInk(doc, MUTED);
+  const [, sm, sd] = schedule.startDate.split('-');
+  const [, em, ed] = schedule.endDate.split('-');
+  const range = `${sd}.${sm}. — ${ed}.${em}.${schedule.year}.`;
+  doc.text(`${schedule.weekNumber}. ${t.week} ${schedule.year}   ·   ${range}   ·   ${rosterCount} ${t.workersOf}`, MARGIN_X, y + 36);
+
+  const ruleY = y + 40;
+  // Letterhead rule: heavy rule + hairline just beneath — reads as "official".
+  setDraw(doc, RULE);
+  doc.setLineWidth(0.7);
+  doc.line(MARGIN_X, ruleY, PAGE_W - MARGIN_X, ruleY);
+  setDraw(doc, HAIRLINE);
+  doc.setLineWidth(0.2);
+  doc.line(MARGIN_X, ruleY + 1, PAGE_W - MARGIN_X, ruleY + 1);
+
+  return ruleY + 6;
 }
 
 interface Column { x: number; w: number; date?: string; label: string; sub?: string }
 
 function buildColumns(dates: string[], lang: 'hr' | 'en'): Column[] {
-  const nameW = 48;
+  const nameW = 58;
   const hoursW = 20;
   const dayW = (CONTENT_W - nameW - hoursW) / dates.length;
   const t = L[lang];
@@ -277,7 +354,7 @@ function buildColumns(dates: string[], lang: 'hr' | 'en'): Column[] {
 }
 
 const HEADER_ROW_H = 11;
-const BODY_ROW_H = 8.4;
+const BODY_ROW_H = 9.6;
 
 function drawTableHeader(doc: jsPDF, cols: Column[], y: number): number {
   // Booktabs top rule.
@@ -332,6 +409,7 @@ function drawRow(
   schedule: ShiftScheduleRecord,
   cols: Column[],
   workerId: number,
+  rowNumber: number,
   y: number,
   zebra: boolean,
 ) {
@@ -350,14 +428,33 @@ function drawRow(
 
   const midY = y + BODY_ROW_H / 2 + 1.3;
 
-  // Worker name.
+  // Worker cell: row number (muted) + name (the row's anchor, bold) with an
+  // optional role line beneath it.
+  const nameCol = cols[0];
+  const subtitle = input.workerSubtitle?.(workerId);
+  doc.setFont(FONT, 'normal');
+  doc.setFontSize(8);
+  setInk(doc, MUTED);
+  const idx = `${rowNumber}.`;
+  doc.text(idx, nameCol.x + 2, subtitle ? midY - 1.2 : midY);
+  const idxW = doc.getTextWidth(idx);
+  const nameX = nameCol.x + 2 + idxW + 2;
+
   doc.setFont(FONT, 'bold');
-  doc.setFontSize(9.5);
+  doc.setFontSize(9.8);
   setInk(doc, INK);
   let name = input.workerName(workerId);
-  // Guard against a name overrunning its column.
-  while (doc.getTextWidth(name) > cols[0].w - 4 && name.length > 4) name = `${name.slice(0, -2)}…`;
-  doc.text(name, cols[0].x + 2, midY);
+  while (doc.getTextWidth(name) > nameCol.w - (nameX - nameCol.x) - 2 && name.length > 4) name = `${name.slice(0, -2)}…`;
+  doc.text(name, nameX, subtitle ? midY - 1.2 : midY);
+
+  if (subtitle) {
+    doc.setFont(FONT, 'normal');
+    doc.setFontSize(6.8);
+    setInk(doc, MUTED);
+    let sub = subtitle;
+    while (doc.getTextWidth(sub) > nameCol.w - (nameX - nameCol.x) - 2 && sub.length > 2) sub = `${sub.slice(0, -2)}…`;
+    doc.text(sub, nameX, midY + 2.6);
+  }
 
   // Day cells.
   cols.slice(1, -1).forEach((col) => {
@@ -421,18 +518,30 @@ function drawLegendAndFootnote(doc: jsPDF, input: ShiftPdfInput, schedule: Shift
   setInk(doc, MUTED);
   doc.text(t.footnote, MARGIN_X, cursorY);
 
-  // Signature lines pinned near the bottom of the page.
+  // Signature block pinned near the bottom. The preparer is known (printed above
+  // the left rule); the approver signs by hand.
   const sigY = PAGE_H - MARGIN_BOTTOM - 6;
-  const half = CONTENT_W / 2;
+  const colW = 78;
+  const gap = 14;
+  const preparer = input.preparedBy?.trim();
+
+  if (preparer) {
+    doc.setFont(FONT, 'normal');
+    doc.setFontSize(9);
+    setInk(doc, INK);
+    doc.text(preparer, MARGIN_X, sigY - 1.6);
+  }
+
   setDraw(doc, INK);
   doc.setLineWidth(0.3);
-  doc.line(MARGIN_X, sigY, MARGIN_X + half - 20, sigY);
-  doc.line(MARGIN_X + half, sigY, MARGIN_X + half * 2 - 20, sigY);
+  doc.line(MARGIN_X, sigY, MARGIN_X + colW, sigY);
+  doc.line(MARGIN_X + colW + gap, sigY, MARGIN_X + colW * 2 + gap, sigY);
+
   doc.setFont(FONT, 'normal');
   doc.setFontSize(8.5);
   setInk(doc, MUTED);
   doc.text(t.preparedBy, MARGIN_X, sigY + 4);
-  doc.text(t.approvedBy, MARGIN_X + half, sigY + 4);
+  doc.text(t.approvedBy, MARGIN_X + colW + gap, sigY + 4);
 }
 
 function renderSchedule(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftScheduleRecord, isFirstPage: boolean) {
@@ -464,7 +573,7 @@ function renderSchedule(doc: jsPDF, input: ShiftPdfInput, schedule: ShiftSchedul
       y = drawHeader(doc, input, schedule, roster.length);
       y = drawTableHeader(doc, cols, y);
     }
-    y = drawRow(doc, input, schedule, cols, workerId, y, index % 2 === 1);
+    y = drawRow(doc, input, schedule, cols, workerId, index + 1, y, index % 2 === 1);
   });
 
   // Booktabs bottom rule.
