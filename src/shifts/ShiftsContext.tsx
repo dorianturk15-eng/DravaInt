@@ -61,8 +61,25 @@ const ABSENCE_KEY = 'dravaint-absences-v1';
 const DEFAULT_DEFINITIONS: ShiftDefinition[] = [
   { id: 1, nameHr: 'Prva smjena', nameEn: 'First shift', startTime: '06:00', endTime: '14:00', color: '#2563eb', isActive: true },
   { id: 2, nameHr: 'Druga smjena', nameEn: 'Second shift', startTime: '14:00', endTime: '22:00', color: '#7c3aed', isActive: true },
-  { id: 3, nameHr: 'Treća smjena', nameEn: 'Third shift', startTime: '22:00', endTime: '06:00', color: '#0f766e', isActive: true },
+  { id: 3, nameHr: 'Treća smjena', nameEn: 'Third shift', startTime: '22:00', endTime: '06:00', color: '#0f766e', isActive: false },
 ];
+
+/**
+ * A shift whose end time wraps past midnight — i.e. the third shift.
+ *
+ * The company never runs a *scheduled* third shift: when someone works overnight
+ * it is logged as overtime against that person rather than filling a regular
+ * schedule slot. Overnight definitions are therefore never offered as a lane in
+ * the planning grid, but are still resolved by name so that assignments saved
+ * before this rule existed keep rendering correctly in the archive.
+ *
+ * This is derived from the times rather than from `isActive` or the row id on
+ * purpose: the definitions may come from Supabase, where the third shift row can
+ * still be marked active.
+ */
+export function isOvernightShift(definition: ShiftDefinition) {
+  return definition.endTime <= definition.startTime;
+}
 
 function loadLocal<T>(key: string, fallback: T): T {
   try {
