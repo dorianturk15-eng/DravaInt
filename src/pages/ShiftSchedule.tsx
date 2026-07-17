@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { IconPrint, IconRefresh } from '../components/Icons';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
-import { isOvernightShift, useShifts, type ShiftAssignment, type ShiftDefinition, type ShiftScheduleRecord } from '../shifts/ShiftsContext';
+import { useShifts, type ShiftAssignment, type ShiftDefinition, type ShiftScheduleRecord } from '../shifts/ShiftsContext';
 import { downloadShiftSchedulePdf } from '../shifts/shiftPdf';
 import { useWorkers } from '../workers/WorkersContext';
 
@@ -70,10 +70,10 @@ export default function ShiftSchedule() {
   const { definitions, schedules, absences, saveSchedule, generateSchedule: generateRemoteSchedule, saveAbsence, exportIcs } = useShifts();
   const today = isoDate(new Date());
 
-  // Overnight (third) shifts never get a lane in the grid, but stay resolvable by
-  // name so assignments saved before that rule still render in the archive.
+  // All active shifts get a lane, including the third/overnight shift. (Whether
+  // to hide the third shift from regular scheduling is pending confirmation.)
   const scheduleDefinitions = useMemo(
-    () => definitions.filter((definition) => definition.isActive && !isOvernightShift(definition)),
+    () => definitions.filter((definition) => definition.isActive),
     [definitions],
   );
 
