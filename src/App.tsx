@@ -19,7 +19,8 @@ import { CommandPalette, type CommandItem } from './components/CommandPalette';
 import { NotificationCenter, type OperationalAlert } from './components/NotificationCenter';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from './scheduling/capacity';
-import { computeEffectiveSchedule, jobsToScheduleInput } from './scheduling/cpm';
+import { computeEffectiveSchedule, jobsToScheduleInput, getJobConflicts } from './scheduling/cpm';
+import { supabase } from './supabase/client';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const ShiftSchedule = lazy(() => import('./pages/ShiftSchedule'));
@@ -61,7 +62,10 @@ function App() {
   const location = useLocation();
   const routerNavigate = useNavigate();
   const currentUser = users.find((user) => user.username === username);
-  const role = currentUser?.role || (username === 'dturk' ? 'admin' : 'workers');
+  // Role comes only from the authenticated profile. No username-based admin fallback: a hardcoded
+  // "this username is admin" default is a backdoor pattern (harmless server-side since RLS still
+  // applies, but it hands out the full admin UI locally and would confuse a security audit).
+  const role = currentUser?.role || 'workers';
   const isAdmin = role === 'admin' || role === 'boss';
   const routeValue = location.pathname.replace(/^\//, '') as AppTab;
   const tab = ALL_TABS.includes(routeValue) ? routeValue : settings.defaultView;
@@ -129,7 +133,22 @@ function App() {
     return <LockScreen
       username={username ?? ''}
       operatorName={operatorName}
-      onUnlock={(secret) => Boolean((settings.lockPin.length === 4 || settings.lockPin.length === 6) && secret === settings.lockPin) || secret === currentUser?.password}
+      onUnlock={async (secret) => {
+        // Never accept an empty secret — comparing against an empty stored value (Supabase profiles
+        // carry no password) is what previously made a terminal with no PIN impossible to unlock.
+        if (!secret) return false;
+        const pin = settings.lockPin;
+        if ((pin.length === 4 || pin.length === 6) && secret === pin) return true;
+        if (supabase) {
+          // Supabase mode: re-authenticate the current user so a terminal with no PIN configured is
+          // never permanently locked out. A wrong password errors without changing the session.
+          const email = currentUser?.email || `${username}@dravaint.local`;
+          const { error } = await supabase.auth.signInWithPassword({ email, password: secret });
+          return !error;
+        }
+        // Demo/offline mode: the account password is stored locally. Require a non-empty match.
+        return Boolean(currentUser?.password) && secret === currentUser?.password;
+      }}
       onUnlocked={() => setIsLocked(false)}
       onLogout={() => { setIsLocked(false); logout(); }}
     />;
@@ -152,10 +171,10 @@ function App() {
   const materialRisks = settings.materialAlertsEnabled ? leafJobs.filter((job) => job.materialStatus === 'waiting' || job.materialStatus === 'delayed') : [];
   const absentWorkerIds = new Set(absences.filter((absence) => absence.startDate <= today && absence.endDate >= today).map((absence) => absence.workerId));
   workers.filter((worker) => worker.status === 'absent').forEach((worker) => absentWorkerIds.add(worker.id));
-  const machineConflicts = settings.scheduleConflictAlertsEnabled && leafJobs.some((job, index) => leafJobs.slice(index + 1).some((candidate) => {
-    if (!job.machine || job.machine !== candidate.machine || !job.start || !job.end || !candidate.start || !candidate.end) return false;
-    return new Date(job.start).getTime() < new Date(candidate.end).getTime() && new Date(candidate.start).getTime() < new Date(job.end).getTime();
-  }));
+  // Use the same conflict engine the Gantt and board use (cpm.getJobConflicts), so the bell can't
+  // report "operations are stable" while the board shows red. The old naive `job.machine === candidate.machine`
+  // string compare missed routed orders ("Tokarilica-1 → CNC-2") and per-operation windows entirely.
+  const machineConflicts = settings.scheduleConflictAlertsEnabled && leafJobs.some((job) => Boolean(getJobConflicts(job, jobs).machineOverlap));
   // Capacity alert is scoped to the current week so it reflects this week's load, not an all-time sum.
   const capacityWindow = weekWindow();
   const weekLeafJobs = leafJobs.filter((job) => jobIntersectsWeek(job, capacityWindow));

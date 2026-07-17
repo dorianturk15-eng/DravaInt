@@ -13,7 +13,7 @@ import { useShifts } from '../shifts/ShiftsContext';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../settings/SettingsContext';
 import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from '../scheduling/capacity';
-import { computeEffectiveSchedule, jobsToScheduleInput } from '../scheduling/cpm';
+import { computeEffectiveSchedule, jobsToScheduleInput, getJobConflicts } from '../scheduling/cpm';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   planned: 'var(--primary-color)',
@@ -41,10 +41,9 @@ export default function Dashboard() {
   const recent = [...jobs].sort((a, b) => b.id - a.id).slice(0, 6);
   const materialRisks = settings.materialAlertsEnabled ? jobs.filter((job) => job.materialStatus === 'waiting' || job.materialStatus === 'delayed').length : 0;
   const delayedCount = jobs.filter((job) => job.status === 'delayed' || (job.status !== 'done' && job.end && new Date(job.end).getTime() < Date.now() - settings.delayAlertMinutes * 60_000)).length;
-  const hasMachineOverlap = settings.scheduleConflictAlertsEnabled && jobs.some((job, index) => jobs.slice(index + 1).some((candidate) => {
-    if (!job.machine || job.machine !== candidate.machine || !job.start || !job.end || !candidate.start || !candidate.end) return false;
-    return new Date(job.start).getTime() < new Date(candidate.end).getTime() && new Date(candidate.start).getTime() < new Date(job.end).getTime();
-  }));
+  // Same conflict engine as the Gantt/board (cpm.getJobConflicts) so the dashboard exception count
+  // agrees with what planners see, including routed orders and per-operation machine windows.
+  const hasMachineOverlap = settings.scheduleConflictAlertsEnabled && jobs.some((job) => Boolean(getJobConflicts(job, allJobs).machineOverlap));
   const todayLabel = new Intl.DateTimeFormat(lang === 'hr' ? 'hr-HR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
   // Capacity heatmap is scoped to a single week (default: current), so it reflects load for the

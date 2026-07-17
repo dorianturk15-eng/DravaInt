@@ -105,7 +105,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     void supabase.from('app_settings').select('value').eq('key', 'ui_settings').maybeSingle().then(({ data }) => {
       if (!data?.value || typeof data.value !== 'object') return;
-      const next = { ...loadSettings(), ...(data.value as Partial<AppSettings>) };
+      const remote = { ...(data.value as Partial<AppSettings>) };
+      // The lock PIN must never travel through the shared, world-readable app_settings row. If an
+      // older client persisted one there, ignore it and keep this workstation's local PIN.
+      delete remote.lockPin;
+      const next = { ...loadSettings(), ...remote };
       setSettings(next);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     });
@@ -117,7 +121,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('dravaint-role-timeouts', JSON.stringify(next.roleTimeouts));
     localStorage.setItem('cfg-auto-lock-enabled', String(next.autoLockEnabled));
     localStorage.setItem('cfg-default-view', next.defaultView);
-    if (supabase) void supabase.from('app_settings').upsert({ key: 'ui_settings', value: next });
+    if (supabase) {
+      // Strip the lock PIN before syncing: app_settings('ui_settings') is a single, world-readable
+      // shop-wide row, and a plaintext credential must not be stored there. The PIN stays local to
+      // this terminal. Non-admin upserts are rejected by RLS — surface that instead of silently
+      // dropping shop-wide settings changes.
+      const { lockPin: _localOnlyPin, ...shared } = next;
+      void supabase.from('app_settings').upsert({ key: 'ui_settings', value: shared }).then(({ error }) => {
+        if (error) console.warn('[settings] shop-wide settings did not sync (kept locally):', error.message);
+      });
+    }
   }
 
   function updateSettings(patch: Partial<AppSettings>) {
