@@ -4,7 +4,7 @@ import 'gantt-task-react/dist/index.css';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
 import { useScheduling, type DependencyType } from '../scheduling/SchedulingContext';
-import { buildGanttTasks, jobIdFromTaskId, hasChildren } from '../scheduling/hierarchy';
+import { buildGanttTasks, jobIdFromTaskId, hasChildren, computeOperationSchedule } from '../scheduling/hierarchy';
 import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, computeScheduleSlack, cascadeDependents, toLocalDateTimeString } from '../scheduling/cpm';
 import { useSettings } from '../settings/SettingsContext';
 import { useMachines } from '../machines/MachinesContext';
@@ -775,7 +775,44 @@ export default function GanttChart() {
     }, 120);
   }
 
+  /**
+   * An operation has no stored start — the route is chained off job.start — so a
+   * dragged operation bar is decomposed into (route shift, this op's duration):
+   *   middle drag -> start moves, duration constant  -> the whole route shifts
+   *   right edge  -> start fixed, duration changes   -> only this op resizes
+   *   left edge   -> both change, so the far edge stays put
+   */
+  function handleOperationDateChange(task: Task) {
+    const match = task.id.match(/^op-(\d+)-(\d+)$/);
+    if (!match) return;
+    const jobId = Number(match[1]);
+    const operationId = Number(match[2]);
+    const job = jobs.find((item) => item.id === jobId);
+    if (!job?.operations) return;
+    const original = computeOperationSchedule(job).find((entry) => entry.op.id === operationId);
+    if (!original) return;
+
+    const shiftMs = task.start.getTime() - original.start.getTime();
+    const durationHours = Math.max(0.25, (task.end.getTime() - task.start.getTime()) / 3_600_000);
+    const operations = job.operations.map((operation) => operation.id === operationId
+      ? { ...operation, hours: Number(durationHours.toFixed(2)) }
+      : operation);
+    const totalHours = operations.reduce((sum, operation) => sum + operation.hours, 0);
+    const start = new Date(new Date(job.start).getTime() + shiftMs);
+    const startStr = toLocalDateTimeString(start);
+    const endStr = toLocalDateTimeString(new Date(start.getTime() + totalHours * 3_600_000));
+
+    pushHistory();
+    updateJob(jobId, { operations, start: startStr, end: endStr });
+    adjustDependencies(jobId, startStr, endStr, jobs);
+    document.documentElement.dataset.ganttDragging = 'false';
+  }
+
   function handleDateChange(task: Task) {
+    if (task.id.startsWith('op-')) {
+      handleOperationDateChange(task);
+      return;
+    }
     const jobId = jobIdFromTaskId(task.id);
     if (!jobId) return;
     pushHistory();
@@ -805,6 +842,8 @@ export default function GanttChart() {
   }
 
   function handleProgressChange(task: Task) {
+    // An operation row renders the parent job's progress; it is not separately tracked.
+    if (task.id.startsWith('op-')) return;
     const jobId = jobIdFromTaskId(task.id);
     if (!jobId) return;
     pushHistory();
@@ -812,6 +851,8 @@ export default function GanttChart() {
   }
 
   function handleDelete(task: Task): boolean {
+    // Deleting an operation row must not delete the work order it belongs to.
+    if (task.id.startsWith('op-')) return false;
     const jobId = jobIdFromTaskId(task.id);
     if (!jobId) return false;
     pushHistory();

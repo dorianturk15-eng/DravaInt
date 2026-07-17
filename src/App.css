@@ -996,7 +996,41 @@ select {
   .planner-sidebar-grid, .planner-fields { grid-template-columns: 1fr; }
   .page-heading-row { align-items: flex-start; }
   .shift-board-scroll { margin-inline: -12px; }
+  /* The board grid is min-width:920px; on phones let each week card scroll it
+     horizontally instead of clipping the later day columns out of reach. */
+  .shift-week-board { overflow-x: auto; }
+  .archive-row { grid-template-columns: 1fr; gap: 8px; }
+  .archive-actions { justify-content: flex-start; }
 }
+
+/* Shift planner: view tabs, published archive, weekend and lock states */
+.shift-view-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.shift-view-tabs button { display: inline-flex; align-items: center; gap: 7px; width: auto; padding: 8px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-pill); background: var(--bg-card); color: var(--text-secondary); font-size: 11px; font-weight: 700; cursor: pointer; transition: var(--transition-base); }
+.shift-view-tabs button:hover { transform: translateY(-1px); color: var(--text-primary); }
+.shift-view-tabs button.active { border-color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-card)); color: var(--primary-color); }
+.tab-count { padding: 1px 6px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text-secondary) 14%, transparent); font-size: 11px; }
+.shift-view-tabs button.active .tab-count { background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+
+.archive-panel { padding: 16px; }
+.archive-empty { margin: 12px 0 0; color: var(--text-secondary); font-size: 12px; }
+.archive-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.archive-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-inner); background: color-mix(in srgb, var(--bg-step) 52%, transparent); transition: var(--transition-base); }
+.archive-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--primary-color) 40%, var(--border-color)); }
+.archive-week strong { display: block; font-size: 12px; }
+.archive-week small { display: block; margin-top: 3px; color: var(--text-secondary); font-size: 11px; }
+.archive-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 11px; }
+.archive-actions { display: flex; gap: 6px; }
+
+.planner-toggle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.weekend-toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 11px; font-weight: 700; cursor: pointer; }
+.planner-toggle-row small { color: var(--text-secondary); font-size: 11px; }
+
+.shift-day-header.is-weekend { background: color-mix(in srgb, var(--bg-step) 62%, transparent); }
+.shift-day-header.is-weekend strong { color: var(--text-secondary); }
+.shift-drop-cell.is-weekend { background: color-mix(in srgb, var(--bg-step) 72%, transparent); }
+.lock-banner { margin: 0; padding: 9px 16px; border-bottom: 1px solid var(--border-color); background: color-mix(in srgb, var(--bg-step) 55%, transparent); color: var(--text-secondary); font-size: 11px; }
+.shift-week-board.is-locked .assignment-chip { cursor: default; box-shadow: none; }
+.shift-week-board.is-locked .shift-drop-cell.empty-cell::after { opacity: 0.45; }
 
 @media print {
   .planner-command-card, .planner-sidebar-grid, .board-help, .week-board-actions, .week-board-footer { display: none !important; }

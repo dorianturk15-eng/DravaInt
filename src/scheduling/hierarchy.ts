@@ -141,7 +141,6 @@ export function buildGanttTasks(jobs: Job[], options: GanttBuildOptions = {}): T
           end: o.end > o.start ? o.end : new Date(o.start.getTime() + 3600000),
           progress: job.status === 'done' ? 100 : job.status === 'inProgress' ? job.progress : 0,
           project: `wo-${job.id}`,
-          isDisabled: true,
           styles: { backgroundColor: STATUS_COLORS[job.status], backgroundSelectedColor: STATUS_COLORS[job.status] },
         });
       });
