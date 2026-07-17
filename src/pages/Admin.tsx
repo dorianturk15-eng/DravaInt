@@ -459,7 +459,7 @@ export default function Admin() {
             </div>
             <div>
               <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{lang === 'hr' ? 'Kvalifikacije' : 'Qualifications'}</label>
-              <input value={workerQualifications} onChange={(e) => setWorkerQualifications(e.target.value)} placeholder="CNC-1, CNC-2, QA" />
+              <input value={workerQualifications} onChange={(e) => setWorkerQualifications(e.target.value)} placeholder="CNC-1, CNC-2, Kontrola kvalitete" />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
               <button className="btn btn-blue" onClick={handleAddWorker} style={{ flex: 1 }}>

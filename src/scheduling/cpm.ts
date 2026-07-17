@@ -278,60 +278,123 @@ export interface JobConflicts {
   shiftOutside?: { message: string };
   hoursExceeded?: { message: string };
   restViolation?: { message: string };
+  absent?: { message: string };
 }
 
-export function getWorkerRole(operatorName: string): string | null {
-  if (!operatorName) return null;
-  const normalized = operatorName.trim().toLowerCase();
-
-  try {
-    const modernRaw = localStorage.getItem('dravaint-workers-v2');
-    if (modernRaw) {
-      const workers = JSON.parse(modernRaw) as Array<{ firstName: string; lastName: string; roleName: string }>;
-      const found = workers.find((worker) => `${worker.firstName} ${worker.lastName}`.trim().toLowerCase() === normalized);
-      if (found) return found.roleName;
-    }
-    const raw = localStorage.getItem('dravaint-workers-list');
-    if (raw) {
-      const workers = JSON.parse(raw);
-      if (Array.isArray(workers)) {
-        const found = workers.find((w) => w.name && w.name.trim().toLowerCase() === normalized);
-        if (found) return found.role;
-      }
-    }
-  } catch {}
-
-  const DEFAULT_WORKERS = [
-    { name: 'Goran Ć.', role: 'workers' },
-    { name: 'Alen M.', role: 'workers' },
-    { name: 'Damir M.', role: 'workers' },
-    { name: 'Krunoslav S.', role: 'workers' },
-    { name: 'Dorian T.', role: 'boss' },
-    { name: 'Božidar B.', role: 'managers' },
-  ];
-  const found = DEFAULT_WORKERS.find((w) => w.name.trim().toLowerCase() === normalized);
-  return found ? found.role : null;
+interface WorkerRecord {
+  id?: number;
+  firstName?: string;
+  lastName?: string;
+  roleName?: string;
+  status?: string;
+  qualifications?: string[];
 }
 
-export function getWorkerQualifications(operatorName: string): string[] {
+interface AbsenceRecord {
+  workerId: number;
+  startDate: string;
+  endDate: string;
+}
+
+function loadWorkerRecords(): WorkerRecord[] {
   try {
-    const workers = JSON.parse(localStorage.getItem('dravaint-workers-v2') || '[]') as Array<{ firstName: string; lastName: string; qualifications?: string[] }>;
-    const normalized = operatorName.trim().toLowerCase();
-    return workers.find((worker) => `${worker.firstName} ${worker.lastName}`.trim().toLowerCase() === normalized)?.qualifications ?? [];
+    const parsed = JSON.parse(localStorage.getItem('dravaint-workers-v2') || '[]');
+    return Array.isArray(parsed) ? (parsed as WorkerRecord[]) : [];
   } catch {
     return [];
   }
 }
 
-export function isWorkerQualified(role: string, machine: string): boolean {
-  const m = machine.toLowerCase();
-  if (m.includes('cnc')) {
-    return ['admin', 'boss', 'managers'].includes(role);
+function loadAbsences(): AbsenceRecord[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('dravaint-absences-v1') || '[]');
+    return Array.isArray(parsed) ? (parsed as AbsenceRecord[]) : [];
+  } catch {
+    return [];
   }
-  if (m.includes('drill') || m.includes('drilling') || m.includes('bušilic') || m.includes('pila')) {
-    return ['workers'].includes(role);
+}
+
+function findWorker(workers: WorkerRecord[], name: string): WorkerRecord | undefined {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return workers.find((worker) => `${worker.firstName ?? ''} ${worker.lastName ?? ''}`.trim().toLowerCase() === normalized);
+}
+
+export function getWorkerQualifications(operatorName: string): string[] {
+  const worker = findWorker(loadWorkerRecords(), operatorName);
+  return Array.isArray(worker?.qualifications) ? worker!.qualifications : [];
+}
+
+interface MachineInterval {
+  machine: string;
+  start: number;
+  end: number;
+}
+
+interface WorkInterval {
+  operator: string;
+  machine: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Lays a routed job's operations out sequentially from the job start, yielding the machine, the
+ * assigned worker, and the time window for each step. This is the same layout buildGanttTasks
+ * renders, so operation-level conflict checks agree with what the Gantt shows. Mirrors
+ * hierarchy.computeOperationSchedule (kept local to avoid a cpm <-> hierarchy import cycle).
+ */
+function operationIntervals(job: Job): WorkInterval[] {
+  if (!job.operations?.length || !job.start) return [];
+  let cursor = new Date(job.start).getTime();
+  if (isNaN(cursor)) return [];
+  const intervals: WorkInterval[] = [];
+  for (const op of job.operations) {
+    const start = cursor;
+    const end = cursor + (op.hours || 0) * 3_600_000;
+    cursor = end;
+    intervals.push({
+      machine: (op.machine || '').trim(),
+      operator: (op.operator || '').trim(),
+      start,
+      end,
+    });
   }
-  return true;
+  return intervals;
+}
+
+/**
+ * Every (machine, time-window) a job actually occupies. For routed jobs this is per-operation, so
+ * "Tokarilica-1 → CNC-2" no longer hides behind a single opaque string; for a plain job whose
+ * machine field is a chain, each machine in the chain is checked across the job window.
+ */
+function machineIntervals(job: Job): MachineInterval[] {
+  if (job.operations?.length) {
+    return operationIntervals(job).filter((i) => i.machine).map(({ machine, start, end }) => ({ machine, start, end }));
+  }
+  const machines = (job.machine || '').split('→').map((m) => m.trim()).filter(Boolean);
+  if (!machines.length || !job.start || !job.end) return [];
+  const start = new Date(job.start).getTime();
+  const end = new Date(job.end).getTime();
+  if (isNaN(start) || isNaN(end) || start >= end) return [];
+  return machines.map((machine) => ({ machine, start, end }));
+}
+
+/**
+ * Every (worker, time-window) work segment a job represents. Routed jobs are per-operation — the
+ * top-level `operator` on a routing order is usually a product label, not a person, so keying
+ * worker checks off it silently skips them (which it did before this was per-operation).
+ */
+function workerIntervals(job: Job): WorkInterval[] {
+  if (job.operations?.length) {
+    return operationIntervals(job).filter((i) => i.operator);
+  }
+  const operator = (job.operator || '').trim();
+  if (!operator || !job.start || !job.end) return [];
+  const start = new Date(job.start).getTime();
+  const end = new Date(job.end).getTime();
+  if (isNaN(start) || isNaN(end) || start >= end) return [];
+  return [{ operator, machine: (job.machine || '').trim(), start, end }];
 }
 
 export function getMonday(d: Date): string {
@@ -343,246 +406,172 @@ export function getMonday(d: Date): string {
   return monday.toISOString().split('T')[0];
 }
 
+/**
+ * Sums a worker's scheduled hours inside the given week across all jobs, counting per-operation
+ * assignments on routed orders as well as plain single-operator jobs.
+ */
 export function calculateWeeklyHours(operator: string, weekMondayStr: string, jobs: Job[]): number {
   if (!operator) return 0;
   const targetMonday = new Date(weekMondayStr);
   const targetSundayEnd = new Date(targetMonday.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  let total = 0;
   const normalizedOp = operator.trim().toLowerCase();
 
+  let total = 0;
   for (const job of jobs) {
-    if (!job.operator || job.operator.trim() === '' || !job.start || !job.end) continue;
-    if (job.operator.trim().toLowerCase() !== normalizedOp) continue;
-
-    const start = new Date(job.start).getTime();
-    const end = new Date(job.end).getTime();
-    if (isNaN(start) || isNaN(end) || start >= end) continue;
-
-    const overlapStart = Math.max(start, targetMonday.getTime());
-    const overlapEnd = Math.min(end, targetSundayEnd.getTime());
-
-    if (overlapStart < overlapEnd) {
-      total += (overlapEnd - overlapStart) / 3600000;
+    for (const seg of workerIntervals(job)) {
+      if (seg.operator.trim().toLowerCase() !== normalizedOp) continue;
+      const overlapStart = Math.max(seg.start, targetMonday.getTime());
+      const overlapEnd = Math.min(seg.end, targetSundayEnd.getTime());
+      if (overlapStart < overlapEnd) total += (overlapEnd - overlapStart) / 3_600_000;
     }
   }
   return total;
 }
 
-export function checkShiftScheduleConflict(job: Job): boolean {
-  if (!job.operator || !job.start || !job.end) return false;
-
-  const start = new Date(job.start).getTime();
-  const end = new Date(job.end).getTime();
-  if (isNaN(start) || isNaN(end) || start >= end) return false;
+/**
+ * True when the worker is working outside the shift they are assigned to for that day. Requires a
+ * generated shift schedule; when none exists yet (the default state) it returns false rather than
+ * flagging every worker against a stale hardcoded roster.
+ */
+export function checkShiftScheduleConflict(operator: string, startMs: number, endMs: number): boolean {
+  if (!operator || isNaN(startMs) || isNaN(endMs) || startMs >= endMs) return false;
 
   try {
     const shiftData = JSON.parse(localStorage.getItem('dravaint-shifts-v2') || '{}') as {
       definitions?: Array<{ id: number; startTime: string; endTime: string }>;
       schedules?: Array<{ startDate: string; endDate: string; assignments: Array<{ workerId: number; shiftDefinitionId: number; date: string }> }>;
     };
-    const workers = JSON.parse(localStorage.getItem('dravaint-workers-v2') || '[]') as Array<{ id: number; firstName: string; lastName: string }>;
-    if (shiftData.schedules?.length && shiftData.definitions?.length) {
-      const worker = workers.find((item) => `${item.firstName} ${item.lastName}`.trim().toLowerCase() === job.operator.trim().toLowerCase());
-      if (!worker) return true;
-      const date = job.start.slice(0, 10);
-      const schedule = shiftData.schedules.find((item) => date >= item.startDate && date <= item.endDate);
-      const assignment = schedule?.assignments.find((item) => item.workerId === worker.id && item.date === date);
-      const definition = shiftData.definitions.find((item) => item.id === assignment?.shiftDefinitionId);
-      if (!assignment || !definition) return true;
-      const allowedStart = new Date(`${date}T${definition.startTime}:00`).getTime();
-      const allowedEndDate = new Date(`${date}T${definition.endTime}:00`);
-      if (definition.endTime <= definition.startTime) allowedEndDate.setDate(allowedEndDate.getDate() + 1);
-      return start < allowedStart || end > allowedEndDate.getTime();
-    }
+    const workers = loadWorkerRecords();
+    if (!shiftData.schedules?.length || !shiftData.definitions?.length) return false;
+
+    const worker = findWorker(workers, operator);
+    if (!worker || worker.id == null) return false;
+
+    const date = toLocalDateTimeString(new Date(startMs)).slice(0, 10);
+    const schedule = shiftData.schedules.find((item) => date >= item.startDate && date <= item.endDate);
+    const assignment = schedule?.assignments.find((item) => item.workerId === worker.id && item.date === date);
+    const definition = shiftData.definitions.find((item) => item.id === assignment?.shiftDefinitionId);
+    if (!assignment || !definition) return true;
+
+    const allowedStart = new Date(`${date}T${definition.startTime}:00`).getTime();
+    const allowedEndDate = new Date(`${date}T${definition.endTime}:00`);
+    if (definition.endTime <= definition.startTime) allowedEndDate.setDate(allowedEndDate.getDate() + 1);
+    return startMs < allowedStart || endMs > allowedEndDate.getTime();
   } catch {
-    // Continue with the legacy schedule cache below when migration data is unavailable.
+    return false;
   }
+}
 
-  const raw = localStorage.getItem('dravaint-shift-schedule');
-  let weeks: any[] = [];
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      weeks = parsed.weeks || [];
-    } catch {}
-  }
-
-  if (weeks.length === 0) {
-    const base = 'Božidar B.\nPerica B.\nNenad S.\nToni P.\nIvica B.';
-    const always1 = 'Goran Ć.\nAlen M.\nDamir M.\nKrunoslav S.\nDorian T.';
-    const g1 = 'Matej B.\nAnthony Đ.';
-    const g2 = 'Tihomir M.\nDarko N.\nMatej P.';
-    const startWeek = 29;
-    const weekCount = 6;
-    const startDate = '2026-07-13';
-
-    const rotatingBase = base.split('\n').map((n) => n.trim()).filter((n) => n);
-    const alwaysFirst = always1.split('\n').map((n) => n.trim()).filter((n) => n);
-    const group1 = g1.split('\n').map((n) => n.trim()).filter((n) => n);
-    const group2 = g2.split('\n').map((n) => n.trim()).filter((n) => n);
-    const baseWorkersList = [...rotatingBase, ...alwaysFirst];
-
-    let currentDate = new Date(startDate);
-    for (let i = 0; i < weekCount; i++) {
-      const ind2ShiftWorker = rotatingBase.length ? rotatingBase[i % rotatingBase.length] : '';
-      const isGroup1In2nd = i % 2 === 0;
-
-      const pad = (n: number) => (n < 10 ? '0' + n : String(n));
-      const dateString = `${pad(currentDate.getDate())}.${pad(currentDate.getMonth() + 1)}.${currentDate.getFullYear()}.`;
-
-      weeks.push({
-        weekLabel: startWeek + i,
-        dateLabel: dateString,
-        firstShift: baseWorkersList.filter((w) => w !== ind2ShiftWorker),
-        firstShiftExtra: isGroup1In2nd ? group2 : group1,
-        secondShiftWorker: ind2ShiftWorker,
-        secondShiftExtra: isGroup1In2nd ? group1 : group2,
-      });
-      currentDate.setDate(currentDate.getDate() + 7);
-    }
-  }
-
-  const shiftHours = parseInt(localStorage.getItem('cfg-shift-hours') || '8');
-  const normalizedOp = job.operator.trim().toLowerCase();
-
-  let current = new Date(start);
-  while (current.getTime() < end) {
-    const dayStart = new Date(current);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-
-    const overlapStart = Math.max(start, dayStart.getTime());
-    const overlapEnd = Math.min(end, dayEnd.getTime());
-    if (overlapStart >= overlapEnd) {
-      current = dayEnd;
-      continue;
-    }
-
-    const dayDate = new Date(overlapStart);
-    let foundWeek: any = null;
-
-    for (const w of weeks) {
-      const match = w.dateLabel.match(/(\d+)\.(\d+)\.(\d+)/);
-      if (match) {
-        const d = parseInt(match[1]);
-        const m = parseInt(match[2]) - 1;
-        const y = parseInt(match[3]);
-        const weekStart = new Date(y, m, d, 0, 0, 0);
-        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-        if (dayDate >= weekStart && dayDate < weekEnd) {
-          foundWeek = w;
-          break;
-        }
-      }
-    }
-
-    if (!foundWeek) {
-      return true;
-    }
-
-    let shift: 1 | 2 | null = null;
-    if (
-      foundWeek.firstShift.some((w: string) => w.trim().toLowerCase() === normalizedOp) ||
-      foundWeek.firstShiftExtra.some((w: string) => w.trim().toLowerCase() === normalizedOp)
-    ) {
-      shift = 1;
-    } else if (
-      (foundWeek.secondShiftWorker && foundWeek.secondShiftWorker.trim().toLowerCase() === normalizedOp) ||
-      foundWeek.secondShiftExtra.some((w: string) => w.trim().toLowerCase() === normalizedOp)
-    ) {
-      shift = 2;
-    }
-
-    if (shift === null) {
-      return true;
-    }
-
-    const dayOfWeek = dayDate.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      return true;
-    }
-
-    let shiftStart: number;
-    let shiftEnd: number;
-    if (shift === 1) {
-      shiftStart = dayStart.getTime() + 6 * 3600000;
-      shiftEnd = shiftStart + shiftHours * 3600000;
-    } else {
-      shiftStart = dayStart.getTime() + (6 + shiftHours) * 3600000;
-      shiftEnd = shiftStart + shiftHours * 3600000;
-    }
-
-    if (overlapStart < shiftStart || overlapEnd > shiftEnd) {
-      return true;
-    }
-
-    current = dayEnd;
-  }
-
-  return false;
+function intervalsOverlap(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
+  return a.start < b.end && b.start < a.end;
 }
 
 export function getJobConflicts(job: Job, allJobs: Job[]): JobConflicts {
   const conflicts: JobConflicts = {};
 
-  if (!job.start || !job.end || job.status === 'done') return conflicts;
-  const currentStart = new Date(job.start).getTime();
-  const currentEnd = new Date(job.end).getTime();
-  if (isNaN(currentStart) || isNaN(currentEnd) || currentStart >= currentEnd) return conflicts;
-
-  const hasChildren = (id: number) => allJobs.some((j) => j.parentId === id);
-  const leafJobs = allJobs.filter((j) => !hasChildren(j.id));
-
-  for (const other of leafJobs) {
-    if (other.id === job.id || other.status === 'done' || !other.start || !other.end) continue;
-    const otherStart = new Date(other.start).getTime();
-    const otherEnd = new Date(other.end).getTime();
-    if (isNaN(otherStart) || isNaN(otherEnd) || otherStart >= otherEnd) continue;
-
-    const overlaps = currentStart < otherEnd && otherStart < currentEnd;
-    if (overlaps) {
-      if (job.machine && other.machine && job.machine === other.machine) {
-        conflicts.machineOverlap = { otherOrder: other.order };
-      }
-      if (
-        job.operator &&
-        other.operator &&
-        job.operator.trim() !== '' &&
-        job.operator.trim().toLowerCase() === other.operator.trim().toLowerCase()
-      ) {
-        conflicts.operatorOverlap = { otherOrder: other.order };
-      }
-    }
+  if (!job.start || job.status === 'done') return conflicts;
+  const jobStart = new Date(job.start).getTime();
+  if (isNaN(jobStart)) return conflicts;
+  // Routed orders carry a zero-duration parent window (the work lives in the operations), so only
+  // bail on an empty window for plain, non-routed jobs — otherwise every routing order is skipped.
+  if (!job.operations?.length) {
+    const jobEnd = new Date(job.end).getTime();
+    if (isNaN(jobEnd) || jobStart >= jobEnd) return conflicts;
   }
 
-  if (job.operator && job.operator.trim() !== '') {
-    const role = getWorkerRole(job.operator);
-    if (role) {
-      const qualifications = getWorkerQualifications(job.operator);
-      const qualified = qualifications.length ? job.machine.split('→').map((part) => part.trim()).every((machine) => qualifications.includes(machine) || machine.toLowerCase().includes('kontrola')) : isWorkerQualified(role, job.machine);
-      if (!qualified) {
-        conflicts.unqualified = { message: `Role '${role}' is not qualified for machine '${job.machine}'` };
+  const hasKids = (id: number) => allJobs.some((j) => j.parentId === id);
+  const leafJobs = allJobs.filter((j) => !hasKids(j.id));
+  const others = leafJobs.filter((o) => o.id !== job.id && o.status !== 'done');
+
+  // --- Machine double-booking (bug: routing chains were compared by exact string) ---
+  const myMachines = machineIntervals(job);
+  for (const other of others) {
+    if (conflicts.machineOverlap) break;
+    const otherMachines = machineIntervals(other);
+    const clash = myMachines.some((a) => otherMachines.some((b) => a.machine === b.machine && intervalsOverlap(a, b)));
+    if (clash) conflicts.machineOverlap = { otherOrder: other.order };
+  }
+
+  // --- Operator double-booking (per-worker, per-operation) ---
+  const myWork = workerIntervals(job);
+  for (const other of others) {
+    if (conflicts.operatorOverlap) break;
+    const otherWork = workerIntervals(other);
+    const clash = myWork.some((a) => otherWork.some((b) =>
+      a.operator.trim().toLowerCase() === b.operator.trim().toLowerCase() && intervalsOverlap(a, b)));
+    if (clash) conflicts.operatorOverlap = { otherOrder: other.order };
+  }
+
+  // --- Per-assigned-worker checks: qualification, absence, shift, hours, rest ---
+  const workers = loadWorkerRecords();
+  const absences = loadAbsences();
+  const maxHoursLimit = parseFloat(localStorage.getItem('cfg-max-hours') || '48');
+
+  const byOperator = new Map<string, WorkInterval[]>();
+  for (const seg of myWork) {
+    const key = seg.operator.trim();
+    if (!key) continue;
+    const list = byOperator.get(key);
+    if (list) list.push(seg);
+    else byOperator.set(key, [seg]);
+  }
+
+  for (const [operatorName, segs] of byOperator) {
+    const worker = findWorker(workers, operatorName);
+    // The operator isn't a real worker (e.g. a product/assembly label on a routing order): there is
+    // nothing to verify about a person here, so skip rather than silently pass.
+    if (!worker) continue;
+    const quals = Array.isArray(worker.qualifications) ? worker.qualifications : [];
+    const earliest = Math.min(...segs.map((s) => s.start));
+    const dateStr = toLocalDateTimeString(new Date(earliest)).slice(0, 10);
+
+    // Qualification: only when the worker has explicit qualifications recorded. An empty list means
+    // "not verified", not "unqualified" — we don't guess from role.
+    if (quals.length && !conflicts.unqualified) {
+      const machinesForWorker = [...new Set(segs.map((s) => s.machine).filter(Boolean))];
+      const missing = machinesForWorker.filter((m) => !quals.includes(m));
+      if (missing.length) conflicts.unqualified = { message: `'${operatorName}' nije kvalificiran za: ${missing.join(', ')}` };
+    }
+
+    // Absence: live status or a date-ranged absence record covering the work day.
+    if (!conflicts.absent) {
+      const absentByStatus = (worker.status ?? '') === 'absent';
+      const absentByRecord = worker.id != null && absences.some((a) => a.workerId === worker.id && a.startDate <= dateStr && a.endDate >= dateStr);
+      if (absentByStatus || absentByRecord) {
+        conflicts.absent = { message: `${operatorName} je nedostupan (${absentByStatus ? 'status: odsutan' : 'evidentirana odsutnost'}) — ${dateStr}` };
       }
     }
 
-    if (checkShiftScheduleConflict(job)) {
-      conflicts.shiftOutside = { message: `Outside assigned shift schedule` };
+    // Shift schedule.
+    if (!conflicts.shiftOutside && segs.some((s) => checkShiftScheduleConflict(operatorName, s.start, s.end))) {
+      conflicts.shiftOutside = { message: 'Izvan dodijeljenog rasporeda smjena' };
     }
 
-    const maxHoursLimit = parseFloat(localStorage.getItem('cfg-max-hours') || '48');
-    const mondayStr = getMonday(new Date(job.start));
-    const weeklyHours = calculateWeeklyHours(job.operator, mondayStr, leafJobs);
-    if (weeklyHours > maxHoursLimit) {
-      conflicts.hoursExceeded = { message: `${weeklyHours.toFixed(1)}h / limit ${maxHoursLimit}h` };
+    // Weekly hours.
+    if (!conflicts.hoursExceeded) {
+      const weeklyHours = calculateWeeklyHours(operatorName, getMonday(new Date(earliest)), leafJobs);
+      if (weeklyHours > maxHoursLimit) conflicts.hoursExceeded = { message: `${weeklyHours.toFixed(1)}h / limit ${maxHoursLimit}h` };
     }
 
-    const nearestPrevious = leafJobs
-      .filter((other) => other.id !== job.id && other.operator.trim().toLowerCase() === job.operator.trim().toLowerCase() && other.end && new Date(other.end).getTime() <= currentStart)
-      .sort((a, b) => new Date(b.end).getTime() - new Date(a.end).getTime())[0];
-    if (nearestPrevious) {
-      const restHours = (currentStart - new Date(nearestPrevious.end).getTime()) / 3_600_000;
-      if (restHours < 12) conflicts.restViolation = { message: `${restHours.toFixed(1)}h rest after ${nearestPrevious.order}` };
+    // Rest: < 12h since this worker's previous work segment ends.
+    if (!conflicts.restViolation) {
+      let prevEnd = -Infinity;
+      let prevOrder = '';
+      for (const other of leafJobs) {
+        if (other.status === 'done') continue;
+        for (const s of workerIntervals(other)) {
+          if (s.operator.trim().toLowerCase() !== operatorName.trim().toLowerCase()) continue;
+          if (other.id === job.id && s.start === earliest) continue;
+          if (s.end <= earliest && s.end > prevEnd) {
+            prevEnd = s.end;
+            prevOrder = other.order;
+          }
+        }
+      }
+      if (prevEnd > -Infinity) {
+        const restHours = (earliest - prevEnd) / 3_600_000;
+        if (restHours < 12) conflicts.restViolation = { message: `${restHours.toFixed(1)}h odmora nakon ${prevOrder}` };
+      }
     }
   }
 

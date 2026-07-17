@@ -38,7 +38,7 @@ const DEFAULT_WORKERS: Worker[] = [
   { id: 2, firstName: 'Alen', lastName: 'M.', email: 'alen@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'busy', qualifications: ['CNC-2'] },
   { id: 3, firstName: 'Damir', lastName: 'M.', email: 'damir@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'available', qualifications: ['Tokarilica-1'] },
   { id: 4, firstName: 'Krunoslav', lastName: 'S.', email: 'krunoslav@dravaint.local', roleId: null, roleName: 'managers', appUserId: null, isActive: true, status: 'available', qualifications: ['CNC-1', 'CNC-2', 'Tokarilica-1'] },
-  { id: 5, firstName: 'Dorian', lastName: 'T.', email: 'dorian@dravaint.local', roleId: null, roleName: 'boss', appUserId: null, isActive: true, status: 'available', qualifications: ['QA'] },
+  { id: 5, firstName: 'Dorian', lastName: 'T.', email: 'dorian@dravaint.local', roleId: null, roleName: 'boss', appUserId: null, isActive: true, status: 'available', qualifications: ['Kontrola kvalitete'] },
   { id: 6, firstName: 'Božidar', lastName: 'B.', email: 'bozidar@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'break', qualifications: ['CNC-1'] },
   { id: 7, firstName: 'Ivana', lastName: 'K.', email: 'ivana@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'available', qualifications: ['Pila', 'Tokarilica-1'] },
   { id: 8, firstName: 'Tomislav', lastName: 'P.', email: 'tomislav@dravaint.local', roleId: null, roleName: 'workers', appUserId: null, isActive: true, status: 'available', qualifications: [] },

@@ -18,7 +18,14 @@ export interface OperationStep {
   name: string;
   machine: string;
   hours: number;
+  /** Worker assigned to this specific operation. Multi-op routing orders are worked by different
+   * people per step (a lathe operator, then a mill operator, then QC), so the assignment lives on
+   * the operation, not the parent order — whose top-level `operator` is often just a product label. */
+  operator?: string;
+  operatorId?: number | null;
 }
+
+export type JobPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface Job {
   id: number;
@@ -38,6 +45,7 @@ export interface Job {
   comments?: string;
   setupHours?: number;
   materialStatus?: 'ready' | 'waiting' | 'delayed';
+  priority?: JobPriority;
   version?: number;
 }
 
@@ -59,6 +67,7 @@ interface JobRow {
   comments?: string | null;
   setup_hours?: number | null;
   material_status?: 'ready' | 'waiting' | 'delayed' | null;
+  priority?: JobPriority | null;
   version?: number | null;
 }
 
@@ -81,6 +90,7 @@ function rowToJob(row: JobRow): Job {
     comments: row.comments ?? '',
     setupHours: row.setup_hours ?? 0,
     materialStatus: row.material_status ?? 'ready',
+    priority: row.priority ?? 'normal',
     version: row.version ?? 1,
   };
 }
@@ -122,9 +132,9 @@ const FALLBACK_JOBS: Job[] = [
     progress: 0,
     color: COLORS[2],
     operations: [
-      { id: 1, name: 'Tokarenje', machine: 'Tokarilica-1', hours: 4 },
-      { id: 2, name: 'Glodanje (5-osno)', machine: 'CNC-2', hours: 6 },
-      { id: 3, name: 'Završna kontrola', machine: 'Kontrola kvalitete', hours: 1 },
+      { id: 1, name: 'Tokarenje', machine: 'Tokarilica-1', hours: 4, operator: 'Damir M.', operatorId: 3 },
+      { id: 2, name: 'Glodanje (5-osno)', machine: 'CNC-2', hours: 6, operator: 'Alen M.', operatorId: 2 },
+      { id: 3, name: 'Završna kontrola', machine: 'Kontrola kvalitete', hours: 1, operator: 'Marija H.', operatorId: 10 },
     ],
   },
   {
@@ -162,9 +172,9 @@ const FALLBACK_JOBS: Job[] = [
     color: COLORS[3],
     parentId: 31,
     operations: [
-      { id: 1, name: 'Pila', machine: 'Pila', hours: 2 },
-      { id: 2, name: 'Glodanje Operacija 1', machine: 'CNC-1', hours: 3 },
-      { id: 3, name: 'Glodanje Operacija 2', machine: 'CNC-1', hours: 2 },
+      { id: 1, name: 'Pila', machine: 'Pila', hours: 2, operator: 'Ivana K.', operatorId: 7 },
+      { id: 2, name: 'Glodanje Operacija 1', machine: 'CNC-1', hours: 3, operator: 'Goran Ć.', operatorId: 1 },
+      { id: 3, name: 'Glodanje Operacija 2', machine: 'CNC-1', hours: 2, operator: 'Goran Ć.', operatorId: 1 },
     ],
   },
   {
@@ -179,8 +189,8 @@ const FALLBACK_JOBS: Job[] = [
     color: COLORS[3],
     parentId: 31,
     operations: [
-      { id: 1, name: 'Tokarenje Operacija 1', machine: 'Tokarilica-1', hours: 3 },
-      { id: 2, name: 'Glodanje Operacija 1', machine: 'CNC-2', hours: 4 },
+      { id: 1, name: 'Tokarenje Operacija 1', machine: 'Tokarilica-1', hours: 3, operator: 'Damir M.', operatorId: 3 },
+      { id: 2, name: 'Glodanje Operacija 1', machine: 'CNC-2', hours: 4, operator: 'Filip R.', operatorId: 12 },
     ],
   },
   {
@@ -207,8 +217,8 @@ const FALLBACK_JOBS: Job[] = [
     color: COLORS[4],
     parentId: 34,
     operations: [
-      { id: 1, name: 'Pila', machine: 'Pila', hours: 1.5 },
-      { id: 2, name: 'Tokarenje Operacija 1', machine: 'Tokarilica-1', hours: 2 },
+      { id: 1, name: 'Pila', machine: 'Pila', hours: 1.5, operator: 'Ivana K.', operatorId: 7 },
+      { id: 2, name: 'Tokarenje Operacija 1', machine: 'Tokarilica-1', hours: 2, operator: 'Damir M.', operatorId: 3 },
     ],
   },
   {
@@ -223,8 +233,8 @@ const FALLBACK_JOBS: Job[] = [
     color: COLORS[4],
     parentId: 34,
     operations: [
-      { id: 1, name: 'Glodanje Operacija 1', machine: 'CNC-1', hours: 3 },
-      { id: 2, name: 'Glodanje Operacija 2', machine: 'CNC-1', hours: 2 },
+      { id: 1, name: 'Glodanje Operacija 1', machine: 'CNC-1', hours: 3, operator: 'Božidar B.', operatorId: 6 },
+      { id: 2, name: 'Glodanje Operacija 2', machine: 'CNC-1', hours: 2, operator: 'Božidar B.', operatorId: 6 },
     ],
   },
 
@@ -450,12 +460,12 @@ const FALLBACK_JOBS: Job[] = [
     progress: 0,
     color: COLORS[0],
     materialStatus: 'waiting',
-    comments: 'Velika serija (200 kom), rok 24.7. Čeka se sirovina.',
+    comments: 'Velika serija (200 kom), rok 24.7. Čeka se sirovina. Tokarenje je dodijeljeno Nikoli V. koji je trenutno odsutan — sada se prijavljuje i na razini operacije rute.',
     operations: [
-      { id: 1, name: 'Pila', machine: 'Pila', hours: 2 },
-      { id: 2, name: 'Tokarenje grubo', machine: 'Tokarilica-2', hours: 5 },
-      { id: 3, name: 'Glodanje finalno', machine: 'CNC-1', hours: 6 },
-      { id: 4, name: 'Završna kontrola', machine: 'Kontrola kvalitete', hours: 1.5 },
+      { id: 1, name: 'Pila', machine: 'Pila', hours: 2, operator: 'Ivana K.', operatorId: 7 },
+      { id: 2, name: 'Tokarenje grubo', machine: 'Tokarilica-2', hours: 5, operator: 'Nikola V.', operatorId: 9 },
+      { id: 3, name: 'Glodanje finalno', machine: 'CNC-1', hours: 6, operator: 'Goran Ć.', operatorId: 1 },
+      { id: 4, name: 'Završna kontrola', machine: 'Kontrola kvalitete', hours: 1.5, operator: 'Marija H.', operatorId: 10 },
     ],
   },
   {
@@ -498,8 +508,8 @@ const FALLBACK_JOBS: Job[] = [
     color: COLORS[3],
     comments: 'Standardni nalog, bez posebnosti.',
     operations: [
-      { id: 1, name: 'Tokarenje', machine: 'Tokarilica-1', hours: 3 },
-      { id: 2, name: 'Glodanje', machine: 'CNC-1', hours: 2 },
+      { id: 1, name: 'Tokarenje', machine: 'Tokarilica-1', hours: 3, operator: 'Damir M.', operatorId: 3 },
+      { id: 2, name: 'Glodanje', machine: 'CNC-1', hours: 2, operator: 'Goran Ć.', operatorId: 1 },
     ],
   },
   {
@@ -615,6 +625,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         comments: job.comments ?? '',
         setup_hours: job.setupHours ?? 0,
         material_status: job.materialStatus ?? 'ready',
+        priority: job.priority ?? 'normal',
       };
       const { error } = await supabase.from('jobs').insert(payload);
       if (error) {
@@ -652,6 +663,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       if (patch.comments !== undefined) dbPatch.comments = patch.comments;
       if (patch.setupHours !== undefined) dbPatch.setup_hours = patch.setupHours;
       if (patch.materialStatus !== undefined) dbPatch.material_status = patch.materialStatus;
+      if (patch.priority !== undefined) dbPatch.priority = patch.priority;
       dbPatch.version = (jobs.find((job) => job.id === id)?.version ?? 1) + 1;
       let query = supabase.from('jobs').update(dbPatch).eq('id', id);
       const expectedVersion = jobs.find((job) => job.id === id)?.version;
