@@ -7,10 +7,12 @@ import { useMachines, MACHINE_TYPES, type MachineType, type MillAxis } from '../
 import { useRoles } from '../roles/RolesContext';
 import { IconUpload, IconTrash, IconEdit, IconPlus } from '../components/Icons';
 import { useWorkers, type Worker } from '../workers/WorkersContext';
+import { useSettings } from '../settings/SettingsContext';
 
 export default function Admin() {
   const { t, lang } = useLanguage();
   const { logo, setLogo } = useLogo();
+  const { exportBackup, importBackup } = useSettings();
   const { users, username: currentUsername, addUser, updateUser, deleteUser } = useAuth();
   const lastLogins = getLastLogins();
   const { machines, addMachine, updateMachine, removeMachine } = useMachines();
@@ -228,52 +230,26 @@ export default function Admin() {
     setTimeout(() => setCfgSaved(false), 3000);
   }
 
-  // JSON Backup utilities
+  // JSON Backup utilities. These delegate to SettingsContext, which backs up EVERY non-`sb-`
+  // localStorage key (the actual data lives under keys like `dravaint-jobs-fallback`,
+  // `dravaint-shifts-v2`, `dravaint-machines-fallback`, …). The previous hardcoded key list here
+  // referenced keys that never existed, so the exported file was a JSON of nulls — no real backup.
   function handleExportBackup() {
-    const backupData: Record<string, string | null> = {};
-    const keysToBackup = [
-      'dravaint-shift-schedule',
-      'dravaint-machines',
-      'dravaint-roles',
-      'dravaint-users-fallback',
-      'dravaint-schedule',
-      'cfg-shift-hours',
-      'cfg-max-hours',
-      'cfg-bottleneck-hours',
-      'gantt-baseline'
-    ];
-    keysToBackup.forEach((k) => {
-      backupData[k] = localStorage.getItem(k);
-    });
-
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `dravaint-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    exportBackup();
   }
 
-  function handleImportBackup(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImportBackup(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string);
-        Object.entries(parsed).forEach(([k, v]) => {
-          if (v !== null) {
-            localStorage.setItem(k, v as string);
-          }
-        });
-        alert(lang === 'hr' ? 'Sigurnosna kopija uspješno učitana! Ponovno učitajte aplikaciju.' : 'Backup successfully imported! Please reload the application.');
-        window.location.reload();
-      } catch {
-        alert(lang === 'hr' ? 'Greška pri čitanju datoteke.' : 'Error reading backup file.');
-      }
-    };
-    reader.readAsText(file);
+    try {
+      await importBackup(file);
+      alert(lang === 'hr' ? 'Sigurnosna kopija uspješno učitana! Ponovno učitajte aplikaciju.' : 'Backup successfully imported! Please reload the application.');
+      window.location.reload();
+    } catch {
+      alert(lang === 'hr' ? 'Greška pri čitanju datoteke.' : 'Error reading backup file.');
+    } finally {
+      e.target.value = '';
+    }
   }
 
   return (
