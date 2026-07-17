@@ -3,7 +3,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
 import { SyncDiagnostics } from '../components/SyncDiagnostics';
 import { useAuth, getLastLogins } from '../auth/AuthContext';
-import { useMachines, type MachineType, type MillAxis } from '../machines/MachinesContext';
+import { useMachines, MACHINE_TYPES, type MachineType, type MillAxis } from '../machines/MachinesContext';
 import { useRoles } from '../roles/RolesContext';
 import { IconUpload, IconTrash, IconEdit, IconPlus } from '../components/Icons';
 import { useWorkers, type Worker } from '../workers/WorkersContext';
@@ -25,6 +25,14 @@ export default function Admin() {
   const [newRole, setNewRole] = useState('');
   const [editingUsername, setEditingUsername] = useState<string | null>(null);
   const [userError, setUserError] = useState('');
+
+  const machineTypeLabels: Record<MachineType, string> = {
+    mill: t.machines.typeMill,
+    lathe: t.machines.typeLathe,
+    saw: t.machines.typeSaw,
+    qc: t.machines.typeQc,
+    other: t.machines.typeOther,
+  };
 
   const [machineName, setMachineName] = useState('');
   const [machineType, setMachineType] = useState<MachineType>('mill');
@@ -351,8 +359,9 @@ export default function Admin() {
             <div>
               <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{t.admin.machineType}</label>
               <select value={machineType} onChange={(e) => setMachineType(e.target.value as MachineType)}>
-                <option value="mill">{t.machines.typeMill}</option>
-                <option value="lathe">{t.machines.typeLathe}</option>
+                {MACHINE_TYPES.map((type) => (
+                  <option key={type} value={type}>{machineTypeLabels[type]}</option>
+                ))}
               </select>
             </div>
             {machineType === 'mill' && (
@@ -395,7 +404,7 @@ export default function Admin() {
                   {machines.map((m) => (
                     <tr key={m.id}>
                       <td style={{ fontWeight: 600 }}>{m.name}</td>
-                      <td>{m.type === 'mill' ? t.machines.typeMill : t.machines.typeLathe}</td>
+                      <td>{machineTypeLabels[m.type]}</td>
                       <td>{m.axis ? `${m.axis} ${t.machines.axisShort}` : '-'}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 8 }}>

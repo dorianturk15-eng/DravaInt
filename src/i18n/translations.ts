@@ -61,6 +61,9 @@ export interface TranslationShape {
     noMachinesDefined: string;
     typeMill: string;
     typeLathe: string;
+    typeSaw: string;
+    typeQc: string;
+    typeOther: string;
     axisShort: string;
   };
   machineBoard: {
@@ -272,6 +275,9 @@ export const translations: Record<Lang, TranslationShape> = {
       noMachinesDefined: 'Nema definiranih strojeva. Zamolite administratora da ih doda.',
       typeMill: 'Glodalica',
       typeLathe: 'Tokarilica',
+      typeSaw: 'Pila',
+      typeQc: 'Kontrola kvalitete',
+      typeOther: 'Ostalo',
       axisShort: 'osna',
     },
     machineBoard: {
@@ -481,6 +487,9 @@ export const translations: Record<Lang, TranslationShape> = {
       noMachinesDefined: 'No machines defined yet. Ask an admin to add some.',
       typeMill: 'Mill',
       typeLathe: 'Lathe',
+      typeSaw: 'Saw',
+      typeQc: 'Quality control',
+      typeOther: 'Other',
       axisShort: 'axis',
     },
     machineBoard: {

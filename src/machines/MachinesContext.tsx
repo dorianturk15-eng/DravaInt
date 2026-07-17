@@ -1,8 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../supabase/client';
 
-export type MachineType = 'mill' | 'lathe';
+export type MachineType = 'mill' | 'lathe' | 'saw' | 'qc' | 'other';
 export type MillAxis = 3 | 5;
+
+/** Machine types that are registrable/capacity-tracked. Routings reference saw ("Pila") and a QC
+ * station ("Kontrola kvalitete") beyond the original mill/lathe pair. */
+export const MACHINE_TYPES: MachineType[] = ['mill', 'lathe', 'saw', 'qc', 'other'];
 
 export interface Machine {
   id: number;
@@ -25,6 +29,9 @@ const FALLBACK_MACHINES: Machine[] = [
   { id: 4, name: 'Tokarilica-2', type: 'lathe', axis: null },
   // Spare lathe, not currently scheduled - genuinely idle rather than merely light.
   { id: 5, name: 'Tokarilica-3', type: 'lathe', axis: null },
+  // Referenced by routings (saw + QC station) so they can be registered and capacity-tracked.
+  { id: 6, name: 'Pila', type: 'saw', axis: null },
+  { id: 7, name: 'Kontrola kvalitete', type: 'qc', axis: null },
 ];
 
 const FALLBACK_STORAGE_KEY = 'dravaint-machines-fallback';
@@ -108,7 +115,7 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       if (machines.some((m) => m.id !== id && m.name.toLowerCase() === trimmed.toLowerCase())) return false;
       patch = { ...patch, name: trimmed };
     }
-    if (patch.type === 'lathe') patch = { ...patch, axis: null };
+    if (patch.type !== undefined && patch.type !== 'mill') patch = { ...patch, axis: null };
 
     if (supabase) {
       const { error } = await supabase.from('machines').update(patch).eq('id', id);
