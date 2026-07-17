@@ -11,7 +11,7 @@ import { useWorkers } from '../workers/WorkersContext';
 import { useShifts } from '../shifts/ShiftsContext';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../settings/SettingsContext';
-import { calculateMachineLoads, WEEKLY_CAPACITY_HOURS } from '../scheduling/capacity';
+import { calculateMachineLoads, getWeeklyCapacityHours } from '../scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput } from '../scheduling/cpm';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
@@ -48,7 +48,8 @@ export default function Dashboard() {
 
   const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(jobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
   const machineLoads = calculateMachineLoads(jobs, effectiveSchedule);
-  const overloadedMachineCount = [...machineLoads.values()].filter((hours) => hours / WEEKLY_CAPACITY_HOURS * 100 >= settings.capacityAlertPercent).length;
+  const weeklyCapacityHours = getWeeklyCapacityHours();
+  const overloadedMachineCount = [...machineLoads.values()].filter((hours) => hours / weeklyCapacityHours * 100 >= settings.capacityAlertPercent).length;
   const exceptionCount = delayedCount + materialRisks + Number(hasMachineOverlap) + overloadedMachineCount;
 
   const uniqueMachines = [...machineLoads.keys()];
@@ -158,7 +159,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
             {machinesList.map((m) => {
               const hours = Math.round((machineLoads.get(m) || 0) * 10) / 10;
-              const loadPercent = Math.min(100, Math.round((hours / WEEKLY_CAPACITY_HOURS) * 100));
+              const loadPercent = Math.min(100, Math.round((hours / weeklyCapacityHours) * 100));
               const color = loadPercent > 90 ? 'var(--danger-color)' : loadPercent > 60 ? '#f59e0b' : 'var(--success-color)';
 
               return (

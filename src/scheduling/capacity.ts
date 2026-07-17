@@ -3,6 +3,14 @@ import type { EffectiveSchedule } from './cpm';
 
 export const WEEKLY_CAPACITY_HOURS = 40;
 
+/** Weekly machine-capacity threshold. Admins tune it via the "bottleneck hours" system config
+ *  (Admin → System); falls back to the 40h default when unset or invalid. */
+export function getWeeklyCapacityHours(): number {
+  const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem('cfg-bottleneck-hours');
+  const parsed = raw ? parseFloat(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : WEEKLY_CAPACITY_HOURS;
+}
+
 function add(loads: Map<string, number>, machine: string, hours: number) {
   const name = machine.trim();
   if (!name || !Number.isFinite(hours) || hours <= 0) return;

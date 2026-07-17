@@ -280,7 +280,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
 
     async function loadJobs() {
-      const { data, error } = await supabase!.from('jobs').select('*').order('id');
+      const { data, error } = await supabase!.from('jobs').select('*').is('deleted_at', null).order('id');
       if (!error && data) setJobs((data as JobRow[]).map(rowToJob));
       setLoading(false);
     }
@@ -291,8 +291,18 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, loadJobs)
       .subscribe();
 
+    // Reconciliation pass: refetch when the terminal regains focus, catching any drift the
+    // realtime channel missed while the tab was backgrounded or briefly disconnected.
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') void loadJobs();
+    };
+    window.addEventListener('visibilitychange', onFocus);
+    window.addEventListener('focus', onFocus);
+
     return () => {
       supabase!.removeChannel(channel);
+      window.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener('focus', onFocus);
     };
   }, []);
 
@@ -382,8 +392,11 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
 
   async function removeJob(id: number) {
     if (supabase) {
-      const { error } = await supabase.from('jobs').delete().eq('id', id);
-      if (error) await enqueueMutation({ table: 'jobs', operation: 'delete', match: { id } });
+      // Soft delete: the schema's deleted_at column keeps history intact (audit trail, dependency
+      // references) and every read filters on `deleted_at is null`.
+      const deletedAt = new Date().toISOString();
+      const { error } = await supabase.from('jobs').update({ deleted_at: deletedAt }).eq('id', id);
+      if (error) await enqueueMutation({ table: 'jobs', operation: 'update', payload: { deleted_at: deletedAt }, match: { id } });
     } else {
       setJobs((prev) => {
         const next = prev.filter((j) => j.id !== id);

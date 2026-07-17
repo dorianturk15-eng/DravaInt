@@ -4,13 +4,24 @@ import { useScheduling } from '../../scheduling/SchedulingContext';
 import { useMachines } from '../../machines/MachinesContext';
 import { useSettings } from '../../settings/SettingsContext';
 import { STATUS_COLORS } from '../../scheduling/boardData';
-import { WEEKLY_CAPACITY_HOURS } from '../../scheduling/capacity';
+import { getWeeklyCapacityHours } from '../../scheduling/capacity';
 import {
   buildConnectorPath,
   buildTimeTicks,
   cardEdgeAnchor,
   edgesForDependencyType,
+  snapToShiftBoundary,
+  xToTime,
 } from '../../scheduling/boardGeometry';
+import { toLocalDateTimeString } from '../../scheduling/cpm';
+
+/** Fired when the user double-clicks empty lane space; MachineSchedule prefills its add-job form. */
+export const QUICK_CREATE_EVENT = 'dravaint:board-quick-create';
+export interface QuickCreateDetail {
+  machine: string;
+  start: string;
+  end: string;
+}
 import { useMachineBoardController } from './useMachineBoardController';
 import { MachineLane } from './MachineLane';
 import { TaskCard } from './TaskCard';
@@ -93,15 +104,22 @@ export function MachineBoard() {
 
       <BoardToolbar
         t={t.machineBoard}
+        statusLabels={t.progress.statusOptions}
         zoom={controller.zoom}
         onZoomChange={controller.setZoom}
         sortBy={controller.sortBy}
         onSortChange={controller.setSortBy}
+        statusFilter={controller.statusFilter}
+        onStatusFilterChange={controller.setStatusFilter}
         connectMode={controller.connectMode}
         onToggleConnectMode={() => controller.setConnectMode((value) => !value)}
         onScrollToday={controller.scrollToToday}
+        onAutoSchedule={() => void controller.autoSchedule()}
+        onExportCsv={controller.exportCsv}
         canUndo={controller.canUndo}
         canRedo={controller.canRedo}
+        historyDepth={controller.historyDepth}
+        futureDepth={controller.futureDepth}
         onUndo={controller.undo}
         onRedo={controller.redo}
       />
@@ -118,7 +136,21 @@ export function MachineBoard() {
       )}
 
       <div className="board-scroll" ref={controller.scrollRef}>
-        <div className="board-content" ref={controller.contentRef} style={{ width: controller.contentWidth, height: controller.totalHeight + 32 }}>
+        <div
+          className="board-content"
+          ref={controller.contentRef}
+          style={{ width: controller.contentWidth, height: controller.totalHeight + 32 }}
+          onDoubleClick={(event) => {
+            if ((event.target as HTMLElement).closest('.board-task-card')) return;
+            const point = controller.toContentCoords(event.clientX, event.clientY);
+            const lane = controller.laneLayouts.find((item) => point.y >= item.top && point.y < item.top + item.height);
+            if (!lane) return;
+            const startMs = snapToShiftBoundary(xToTime(point.x, controller.originMs, controller.pixelsPerHour), settings.workdayStart, settings.workdayEnd);
+            window.dispatchEvent(new CustomEvent<QuickCreateDetail>(QUICK_CREATE_EVENT, {
+              detail: { machine: lane.machine, start: toLocalDateTimeString(new Date(startMs)), end: toLocalDateTimeString(new Date(startMs + 8 * 3_600_000)) },
+            }));
+          }}
+        >
           <div className="board-ruler" style={{ width: controller.contentWidth }}>
             {ticks.map((tick) => (
               <div key={tick.ms} className={`board-ruler-tick${tick.isDayStart ? ' is-day' : ''}`} style={{ left: tick.x }}>
@@ -136,7 +168,7 @@ export function MachineBoard() {
                 lane={layout}
                 machine={machineByName.get(lane.machine)}
                 jobCount={lane.jobs.length}
-                loadPercent={(hours / WEEKLY_CAPACITY_HOURS) * 100}
+                loadPercent={(hours / getWeeklyCapacityHours()) * 100}
                 emptyLabel={t.machineBoard.emptyLane}
                 isDropTarget={dropTargetMachine === lane.machine}
               />

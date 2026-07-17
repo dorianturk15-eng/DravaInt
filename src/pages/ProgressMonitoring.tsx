@@ -246,13 +246,13 @@ export default function ProgressMonitoring() {
         const job = jobs.find((j) => j.id === detailJobId);
         if (!job) return null;
         return (
-          <div className="login-page" style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="wizard-container login-card" style={{ maxWidth: 400, textAlign: 'left', background: 'var(--bg-card)', padding: 24, border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', boxShadow: 'var(--shadow-hover)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                <h3 style={{ margin: 0, fontFamily: 'var(--font-title)', fontWeight: 800 }}>🔍 {lang === 'hr' ? 'Detalji Radnog Naloga' : 'Work Order Details'}</h3>
-                <button onClick={() => setDetailJobId(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+          <div className="modal-backdrop" onClick={() => setDetailJobId(null)}>
+            <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+              <div className="modal-header">
+                <h3 style={{ margin: 0 }}>{lang === 'hr' ? 'Detalji radnog naloga' : 'Work order details'}</h3>
+                <button onClick={() => setDetailJobId(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-secondary)' }} aria-label={lang === 'hr' ? 'Zatvori' : 'Close'}>✕</button>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
                 <div><strong style={{ color: 'var(--text-secondary)' }}>{t.workOrders.orderNumber}:</strong> <span style={{ fontWeight: 700 }}>{job.order}</span></div>
                 <div><strong style={{ color: 'var(--text-secondary)' }}>{t.workOrders.product}:</strong> {job.operator || '-'}</div>
                 <div><strong style={{ color: 'var(--text-secondary)' }}>{t.machines.machine}:</strong> {job.machine}</div>
@@ -261,8 +261,8 @@ export default function ProgressMonitoring() {
                 <div><strong style={{ color: 'var(--text-secondary)' }}>{t.common.start}:</strong> {job.start ? new Date(job.start).toLocaleString() : '-'}</div>
                 <div><strong style={{ color: 'var(--text-secondary)' }}>{t.common.end}:</strong> {job.end ? new Date(job.end).toLocaleString() : '-'}</div>
               </div>
-              <div style={{ marginTop: 22, display: 'flex', justifyContent: 'flex-end' }}>
-                <button className="btn btn-blue" onClick={() => setDetailJobId(null)} style={{ width: 'auto', padding: '6px 16px' }}>
+              <div className="modal-footer">
+                <button className="btn btn-blue btn-sm" onClick={() => setDetailJobId(null)}>
                   {lang === 'hr' ? 'Zatvori' : 'Close'}
                 </button>
               </div>

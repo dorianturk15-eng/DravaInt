@@ -938,7 +938,7 @@ export default function GanttChart() {
   async function exportGantt(format: 'png' | 'pdf') {
     if (!pageContainerRef.current) return;
     const { default: html2canvas } = await import('html2canvas');
-    const canvas = await html2canvas(pageContainerRef.current, { backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-main') || '#fff', scale: 1.6, useCORS: true });
+    const canvas = await html2canvas(pageContainerRef.current, { backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-page') || '#fff', scale: 1.6, useCORS: true });
     if (format === 'png') {
       const link = document.createElement('a'); link.download = `dravaint-gantt-${new Date().toISOString().slice(0, 10)}.png`; link.href = canvas.toDataURL('image/png'); link.click(); return;
     }
@@ -1107,7 +1107,7 @@ export default function GanttChart() {
             {t.gantt.addDependency}
           </button>
         </div>
-        {depError && <p style={{ color: '#dc2626', fontSize: 13, marginTop: 10 }}>{depError}</p>}
+        {depError && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10 }}>{depError}</p>}
 
         <div style={{ marginTop: 15 }}>
           {!hasAnyDependency ? (

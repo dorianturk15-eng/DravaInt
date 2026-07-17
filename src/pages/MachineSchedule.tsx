@@ -1,18 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
 import { useScheduling } from '../scheduling/SchedulingContext';
 import { useMachines } from '../machines/MachinesContext';
 import { useWorkers } from '../workers/WorkersContext';
-import { MachineBoard } from '../components/machine-board/MachineBoard';
+import { MachineBoard, QUICK_CREATE_EVENT, type QuickCreateDetail } from '../components/machine-board/MachineBoard';
 
 export default function MachineSchedule() {
   const { t, lang } = useLanguage();
   const { addJob } = useScheduling();
   const { machines } = useMachines();
   const { activeWorkers, displayName } = useWorkers();
+  const formRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState({ machine: '', order: '', operator: '', operatorId: null as number | null, start: '', end: '' });
+
+  useEffect(() => {
+    const onQuickCreate = (event: Event) => {
+      const detail = (event as CustomEvent<QuickCreateDetail>).detail;
+      setForm((current) => ({ ...current, machine: detail.machine, start: detail.start, end: detail.end }));
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    window.addEventListener(QUICK_CREATE_EVENT, onQuickCreate);
+    return () => window.removeEventListener(QUICK_CREATE_EVENT, onQuickCreate);
+  }, []);
 
   function handleAdd() {
     if (!form.machine || !form.order) return;
@@ -25,7 +36,7 @@ export default function MachineSchedule() {
       <h2 style={{ marginBottom: 5 }}>{t.machines.title}</h2>
       <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.machines.subtitle}</p>
 
-      <div className="step-box">
+      <div className="step-box" ref={formRef}>
         <div className="step-title">
           <span className="step-number">1</span>
           {t.machines.addJob}

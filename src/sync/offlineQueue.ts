@@ -86,9 +86,30 @@ export async function flushOfflineQueue() {
 }
 
 let started = false;
+let retryDelayMs = 30_000;
+let retryTimer: number | null = null;
+
+/** Periodic retry with exponential backoff (30s → 8min cap), in addition to the instant
+ *  retry on the browser's `online` event — covers flaky connections that never fully drop. */
+async function retryLoop() {
+  const before = await getOfflineQueueCount();
+  if (before > 0) {
+    await flushOfflineQueue();
+    const after = await getOfflineQueueCount();
+    retryDelayMs = after < before ? 30_000 : Math.min(retryDelayMs * 2, 480_000);
+  } else {
+    retryDelayMs = 30_000;
+  }
+  retryTimer = window.setTimeout(() => void retryLoop(), retryDelayMs);
+}
+
 export function startOfflineSync() {
   if (started || typeof window === 'undefined' || !('indexedDB' in window)) return;
   started = true;
-  window.addEventListener('online', () => void flushOfflineQueue());
+  window.addEventListener('online', () => {
+    retryDelayMs = 30_000;
+    void flushOfflineQueue();
+  });
   void flushOfflineQueue();
+  if (retryTimer === null) retryTimer = window.setTimeout(() => void retryLoop(), retryDelayMs);
 }

@@ -4,8 +4,9 @@ import type { UpdateResult } from '../../scheduling/SchedulingContext';
 import type { Machine } from '../../machines/MachinesContext';
 import type { AppSettings } from '../../settings/SettingsContext';
 import type { JobConflicts } from '../../scheduling/cpm';
-import { findDependencyCycle, jobsToScheduleInput, cascadeDependents, toLocalDateTimeString } from '../../scheduling/cpm';
-import { buildBoardLanes, type BoardModel, type BoardLane } from '../../scheduling/boardData';
+import { findDependencyCycle, jobsToScheduleInput, cascadeDependents, toLocalDateTimeString, computeEffectiveSchedule } from '../../scheduling/cpm';
+import { buildBoardLanes, classifyLinkCandidate, type BoardModel, type BoardLane, type LinkClassification } from '../../scheduling/boardData';
+import { hasChildren } from '../../scheduling/hierarchy';
 import {
   ZOOM_PRESETS,
   ZOOM_ORDER,
@@ -23,7 +24,7 @@ import {
 } from '../../scheduling/boardGeometry';
 
 export type SortBy = 'name' | 'load';
-export type LinkClassification = 'valid' | 'invalid-self' | 'invalid-duplicate' | 'invalid-cycle';
+export type { LinkClassification } from '../../scheduling/boardData';
 
 interface MoveInteraction {
   kind: 'move';
@@ -110,6 +111,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
 
   const [zoom, setZoom] = useState<ZoomPreset>('day');
   const [sortBy, setSortBy] = useState<SortBy>('name');
+  const [statusFilter, setStatusFilter] = useState<Job['status'] | 'all'>('all');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [interaction, setInteraction] = useState<Interaction | null>(null);
   const [history, setHistory] = useState<Job[][]>([]);
@@ -144,7 +146,11 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
   const contentWidth = spanHours * pixelsPerHour;
 
   const schedulingOptions = useMemo(() => schedulingOptionsFrom(settings), [settings]);
-  const board: BoardModel = useMemo(() => buildBoardLanes(jobs, machines, schedulingOptions), [jobs, machines, schedulingOptions]);
+  const filteredJobs = useMemo(
+    () => (statusFilter === 'all' ? jobs : jobs.filter((job) => job.status === statusFilter || hasChildren(jobs, job.id))),
+    [jobs, statusFilter],
+  );
+  const board: BoardModel = useMemo(() => buildBoardLanes(filteredJobs, machines, schedulingOptions), [filteredJobs, machines, schedulingOptions]);
 
   const laneOrder = useMemo(() => {
     const lanes = [...board.lanes];
@@ -241,18 +247,10 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     });
   }, []);
 
-  const classifyLinkTarget = useCallback((sourceJobId: number, targetJobId: number): LinkClassification => {
-    if (targetJobId === sourceJobId) return 'invalid-self';
-    const target = jobs.find((job) => job.id === targetJobId);
-    if (target?.dependencies?.some((dependency) => dependency.jobId === sourceJobId)) return 'invalid-duplicate';
-    const candidateJobs = jobs.map((job) =>
-      job.id === targetJobId
-        ? { ...job, dependencies: [...(job.dependencies ?? []), { jobId: sourceJobId, type: 'FS' as DependencyType, lagHours: 0 }] }
-        : job,
-    );
-    if (findDependencyCycle(jobsToScheduleInput(candidateJobs))) return 'invalid-cycle';
-    return 'valid';
-  }, [jobs]);
+  const classifyLinkTarget = useCallback(
+    (sourceJobId: number, targetJobId: number): LinkClassification => classifyLinkCandidate(jobs, sourceJobId, targetJobId),
+    [jobs],
+  );
 
   const findCardAt = useCallback((x: number, y: number, excludeJobId?: number) => {
     for (const layout of cardLayouts.values()) {
@@ -488,6 +486,62 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     container.scrollTo({ left: Math.max(0, timeToX(Date.now(), originMs, pixelsPerHour) - 160), behavior: 'smooth' });
   }, [originMs, pixelsPerHour]);
 
+  /** Packs every leaf job onto its machine back-to-back, respecting dependency starts (same
+   *  greedy scheduler the Gantt page offers, so both pages resolve overlaps identically). */
+  const autoSchedule = useCallback(async () => {
+    pushHistory();
+    const effective = computeEffectiveSchedule(jobsToScheduleInput(jobs), schedulingOptions);
+    const machineEnd = new Map<string, number>();
+    for (const job of [...jobs].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())) {
+      if (hasChildren(jobs, job.id) || !job.start || !job.end) continue;
+      const duration = Math.max(0, new Date(job.end).getTime() - new Date(job.start).getTime());
+      const dependencyStart = effective.get(job.id)?.start ?? new Date(job.start).getTime();
+      const previousEnd = machineEnd.get(job.machine) ?? 0;
+      const start = Math.max(dependencyStart, previousEnd);
+      machineEnd.set(job.machine, start + duration);
+      if (start !== new Date(job.start).getTime()) {
+        await updateJob(job.id, { start: toLocalDateTimeString(new Date(start)), end: toLocalDateTimeString(new Date(start + duration)) }).then(showResult);
+      }
+    }
+  }, [jobs, pushHistory, schedulingOptions, showResult, updateJob]);
+
+  // Arrow-key nudge: moves every selected card by one zoom-sized step without pointer dragging.
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const stepHours = zoom === 'week' ? 24 : zoom === 'day' ? 8 : 1;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      const target = event.target as HTMLElement;
+      if (target.closest('input, select, textarea')) return;
+      event.preventDefault();
+      const deltaMs = (event.key === 'ArrowLeft' ? -stepHours : stepHours) * 3_600_000;
+      pushHistory();
+      selectedIds.forEach((id) => {
+        const job = jobs.find((item) => item.id === id);
+        if (!job || !job.start || !job.end) return;
+        const start = new Date(job.start).getTime() + deltaMs;
+        const end = new Date(job.end).getTime() + deltaMs;
+        void updateJob(id, { start: toLocalDateTimeString(new Date(start)), end: toLocalDateTimeString(new Date(end)) }).then(showResult);
+      });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [jobs, pushHistory, selectedIds, showResult, updateJob, zoom]);
+
+  const exportCsv = useCallback(() => {
+    const header = ['machine', 'order', 'operator', 'start', 'end', 'status', 'progress'];
+    const rows = board.lanes.flatMap((lane) => lane.jobs.map(({ job }) =>
+      [job.machine, job.order, job.operator, job.start, job.end, job.status, String(job.progress)]
+        .map((value) => `"${(value ?? '').replace(/"/g, '""')}"`).join(','),
+    ));
+    const blob = new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `dravaint-machine-schedule-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }, [board.lanes]);
+
   const setZoomPreset = useCallback((next: ZoomPreset) => setZoom(next), []);
   const cycleZoom = useCallback((direction: 1 | -1) => {
     setZoom((current) => {
@@ -509,6 +563,12 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     cycleZoom,
     sortBy,
     setSortBy,
+    statusFilter,
+    setStatusFilter,
+    autoSchedule,
+    exportCsv,
+    historyDepth: history.length,
+    futureDepth: future.length,
     originMs,
     pixelsPerHour,
     spanHours,

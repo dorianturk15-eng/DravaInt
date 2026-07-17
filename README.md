@@ -4,7 +4,7 @@ DravaInt is a bilingual Croatian/English production-planning web app for worksho
 
 ## What is included
 
-- Premium responsive shell with a single-row command bar, drawer navigation, role-aware routes, glass surfaces, dark/light/system themes, compact mode, and keyboard shortcuts.
+- Clean, flat responsive shell with a single-row command bar, drawer navigation, role-aware routes, light/dark themes, compact mode, and keyboard shortcuts.
 - Universal `Ctrl/Cmd + K` command palette, live operational alert center, online/offline and queued-change status, dashboard quick actions, and safe per-module recovery.
 - Per-operator saved Gantt views, configurable delay/capacity/material/conflict/absence alert rules, and unified operation-aware capacity calculations.
 - Work-order creation with product, operator qualifications, operation routes, conflict validation, comments, setup time, material status, printing, and optimistic versioning.

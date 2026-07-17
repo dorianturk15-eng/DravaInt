@@ -68,9 +68,9 @@ function computeJobRange(jobs: Job[], job: Job, effective: Map<number, { start: 
 
 const STATUS_COLORS: Record<Job['status'], string> = {
   planned: '#64748b',
-  inProgress: '#2b6cb0',
-  done: '#16a34a',
-  delayed: '#dc2626',
+  inProgress: '#2563eb',
+  done: '#10b981',
+  delayed: '#ef4444',
 };
 
 /**
@@ -99,7 +99,7 @@ export function buildGanttTasks(jobs: Job[], options: GanttBuildOptions = {}): T
     const children = getChildren(validJobs, job.id);
     const label = job.order || job.machine || `#${job.id}`;
     const isCritical = criticalIds.has(job.id);
-    const color = isCritical ? '#dc2626' : STATUS_COLORS[job.status];
+    const color = isCritical ? '#ef4444' : STATUS_COLORS[job.status];
 
     if (children.length > 0) {
       const range = computeJobRange(validJobs, job, effective);

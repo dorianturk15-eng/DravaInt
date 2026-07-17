@@ -399,16 +399,14 @@ export default function Admin() {
                       <td>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button
-                            className="btn btn-blue"
-                            style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                            className="btn btn-blue btn-sm"
                             onClick={() => startEditMachine(m.id, m.name, m.type, m.axis)}
                           >
                             <IconEdit style={{ width: 12, height: 12 }} />
                             {t.admin.edit}
                           </button>
                           <button
-                            className="btn btn-red"
-                            style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                            className="btn btn-red btn-sm"
                             onClick={() => removeMachine(m.id)}
                           >
                             <IconTrash style={{ width: 12, height: 12 }} />
@@ -500,11 +498,11 @@ export default function Admin() {
                     <td><select value={w.status} onChange={(e) => void updateWorker(w.id, { status: e.target.value as Worker['status'] })} style={{ width: 'auto', padding: '5px 7px', fontSize: 10 }}><option value="available">Available</option><option value="busy">Busy</option><option value="break">Break</option><option value="absent">Absent</option></select></td>
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-blue" style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }} onClick={() => handleEditWorker(w)}>
+                        <button className="btn btn-blue btn-sm" onClick={() => handleEditWorker(w)}>
                           <IconEdit style={{ width: 12, height: 12 }} />
                           {t.admin.edit}
                         </button>
-                        <button className={w.isActive ? 'btn btn-red' : 'btn btn-green'} style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }} onClick={() => w.isActive ? handleDeleteWorker(w.id) : void updateWorker(w.id, { isActive: true })}>
+                        <button className={w.isActive ? 'btn btn-red btn-sm' : 'btn btn-green btn-sm'} onClick={() => w.isActive ? handleDeleteWorker(w.id) : void updateWorker(w.id, { isActive: true })}>
                           <IconTrash style={{ width: 12, height: 12 }} />
                           {w.isActive ? (lang === 'hr' ? 'Arhiviraj' : 'Archive') : (lang === 'hr' ? 'Aktiviraj' : 'Activate')}
                         </button>
@@ -649,16 +647,14 @@ export default function Admin() {
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button
-                          className="btn btn-blue"
-                          style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                          className="btn btn-blue btn-sm"
                           onClick={() => startEdit(u.username, u.password, u.role)}
                         >
                           <IconEdit style={{ width: 12, height: 12 }} />
                           {t.admin.edit}
                         </button>
                         <button
-                          className="btn btn-red"
-                          style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                          className="btn btn-red btn-sm"
                           onClick={() => handleDelete(u.username)}
                         >
                           <IconTrash style={{ width: 12, height: 12 }} />

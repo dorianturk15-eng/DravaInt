@@ -18,7 +18,7 @@ import { useConnectivity } from './hooks/useConnectivity';
 import { CommandPalette, type CommandItem } from './components/CommandPalette';
 import { NotificationCenter, type OperationalAlert } from './components/NotificationCenter';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
-import { calculateMachineLoads, WEEKLY_CAPACITY_HOURS } from './scheduling/capacity';
+import { calculateMachineLoads, getWeeklyCapacityHours } from './scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput } from './scheduling/cpm';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -154,7 +154,7 @@ function App() {
   }));
   const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(leafJobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
   const machineLoads = calculateMachineLoads(leafJobs, effectiveSchedule);
-  const overloadedMachines = [...machineLoads].filter(([, hours]) => hours / WEEKLY_CAPACITY_HOURS * 100 >= settings.capacityAlertPercent);
+  const overloadedMachines = [...machineLoads].filter(([, hours]) => hours / getWeeklyCapacityHours() * 100 >= settings.capacityAlertPercent);
   const alerts: OperationalAlert[] = [];
   if (!online) alerts.push({ id: 'connection-offline', severity: 'critical', title: lang === 'hr' ? 'Radna stanica je izvan mreže' : 'Workstation is offline', detail: lang === 'hr' ? 'Promjene se čuvaju lokalno i sinkronizirat će se nakon povratka veze.' : 'Changes are stored locally and will sync when the connection returns.' });
   if (pendingChanges > 0) alerts.push({ id: `queue-${pendingChanges}`, severity: 'info', title: lang === 'hr' ? 'Promjene čekaju sinkronizaciju' : 'Changes waiting to sync', detail: lang === 'hr' ? `${pendingChanges} lokalnih promjena nalazi se u sigurnom redu čekanja.` : `${pendingChanges} local changes are safely queued.` });

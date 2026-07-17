@@ -347,8 +347,8 @@ export default function WorkOrderCreator() {
           {t.workOrders.createOrder}
         </button>
       </div>
-      {message && <p style={{ color: '#16a34a', fontSize: 13, marginTop: 10 }}>{message}</p>}
-      {error && <p style={{ color: '#dc2626', fontSize: 13, marginTop: 10 }}>{error}</p>}
+      {message && <p style={{ color: 'var(--success-color)', fontSize: 13, marginTop: 10 }}>{message}</p>}
+      {error && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10 }}>{error}</p>}
 
       <div className="step-box" style={{ marginTop: 20 }}>
         <div className="step-title">{t.workOrders.createdOrders}</div>

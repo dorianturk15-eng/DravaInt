@@ -1,13 +1,32 @@
-import type { Job } from './SchedulingContext';
+import type { Job, DependencyType } from './SchedulingContext';
 import type { Machine } from '../machines/MachinesContext';
 import { hasChildren } from './hierarchy';
-import { computeEffectiveSchedule, jobsToScheduleInput, type SchedulingOptions, type EffectiveSchedule } from './cpm';
+import { computeEffectiveSchedule, findDependencyCycle, jobsToScheduleInput, type SchedulingOptions, type EffectiveSchedule } from './cpm';
 
+export type LinkClassification = 'valid' | 'invalid-self' | 'invalid-duplicate' | 'invalid-cycle';
+
+/** Validates a prospective dependency edge (source = predecessor, target = successor) before the
+ *  board commits it: rejects self-links, duplicates, and anything that would close a cycle. */
+export function classifyLinkCandidate(jobs: Job[], sourceJobId: number, targetJobId: number): LinkClassification {
+  if (targetJobId === sourceJobId) return 'invalid-self';
+  const target = jobs.find((job) => job.id === targetJobId);
+  if (target?.dependencies?.some((dependency) => dependency.jobId === sourceJobId)) return 'invalid-duplicate';
+  const candidateJobs = jobs.map((job) =>
+    job.id === targetJobId
+      ? { ...job, dependencies: [...(job.dependencies ?? []), { jobId: sourceJobId, type: 'FS' as DependencyType, lagHours: 0 }] }
+      : job,
+  );
+  if (findDependencyCycle(jobsToScheduleInput(candidateJobs))) return 'invalid-cycle';
+  return 'valid';
+}
+
+/* Kept in sync with the theme tokens in index.css (--primary/success/danger); hex because these
+   also feed SVG fills where CSS variables aren't always usable. */
 export const STATUS_COLORS: Record<Job['status'], string> = {
   planned: '#64748b',
-  inProgress: '#2b6cb0',
-  done: '#16a34a',
-  delayed: '#dc2626',
+  inProgress: '#2563eb',
+  done: '#10b981',
+  delayed: '#ef4444',
 };
 
 export interface BoardJob {

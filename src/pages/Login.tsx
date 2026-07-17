@@ -25,7 +25,6 @@ export default function Login() {
   }
 
   return <main className="auth-screen">
-    <div className="auth-ambient auth-ambient-a" /><div className="auth-ambient auth-ambient-b" />
     <section className="auth-card">
       <header className="auth-brand"><span><ShieldMark /></span><div><strong>DravaInt</strong><small>Production intelligence</small></div><div className="auth-lang"><button className={lang === 'hr' ? 'active' : ''} onClick={() => setLang('hr')}>HR</button><button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button></div></header>
       <div className="auth-heading"><span className="eyebrow">{secureMode ? 'Supabase · secure session' : 'Offline preview'}</span><h1>{t.login.title}</h1><p>{lang === 'hr' ? 'Pristupite radioničkom operativnom sustavu.' : 'Access the workshop operating system.'}</p></div>

@@ -99,7 +99,6 @@ export function LockScreen({ username, operatorName, onUnlock, onUnlocked, onLog
   }
 
   return <div className={`lock-screen${unlocking ? ' is-unlocking' : ''}`} style={settings.wallpaper ? { backgroundImage: `linear-gradient(rgba(4,10,24,.72),rgba(4,10,24,.9)),url(${settings.wallpaper})` } : undefined}>
-    <div className="lock-ambient lock-ambient-a" /><div className="lock-ambient lock-ambient-b" />
     <form className="lock-card" onSubmit={submit}>
       <header className="lock-brand-row"><span className="lock-brand-mark"><LockIcon /></span><span><strong>DravaInt</strong><small>{lang === 'hr' ? 'Sigurni radionički terminal' : 'Secure workshop terminal'}</small></span></header>
       <div className="shift-ring-wrap">
