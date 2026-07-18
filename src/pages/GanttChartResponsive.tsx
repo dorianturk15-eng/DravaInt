@@ -2,7 +2,7 @@ import { lazy } from 'react';
 import { useViewportTier } from '../components/gantt-mobile/useViewportTier';
 import { GanttMobile } from '../components/gantt-mobile/GanttMobile';
 
-// The desktop chart (and the heavy gantt-task-react bundle behind it) only loads on wide
+// The desktop chart (and the DravaGantt renderer behind it) only loads on wide
 // viewports; phones and tablets get the touch-first experience instead.
 const GanttChartDesktop = lazy(() => import('./GanttChart'));
 
