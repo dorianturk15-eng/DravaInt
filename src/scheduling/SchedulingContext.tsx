@@ -741,8 +741,14 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
 
   async function restoreBackup(newJobs: Job[]) {
     if (!supabase) {
-      setJobs(newJobs);
-      saveFallbackJobs(newJobs);
+      // Persist inside the updater (like updateJob does) so the save runs in React's update-queue
+      // order: if an earlier-dispatched updateJob updater is still queued, saving here directly
+      // would let that updater's save land *after* this one and re-persist the pre-restore state,
+      // leaving localStorage out of sync with the restored jobs until the next write.
+      setJobs(() => {
+        saveFallbackJobs(newJobs);
+        return newJobs;
+      });
       return;
     }
 

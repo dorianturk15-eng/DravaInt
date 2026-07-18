@@ -232,21 +232,32 @@ export default function GanttChart() {
     setFuture([]);
   }, [jobs]);
 
+  /** Undo/redo must not race the debounced cascade writes: a pending dependency-cascade firing
+   *  after the restore would re-apply part of the change that was just undone. */
+  const cancelPendingCascade = useCallback(() => {
+    if (dependencyUpdateTimerRef.current !== null) {
+      window.clearTimeout(dependencyUpdateTimerRef.current);
+      dependencyUpdateTimerRef.current = null;
+    }
+  }, []);
+
   const undo = useCallback(() => {
     const previous = history[history.length - 1];
     if (!previous) return;
+    cancelPendingCascade();
     setFuture((current) => [structuredClone(jobs), ...current].slice(0, 30));
     setHistory((current) => current.slice(0, -1));
     void restoreBackup(previous);
-  }, [history, jobs, restoreBackup]);
+  }, [cancelPendingCascade, history, jobs, restoreBackup]);
 
   const redo = useCallback(() => {
     const next = future[0];
     if (!next) return;
+    cancelPendingCascade();
     setHistory((current) => [...current, structuredClone(jobs)].slice(-30));
     setFuture((current) => current.slice(1));
     void restoreBackup(next);
-  }, [future, jobs, restoreBackup]);
+  }, [cancelPendingCascade, future, jobs, restoreBackup]);
 
   useEffect(() => {
     const handleHistoryKey = (event: KeyboardEvent) => {
