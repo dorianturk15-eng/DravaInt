@@ -309,7 +309,7 @@ create trigger shift_assignment_notify after insert or update or delete on publi
 
 create or replace function public.generate_shift_schedule(p_start_date date,p_week_count int,p_worker_ids bigint[],p_department text default 'Alatnica')
 returns setof public.shift_schedules security definer set search_path = public language plpgsql as $$
-declare week_index int; day_index int; worker_index int; schedule_row public.shift_schedules; definitions bigint[]; worker_id bigint; target_date date;
+declare week_index int; day_index int; worker_index int; schedule_row public.shift_schedules; definitions bigint[]; v_worker_id bigint; target_date date;
 begin
   select array_agg(id order by start_time) into definitions from public.shift_definitions where is_active;
   if definitions is null or array_length(definitions,1)=0 then raise exception 'No active shift definitions'; end if;
@@ -321,10 +321,10 @@ begin
     returning * into schedule_row;
     for day_index in 0..4 loop
       for worker_index in 1..coalesce(array_length(p_worker_ids,1),0) loop
-        worker_id := p_worker_ids[worker_index];
-        if not exists(select 1 from public.absences a where a.worker_id=worker_id and target_date+day_index between a.start_date and a.end_date) then
+        v_worker_id := p_worker_ids[worker_index];
+        if not exists(select 1 from public.absences a where a.worker_id=v_worker_id and target_date+day_index between a.start_date and a.end_date) then
           insert into public.shift_assignments(shift_schedule_id,worker_id,shift_definition_id,date,is_override)
-          values(schedule_row.id,worker_id,definitions[1+mod(worker_index-1+week_index,array_length(definitions,1))],target_date+day_index,false)
+          values(schedule_row.id,v_worker_id,definitions[1+mod(worker_index-1+week_index,array_length(definitions,1))],target_date+day_index,false)
           on conflict (shift_schedule_id,worker_id,date) do update set shift_definition_id=excluded.shift_definition_id where public.shift_assignments.is_override=false;
         end if;
       end loop;
