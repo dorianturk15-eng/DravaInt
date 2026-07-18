@@ -12,14 +12,3 @@ export function isJobOverdue(job: Job, now: number = Date.now()): boolean {
   if (isNaN(end)) return false;
   return end < now;
 }
-
-/**
- * True when a job is heading toward being late — not yet overdue, but its end falls inside the
- * given look-ahead window (default 48h). "At risk" rather than "late".
- */
-export function isJobAtRisk(job: Job, now: number = Date.now(), lookaheadMs: number = 48 * 3_600_000): boolean {
-  if (job.status === 'done' || !job.end) return false;
-  const end = new Date(job.end).getTime();
-  if (isNaN(end)) return false;
-  return end >= now && end <= now + lookaheadMs;
-}

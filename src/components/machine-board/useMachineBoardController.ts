@@ -707,5 +707,3 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     toContentCoords,
   };
 }
-
-export type MachineBoardController = ReturnType<typeof useMachineBoardController>;

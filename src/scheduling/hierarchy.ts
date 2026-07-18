@@ -10,12 +10,6 @@ export function hasChildren(jobs: Job[], id: number): boolean {
   return jobs.some((j) => j.parentId === id);
 }
 
-/** True for organizational nodes (a tool, assembly, sub-assembly) that group
- * other work orders rather than representing work done on a machine. */
-export function isContainerNode(jobs: Job[], job: Job): boolean {
-  return hasChildren(jobs, job.id);
-}
-
 export interface OperationSchedule {
   op: OperationStep;
   start: Date;

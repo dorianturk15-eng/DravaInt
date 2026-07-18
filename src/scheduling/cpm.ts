@@ -320,11 +320,6 @@ function findWorker(workers: WorkerRecord[], name: string): WorkerRecord | undef
   return workers.find((worker) => `${worker.firstName ?? ''} ${worker.lastName ?? ''}`.trim().toLowerCase() === normalized);
 }
 
-export function getWorkerQualifications(operatorName: string): string[] {
-  const worker = findWorker(loadWorkerRecords(), operatorName);
-  return Array.isArray(worker?.qualifications) ? worker!.qualifications : [];
-}
-
 /**
  * Splits a job's `machine` field — which may be a routing chain like "Tokarilica-1 → CNC-2" — into
  * its individual machine names. Normalises on the '→' arrow regardless of surrounding whitespace, so
