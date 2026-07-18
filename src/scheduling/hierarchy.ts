@@ -10,6 +10,27 @@ export function hasChildren(jobs: Job[], id: number): boolean {
   return jobs.some((j) => j.parentId === id);
 }
 
+/**
+ * All transitive children of `id` (not including `id` itself). Used to keep the parent-order
+ * selector acyclic when editing: reparenting an order under its own descendant would orphan the
+ * whole subtree from every tree walk (buildGanttTasks, the hierarchy view) which only descends
+ * from roots.
+ */
+export function collectDescendants(jobs: Job[], id: number): Set<number> {
+  const descendants = new Set<number>();
+  const queue = [id];
+  while (queue.length) {
+    const current = queue.pop()!;
+    for (const child of jobs) {
+      if (child.parentId === current && !descendants.has(child.id)) {
+        descendants.add(child.id);
+        queue.push(child.id);
+      }
+    }
+  }
+  return descendants;
+}
+
 export interface OperationSchedule {
   op: OperationStep;
   start: Date;

@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash, IconPrint } from '../components/Icons';
-import { useScheduling, type OperationStep, type JobPriority } from '../scheduling/SchedulingContext';
-import { hasChildren } from '../scheduling/hierarchy';
+import { useScheduling, type Job, type OperationStep, type JobPriority } from '../scheduling/SchedulingContext';
+import { hasChildren, collectDescendants } from '../scheduling/hierarchy';
 import { useLogo } from '../logo/LogoContext';
 import { useWorkers } from '../workers/WorkersContext';
 import { priorityLabel, priorityMeta } from '../scheduling/priority';
@@ -24,7 +25,7 @@ function formatDateTime(value: string): string {
 
 export default function WorkOrderCreator() {
   const { t, lang } = useLanguage();
-  const { jobs, addJob, restoreBackup, getJobConflicts } = useScheduling();
+  const { jobs, loading, addJob, updateJob, restoreBackup, getJobConflicts } = useScheduling();
   const { logo } = useLogo();
   const { activeWorkers, displayName } = useWorkers();
   const [printOrderId, setPrintOrderId] = useState<number | null>(null);
@@ -69,6 +70,37 @@ export default function WorkOrderCreator() {
   const [opForm, setOpForm] = useState({ name: '', machine: '', hours: '', operatorId: '' });
   const [orderSearch, setOrderSearch] = useState('');
 
+  // Edit mode: the id of an existing order loaded into the form. Saving updates that row via
+  // updateJob (optimistic-locked) instead of inserting a duplicate.
+  const [editingJobId, setEditingJobId] = useState<number | null>(null);
+  // The route step currently loaded into the operation form for in-place editing.
+  const [editingOpId, setEditingOpId] = useState<number | null>(null);
+
+  // Deep link from other pages (e.g. Praćenje napretka): /workOrders?edit=<id> opens that order
+  // in edit mode once the job list is available, then strips the param so refresh/back stays clean.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const editParam = searchParams.get('edit');
+    if (!editParam) return;
+    const id = Number(editParam);
+    if (!jobs.some((job) => job.id === id)) {
+      if (loading) return; // jobs still loading — retry when they arrive
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    setSearchParams({}, { replace: true });
+    startEdit(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, jobs, loading]);
+
+  const editingJob = editingJobId !== null ? (jobs.find((job) => job.id === editingJobId) ?? null) : null;
+  // A job can't become its own descendant's child — exclude the edited order and its subtree from
+  // the parent selector.
+  const blockedParentIds = useMemo(
+    () => (editingJobId !== null ? collectDescendants(jobs, editingJobId) : new Set<number>()),
+    [jobs, editingJobId],
+  );
+
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,79 +130,60 @@ export default function WorkOrderCreator() {
 
   const totalHours = operations.reduce((sum, op) => sum + op.hours, 0);
 
+  /** Adds a new route step, or — when a step is loaded via editOperation — saves it in place. */
   function addOperation() {
     const hours = parseFloat(opForm.hours);
     if (!opForm.name || !opForm.machine || !hours || hours <= 0) return;
     const opWorker = activeWorkers.find((worker) => worker.id === Number(opForm.operatorId));
-    setOperations((prev) => [...prev, {
-      id: nextOpId++,
+    const step = {
       name: opForm.name,
       machine: opForm.machine,
       hours,
       operator: opWorker ? displayName(opWorker) : undefined,
       operatorId: opWorker?.id ?? null,
-    }]);
+    };
+    if (editingOpId !== null) {
+      setOperations((prev) => prev.map((op) => (op.id === editingOpId ? { ...op, ...step } : op)));
+      setEditingOpId(null);
+    } else {
+      setOperations((prev) => [...prev, { id: nextOpId++, ...step }]);
+    }
     setOpForm({ name: '', machine: '', hours: '', operatorId: '' });
   }
 
   function removeOperation(id: number) {
     setOperations((prev) => prev.filter((op) => op.id !== id));
+    if (editingOpId === id) {
+      setEditingOpId(null);
+      setOpForm({ name: '', machine: '', hours: '', operatorId: '' });
+    }
   }
 
-  async function createOrder() {
-    setMessage(null);
-    setError(null);
-    if (!orderNumber.trim() || operations.length === 0) {
-      setError(t.workOrders.missingFields);
-      return;
-    }
-    if (!startDateTime) {
-      setError(t.workOrders.missingStartDateTime);
-      return;
-    }
-    const startMs = new Date(startDateTime).getTime();
-    const endMs = startMs + totalHours * 60 * 60 * 1000;
-    const end = new Date(endMs);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const endLocal = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(
-      end.getHours(),
-    )}:${pad(end.getMinutes())}`;
+  /** Loads an existing route step into the operation form for in-place editing. */
+  function editOperation(id: number) {
+    const op = operations.find((item) => item.id === id);
+    if (!op) return;
+    setEditingOpId(id);
+    setOpForm({
+      name: op.name,
+      machine: op.machine,
+      hours: String(op.hours),
+      operatorId: op.operatorId != null ? String(op.operatorId) : '',
+    });
+  }
 
-    const selectedWorker = activeWorkers.find((worker) => worker.id === Number(operatorId));
-    const draft = {
-      id: -1,
-      machine: operations.map((op) => op.machine).join(' → '),
-      order: orderNumber.trim(),
-      operator: selectedWorker ? displayName(selectedWorker) : '',
-      operatorId: selectedWorker?.id ?? null,
-      product: product.trim(),
-      start: startDateTime,
-      end: endLocal,
-      status: 'planned' as const,
-      progress: 0,
-      color: '#2563eb',
-      operations: operations.length > 0 ? operations : undefined,
-      parentId: parentId ? Number(parentId) : undefined,
-      comments: comments.trim(),
-      materialStatus: 'ready' as const,
-      setupHours: 0,
-      priority,
-    };
-    const conflicts = getJobConflicts(draft);
-    // Await the write and honour its result: a DB rejection (double-booking DR001, RLS denial, a
-    // schema mismatch) or a version conflict must NOT show the green "Order created" banner. Only a
-    // real success (or a safely-queued offline write) clears the form.
-    const result = await addJob(draft);
-    if (!result.ok && (result.reason === 'rejected' || result.reason === 'version-conflict')) {
-      setError(result.reason === 'rejected'
-        ? (result.message || (lang === 'hr' ? 'Baza je odbila nalog (npr. dvostruka rezervacija termina). Nalog nije spremljen.' : 'The database rejected the order (e.g. a double-booked slot). Nothing was saved.'))
-        : (lang === 'hr' ? 'Nalog je u međuvremenu izmijenjen na drugom terminalu. Osvježite i pokušajte ponovno.' : 'This order was changed on another terminal meanwhile. Refresh and try again.'));
-      return; // keep the form intact so the planner can correct and resubmit
-    }
+  function moveOperation(id: number, delta: -1 | 1) {
+    setOperations((prev) => {
+      const index = prev.findIndex((op) => op.id === id);
+      const target = index + delta;
+      if (index < 0 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
 
-    setMessage(result.ok
-      ? t.workOrders.created
-      : (lang === 'hr' ? 'Izvan mreže — nalog je spremljen u red čekanja i sinkronizirat će se po povratku veze.' : 'Offline — the order was queued and will sync when the connection returns.'));
+  function resetForm() {
     setOrderNumber('');
     setProduct('');
     setOperatorId('');
@@ -179,10 +192,139 @@ export default function WorkOrderCreator() {
     setStartDateTime('');
     setParentId('');
     setOperations([]);
+    setOpForm({ name: '', machine: '', hours: '', operatorId: '' });
+    setEditingOpId(null);
     setCadFile(null);
     setCadError(null);
+  }
+
+  /** Loads an existing order into the form; saving then updates that row instead of inserting. */
+  function startEdit(id: number) {
+    const source = jobs.find((job) => job.id === id);
+    if (!source) return;
+    setEditingJobId(id);
+    setOrderNumber(source.order);
+    setProduct(source.product ?? '');
+    setOperatorId(source.operatorId != null ? String(source.operatorId) : '');
+    setPriority(source.priority ?? 'normal');
+    setComments(source.comments ?? '');
+    setStartDateTime(source.start ? source.start.slice(0, 16) : '');
+    setParentId(source.parentId != null ? String(source.parentId) : '');
+    const ops = (source.operations ?? []).map((op) => ({ ...op }));
+    // Keep original step ids (stable Gantt op ids) but make sure newly added steps can't collide.
+    nextOpId = Math.max(nextOpId, ...ops.map((op) => op.id + 1));
+    setOperations(ops);
+    setOpForm({ name: '', machine: '', hours: '', operatorId: '' });
+    setEditingOpId(null);
+    setCadFile(null);
+    setCadError(null);
+    setCreatorTab('create');
+    setMessage(null);
+    setError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    setEditingJobId(null);
+    resetForm();
+    setMessage(null);
+    setError(null);
+  }
+
+  async function submitOrder() {
+    setMessage(null);
+    setError(null);
+    const original = editingJobId !== null ? jobs.find((job) => job.id === editingJobId) : undefined;
+    const isEdit = editingJobId !== null;
+    if (isEdit && !original) {
+      setError(lang === 'hr' ? 'Nalog koji uređujete više ne postoji (uklonjen je na drugom terminalu).' : 'The order being edited no longer exists (it was removed on another terminal).');
+      return;
+    }
+    // Container/plain orders (parents with children, no route of their own) may legitimately have
+    // zero operations — only require a route where one existed or is being created from scratch.
+    const requiresOps = !isEdit || Boolean(original?.operations?.length);
+    if (!orderNumber.trim() || (requiresOps && operations.length === 0)) {
+      setError(t.workOrders.missingFields);
+      return;
+    }
+    if (!startDateTime) {
+      setError(t.workOrders.missingStartDateTime);
+      return;
+    }
+    const startMs = new Date(startDateTime).getTime();
+    // A route derives its end from the summed step hours; an op-less order keeps its own duration.
+    const originalDurationMs = original ? Math.max(0, new Date(original.end).getTime() - new Date(original.start).getTime()) : 0;
+    const endMs = operations.length > 0 ? startMs + totalHours * 60 * 60 * 1000 : startMs + (isNaN(originalDurationMs) ? 0 : originalDurationMs);
+    const end = new Date(endMs);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const endLocal = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(
+      end.getHours(),
+    )}:${pad(end.getMinutes())}`;
+
+    const selectedWorker = activeWorkers.find((worker) => worker.id === Number(operatorId));
+    // On routed orders the top-level `operator` is often a product/assembly label, not a person.
+    // Preserve it unless the planner actually picked (or had picked) a worker in the selector.
+    const keepOperatorLabel = isEdit && !selectedWorker && original!.operatorId == null;
+    const operatorName = keepOperatorLabel ? original!.operator : (selectedWorker ? displayName(selectedWorker) : '');
+    const operatorIdValue = keepOperatorLabel ? null : (selectedWorker?.id ?? null);
+    const machineChain = operations.length > 0 ? operations.map((op) => op.machine).join(' → ') : (original?.machine ?? '');
+
+    const draft: Job = {
+      id: editingJobId ?? -1,
+      machine: machineChain,
+      order: orderNumber.trim(),
+      operator: operatorName,
+      operatorId: operatorIdValue,
+      product: product.trim(),
+      start: startDateTime,
+      end: endLocal,
+      status: original?.status ?? ('planned' as const),
+      progress: original?.progress ?? 0,
+      color: original?.color ?? '#2563eb',
+      operations: operations.length > 0 ? operations : undefined,
+      parentId: parentId ? Number(parentId) : undefined,
+      comments: comments.trim(),
+      materialStatus: original?.materialStatus ?? ('ready' as const),
+      setupHours: original?.setupHours ?? 0,
+      priority,
+    };
+    // Same conflict engine as creation: the draft carries the edited id so the order's own current
+    // booking doesn't collide with itself.
+    const conflicts = getJobConflicts(draft);
+    // Await the write and honour its result: a DB rejection (double-booking DR001, RLS denial, a
+    // schema mismatch) or a version conflict must NOT show the green success banner. Only a real
+    // success (or a safely-queued offline write) clears the form.
+    const result = isEdit
+      ? await updateJob(editingJobId!, {
+          machine: machineChain,
+          order: orderNumber.trim(),
+          operator: operatorName,
+          operatorId: operatorIdValue,
+          product: product.trim(),
+          start: startDateTime,
+          end: endLocal,
+          ...(operations.length > 0 ? { operations } : {}),
+          parentId: parentId ? Number(parentId) : null,
+          comments: comments.trim(),
+          priority,
+        })
+      : await addJob(draft);
+    if (!result.ok && (result.reason === 'rejected' || result.reason === 'version-conflict')) {
+      setError(result.reason === 'rejected'
+        ? (result.message || (lang === 'hr' ? 'Baza je odbila nalog (npr. dvostruka rezervacija termina). Nalog nije spremljen.' : 'The database rejected the order (e.g. a double-booked slot). Nothing was saved.'))
+        : (lang === 'hr' ? 'Nalog je u međuvremenu izmijenjen na drugom terminalu. Osvježite i pokušajte ponovno.' : 'This order was changed on another terminal meanwhile. Refresh and try again.'));
+      return; // keep the form intact so the planner can correct and resubmit
+    }
+
+    setMessage(result.ok
+      ? (isEdit ? t.workOrders.updated : t.workOrders.created)
+      : (lang === 'hr' ? 'Izvan mreže — nalog je spremljen u red čekanja i sinkronizirat će se po povratku veze.' : 'Offline — the order was queued and will sync when the connection returns.'));
+    resetForm();
+    setEditingJobId(null);
     if (result.ok && (conflicts.machineOverlap || conflicts.operatorOverlap || conflicts.shiftOutside || conflicts.hoursExceeded || conflicts.unqualified)) {
-      setMessage(lang === 'hr' ? 'Nalog je kreiran uz upozorenja rasporeda. Provjerite vremenski plan.' : 'Order created with scheduling warnings. Review the timeline.');
+      setMessage(isEdit
+        ? (lang === 'hr' ? 'Izmjene su spremljene uz upozorenja rasporeda. Provjerite vremenski plan.' : 'Changes saved with scheduling warnings. Review the timeline.')
+        : (lang === 'hr' ? 'Nalog je kreiran uz upozorenja rasporeda. Provjerite vremenski plan.' : 'Order created with scheduling warnings. Review the timeline.'));
     }
   }
 
@@ -228,6 +370,8 @@ export default function WorkOrderCreator() {
   function duplicateOrder(id: number) {
     const source = jobs.find((job) => job.id === id);
     if (!source) return;
+    setEditingJobId(null); // duplicating always creates a new order, even mid-edit
+    setEditingOpId(null);
     setOrderNumber(`${source.order}-KOPIJA`);
     setProduct(source.product ?? '');
     setOperations((source.operations ?? []).map((op) => ({ ...op, id: nextOpId++ })));
@@ -256,6 +400,19 @@ export default function WorkOrderCreator() {
 
       {creatorTab === 'create' && (
         <>
+        {editingJob && (
+          <div className="step-box" style={{ borderLeft: '4px solid var(--primary-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <strong style={{ color: 'var(--primary-color)' }}>✏️ {t.workOrders.editingOrder}: {editingJob.order}</strong>
+              <div className="subtitle-text" style={{ fontSize: 12, marginTop: 4 }}>
+                {lang === 'hr' ? 'Spremanjem se ažurira postojeći nalog — ne stvara se kopija.' : 'Saving updates the existing order — no copy is created.'}
+              </div>
+            </div>
+            <button className="btn btn-ghost" style={{ width: 'auto' }} onClick={cancelEdit}>
+              {t.workOrders.cancelEdit}
+            </button>
+          </div>
+        )}
         <div className="step-box">
         <div className="step-title">
           <span className="step-number">1</span>
@@ -303,7 +460,7 @@ export default function WorkOrderCreator() {
             <label>{t.workOrders.parentOrder}</label>
             <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
               <option value="">{t.workOrders.noParent}</option>
-              {jobs.map((j) => (
+              {jobs.filter((j) => j.id !== editingJobId && !blockedParentIds.has(j.id)).map((j) => (
                 <option key={j.id} value={j.id}>
                   {j.order || j.machine}
                 </option>
@@ -372,11 +529,20 @@ export default function WorkOrderCreator() {
               {activeWorkers.map((worker) => <option key={worker.id} value={worker.id}>{displayName(worker)}</option>)}
             </select>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
             <button className="btn btn-blue" onClick={addOperation} style={{ width: '100%' }}>
               <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
-              {t.workOrders.addOperation}
+              {editingOpId !== null ? (lang === 'hr' ? 'Spremi korak' : 'Save step') : t.workOrders.addOperation}
             </button>
+            {editingOpId !== null && (
+              <button
+                className="btn btn-ghost"
+                style={{ width: 'auto', whiteSpace: 'nowrap' }}
+                onClick={() => { setEditingOpId(null); setOpForm({ name: '', machine: '', hours: '', operatorId: '' }); }}
+              >
+                {lang === 'hr' ? 'Odustani' : 'Cancel'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -387,7 +553,7 @@ export default function WorkOrderCreator() {
             <div className="flow-row">
               {operations.map((op, i) => (
                 <div key={op.id} style={{ display: 'flex', alignItems: 'center' }}>
-                  <div className="flow-block">
+                  <div className="flow-block" style={editingOpId === op.id ? { outline: '2px solid var(--primary-color)', outlineOffset: 1 } : undefined}>
                     <button className="flow-remove" onClick={() => removeOperation(op.id)} title="Remove">
                       <IconTrash style={{ width: 10, height: 10 }} />
                     </button>
@@ -395,6 +561,37 @@ export default function WorkOrderCreator() {
                     <div className="flow-meta">{op.machine}</div>
                     <div className="flow-meta">{op.hours} h</div>
                     {op.operator && <div className="flow-meta">👤 {op.operator}</div>}
+                    <div style={{ display: 'flex', gap: 4, marginTop: 6, justifyContent: 'center' }}>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: '2px 6px', fontSize: 11, width: 'auto', minWidth: 0 }}
+                        onClick={() => moveOperation(op.id, -1)}
+                        disabled={i === 0}
+                        title={lang === 'hr' ? 'Pomakni ranije u slijedu' : 'Move earlier in the sequence'}
+                        aria-label={lang === 'hr' ? `Pomakni "${op.name}" ranije` : `Move "${op.name}" earlier`}
+                      >
+                        ◀
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: '2px 6px', fontSize: 11, width: 'auto', minWidth: 0 }}
+                        onClick={() => editOperation(op.id)}
+                        title={lang === 'hr' ? 'Uredi korak' : 'Edit step'}
+                        aria-label={lang === 'hr' ? `Uredi korak "${op.name}"` : `Edit step "${op.name}"`}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: '2px 6px', fontSize: 11, width: 'auto', minWidth: 0 }}
+                        onClick={() => moveOperation(op.id, 1)}
+                        disabled={i === operations.length - 1}
+                        title={lang === 'hr' ? 'Pomakni kasnije u slijedu' : 'Move later in the sequence'}
+                        aria-label={lang === 'hr' ? `Pomakni "${op.name}" kasnije` : `Move "${op.name}" later`}
+                      >
+                        ▶
+                      </button>
+                    </div>
                   </div>
                   {i < operations.length - 1 && (
                     <span className="flow-arrow">
@@ -416,10 +613,15 @@ export default function WorkOrderCreator() {
       </div>
 
       <div className="action-bar">
-        <button className="btn btn-green" onClick={createOrder}>
+        <button className="btn btn-green" onClick={submitOrder}>
           <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
-          {t.workOrders.createOrder}
+          {editingJob ? t.workOrders.saveChanges : t.workOrders.createOrder}
         </button>
+        {editingJob && (
+          <button className="btn btn-ghost" onClick={cancelEdit}>
+            {t.workOrders.cancelEdit}
+          </button>
+        )}
       </div>
       {message && <p style={{ color: 'var(--success-color)', fontSize: 13, marginTop: 10 }}>{message}</p>}
       {error && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10 }}>{error}</p>}
@@ -479,6 +681,13 @@ export default function WorkOrderCreator() {
                         >
                           <IconPrint style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
                           {t.workOrders.print}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          title={lang === 'hr' ? 'Uredi postojeći nalog (podaci, ruta, operateri)' : 'Edit this order (details, route, operators)'}
+                          onClick={() => startEdit(job.id)}
+                        >
+                          {t.workOrders.edit}
                         </button>
                         <button
                           className="btn btn-ghost btn-sm"

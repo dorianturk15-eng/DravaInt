@@ -1,17 +1,26 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconTrash, IconList, IconBoard } from '../components/Icons';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
 import { hasChildren } from '../scheduling/hierarchy';
 import { priorityLabel, priorityMeta, priorityRank } from '../scheduling/priority';
 import { isJobOverdue } from '../scheduling/status';
+import { useAuth } from '../auth/AuthContext';
+import { canAccessTab } from '../auth/access';
 
 const STATUSES: JobStatus[] = ['planned', 'inProgress', 'done', 'delayed'];
 
 export default function ProgressMonitoring() {
   const { t, lang } = useLanguage();
   const { jobs: allJobs, updateJob, removeJob } = useScheduling();
+  const { username, users } = useAuth();
+  const navigate = useNavigate();
   const jobs = allJobs.filter((j) => !hasChildren(allJobs, j.id));
+  // Only roles that can open the creator get the edit deep link — same derivation as the App shell.
+  const currentUser = users.find((user) => user.username.toLowerCase() === (username ?? '').toLowerCase());
+  const canEditOrders = canAccessTab(currentUser?.role || 'workers', 'workOrders');
+  const openEditor = (jobId: number) => navigate(`/workOrders?edit=${jobId}`);
   const [view, setView] = useState<'list' | 'board'>('list');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -205,14 +214,26 @@ export default function ProgressMonitoring() {
                     </div>
                   </td>
                   <td>
-                    <button
-                      className="btn btn-red"
-                      style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
-                      onClick={() => removeJob(job.id)}
-                    >
-                      <IconTrash style={{ width: 12, height: 12 }} />
-                      {t.common.remove}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {canEditOrders && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                          title={lang === 'hr' ? 'Otvori nalog u kreatoru za uređivanje' : 'Open this order in the creator for editing'}
+                          onClick={() => openEditor(job.id)}
+                        >
+                          {t.workOrders.edit}
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-red"
+                        style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                        onClick={() => removeJob(job.id)}
+                      >
+                        <IconTrash style={{ width: 12, height: 12 }} />
+                        {t.common.remove}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -260,13 +281,25 @@ export default function ProgressMonitoring() {
                           </option>
                         ))}
                       </select>
-                      <button
-                        className="btn btn-red"
-                        style={{ padding: 4, width: 24, height: 24, minWidth: 24, borderRadius: 4 }}
-                        onClick={() => removeJob(job.id)}
-                      >
-                        <IconTrash style={{ width: 12, height: 12 }} />
-                      </button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {canEditOrders && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ padding: '2px 8px', height: 24, fontSize: 10, width: 'auto', minWidth: 0 }}
+                            title={lang === 'hr' ? 'Otvori nalog u kreatoru za uređivanje' : 'Open this order in the creator for editing'}
+                            onClick={() => openEditor(job.id)}
+                          >
+                            {t.workOrders.edit}
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-red"
+                          style={{ padding: 4, width: 24, height: 24, minWidth: 24, borderRadius: 4 }}
+                          onClick={() => removeJob(job.id)}
+                        >
+                          <IconTrash style={{ width: 12, height: 12 }} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
