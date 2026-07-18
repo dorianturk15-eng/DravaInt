@@ -161,6 +161,9 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
         await enqueueMutation({ table: 'workers', operation: 'insert', payload: { first_name: input.firstName.trim(), last_name: input.lastName.trim(), email: input.email.trim() || null, role_id: input.roleId, is_active: input.isActive, status: input.status ?? 'available', qualifications: input.qualifications } });
         return false;
       }
+      // Refresh directly instead of relying on the realtime channel to echo our own
+      // write — without this a new worker stays invisible everywhere until a reload.
+      await loadRemote();
       return true;
     }
 
@@ -191,13 +194,17 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
         await enqueueMutation({ table: 'workers', operation: 'update', payload: dbPatch, match: { id } });
         return false;
       }
+      void loadRemote();
     }
     return true;
   }
 
   async function archiveWorker(id: number) {
     await updateWorker(id, { isActive: false });
-    if (supabase) await supabase.from('workers').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (supabase) {
+      await supabase.from('workers').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+      void loadRemote();
+    }
   }
 
   async function setWorkerStatus(id: number, status: WorkerStatus) {
