@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase, onAuthUserChange } from '../supabase/client';
-import { getJobConflicts, type JobConflicts } from './cpm';
+import { getJobConflicts, toLocalDateTimeString, type JobConflicts } from './cpm';
 import { enqueueMutation } from '../sync/offlineQueue';
 
 export type JobStatus = 'planned' | 'inProgress' | 'done' | 'delayed';
@@ -79,8 +79,8 @@ function rowToJob(row: JobRow): Job {
     operator: row.operator,
     operatorId: row.operator_id ?? null,
     product: row.product_description ?? '',
-    start: row.start_time,
-    end: row.end_time,
+    start: toLocalDateTimeString(new Date(row.start_time)),
+    end: toLocalDateTimeString(new Date(row.end_time)),
     status: row.status,
     progress: row.progress,
     color: row.color,
