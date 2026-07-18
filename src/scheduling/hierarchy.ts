@@ -2,7 +2,7 @@ import type { Task } from 'gantt-task-react';
 import type { Job, OperationStep } from './SchedulingContext';
 import { computeEffectiveSchedule, computeCriticalPath, jobsToScheduleInput, type SchedulingOptions } from './cpm';
 
-export function getChildren(jobs: Job[], parentId: number): Job[] {
+function getChildren(jobs: Job[], parentId: number): Job[] {
   return jobs.filter((j) => j.parentId === parentId);
 }
 

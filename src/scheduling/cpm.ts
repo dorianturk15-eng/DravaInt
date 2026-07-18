@@ -416,7 +416,7 @@ export function getMonday(d: Date): string {
  * Sums a worker's scheduled hours inside the given week across all jobs, counting per-operation
  * assignments on routed orders as well as plain single-operator jobs.
  */
-export function calculateWeeklyHours(operator: string, weekMondayStr: string, jobs: Job[]): number {
+function calculateWeeklyHours(operator: string, weekMondayStr: string, jobs: Job[]): number {
   if (!operator) return 0;
   const targetMonday = new Date(weekMondayStr);
   const targetSundayEnd = new Date(targetMonday.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -439,7 +439,7 @@ export function calculateWeeklyHours(operator: string, weekMondayStr: string, jo
  * generated shift schedule; when none exists yet (the default state) it returns false rather than
  * flagging every worker against a stale hardcoded roster.
  */
-export function checkShiftScheduleConflict(operator: string, startMs: number, endMs: number): boolean {
+function checkShiftScheduleConflict(operator: string, startMs: number, endMs: number): boolean {
   if (!operator || isNaN(startMs) || isNaN(endMs) || startMs >= endMs) return false;
 
   try {
