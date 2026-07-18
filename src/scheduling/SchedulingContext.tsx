@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase, onAuthUserChange } from '../supabase/client';
 import { getJobConflicts, type JobConflicts } from './cpm';
 import { enqueueMutation } from '../sync/offlineQueue';
@@ -580,30 +580,31 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
   });
   const [loading, setLoading] = useState(Boolean(supabase));
 
+  const refresh = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from('jobs').select('*').is('deleted_at', null).order('id');
+    if (error) console.warn('[scheduling] jobs load failed:', error.message);
+    else if (data) setJobs((data as JobRow[]).map(rowToJob));
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
-
-    async function loadJobs() {
-      const { data, error } = await supabase!.from('jobs').select('*').is('deleted_at', null).order('id');
-      if (error) console.warn('[scheduling] jobs load failed:', error.message);
-      else if (data) setJobs((data as JobRow[]).map(rowToJob));
-      setLoading(false);
-    }
-    loadJobs();
+    void refresh();
 
     const channel = supabase
       .channel('jobs-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, loadJobs)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, () => void refresh())
       .subscribe();
 
     // Reconciliation pass: refetch when the terminal regains focus, catching any drift the
     // realtime channel missed while the tab was backgrounded or briefly disconnected.
     const onFocus = () => {
-      if (document.visibilityState === 'visible') void loadJobs();
+      if (document.visibilityState === 'visible') void refresh();
     };
     window.addEventListener('visibilitychange', onFocus);
     window.addEventListener('focus', onFocus);
-    const unsubscribeAuth = onAuthUserChange(() => void loadJobs());
+    const unsubscribeAuth = onAuthUserChange(() => void refresh());
 
     return () => {
       supabase!.removeChannel(channel);
@@ -611,7 +612,7 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus);
       unsubscribeAuth();
     };
-  }, []);
+  }, [refresh]);
 
   async function addJob(job: Omit<Job, 'id' | 'color' | 'status' | 'progress'>): Promise<UpdateResult> {
     const color = COLORS[jobs.length % COLORS.length];
@@ -642,6 +643,10 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         await enqueueMutation({ table: 'jobs', operation: 'insert', payload });
         return { ok: false, reason: 'offline', message: error.message };
       }
+      // Refetch authoritative state (server id, priority default, etc.) rather than waiting for the
+      // realtime channel to echo our own insert — mirrors Machines/Workers, so a new order appears
+      // immediately instead of only after the next echo/focus/reload.
+      await refresh();
       return { ok: true };
     }
 
@@ -653,7 +658,9 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
-  async function updateJob(id: number, patch: Partial<Job>): Promise<UpdateResult> {
+  // Raw write, no refetch — restoreBackup batches many of these and reconciles once at the end, so
+  // the per-write refetch lives in the public updateJob wrapper below rather than here.
+  async function writeUpdate(id: number, patch: Partial<Job>): Promise<UpdateResult> {
     if (supabase) {
       const dbPatch: Record<string, unknown> = {};
       if (patch.machine !== undefined) dbPatch.machine = patch.machine;
@@ -702,7 +709,16 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }
 
-  async function removeJob(id: number) {
+  async function updateJob(id: number, patch: Partial<Job>): Promise<UpdateResult> {
+    const result = await writeUpdate(id, patch);
+    // Reconcile to server truth after a successful online write instead of trusting realtime echo;
+    // this also refreshes each job's `version`, keeping the next optimistic-locked update accurate.
+    if (supabase && result.ok) await refresh();
+    return result;
+  }
+
+  // Raw write, no refetch — see writeUpdate. restoreBackup uses this directly.
+  async function writeRemove(id: number) {
     if (supabase) {
       // Soft delete: the schema's deleted_at column keeps history intact (audit trail, dependency
       // references) and every read filters on `deleted_at is null`.
@@ -716,6 +732,11 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         return next;
       });
     }
+  }
+
+  async function removeJob(id: number) {
+    await writeRemove(id);
+    if (supabase) await refresh();
   }
 
   async function restoreBackup(newJobs: Job[]) {
@@ -742,10 +763,10 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
         if (key === 'id' || key === 'version') return;
         if (JSON.stringify(target[key]) !== JSON.stringify(current[key])) (patch as Record<string, unknown>)[key] = target[key];
       });
-      if (Object.keys(patch).length > 0) replays.push(updateJob(target.id, patch));
+      if (Object.keys(patch).length > 0) replays.push(writeUpdate(target.id, patch));
     }
     for (const current of jobs) {
-      if (!targetIds.has(current.id)) replays.push(removeJob(current.id));
+      if (!targetIds.has(current.id)) replays.push(writeRemove(current.id));
     }
 
     const results = await Promise.all(replays);
