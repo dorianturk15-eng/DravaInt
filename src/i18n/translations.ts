@@ -157,6 +157,7 @@ export interface TranslationShape {
     createOrder: string;
     created: string;
     missingFields: string;
+    missingStartDateTime: string;
     createdOrders: string;
     noCreatedOrders: string;
     print: string;
@@ -371,6 +372,7 @@ export const translations: Record<Lang, TranslationShape> = {
       createOrder: 'Kreiraj radni nalog',
       created: 'Radni nalog je kreiran i vidljiv je u Rasporedu strojeva, Praćenju napretka i Gantogramu.',
       missingFields: 'Unesite broj naloga i barem jednu operaciju.',
+      missingStartDateTime: 'Unesite početak izvođenja.',
       createdOrders: 'Kreirani nalozi',
       noCreatedOrders: 'Još nema kreiranih naloga.',
       print: 'Ispis',
@@ -583,6 +585,7 @@ export const translations: Record<Lang, TranslationShape> = {
       createOrder: 'Create work order',
       created: 'Work order created and visible in Machine Scheduling, Progress Monitoring, and the Gantt Chart.',
       missingFields: 'Enter an order number and at least one operation.',
+      missingStartDateTime: 'Enter a start time.',
       createdOrders: 'Created orders',
       noCreatedOrders: 'No orders created yet.',
       print: 'Print',

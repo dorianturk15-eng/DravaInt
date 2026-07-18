@@ -120,8 +120,12 @@ export default function WorkOrderCreator() {
   async function createOrder() {
     setMessage(null);
     setError(null);
-    if (!orderNumber.trim() || !startDateTime) {
+    if (!orderNumber.trim() || operations.length === 0) {
       setError(t.workOrders.missingFields);
+      return;
+    }
+    if (!startDateTime) {
+      setError(t.workOrders.missingStartDateTime);
       return;
     }
     const startMs = new Date(startDateTime).getTime();
@@ -288,7 +292,7 @@ export default function WorkOrderCreator() {
             </select>
           </div>
           <div>
-            <label>{t.workOrders.startDateTime}</label>
+            <label>{t.workOrders.startDateTime} *</label>
             <input
               type="datetime-local"
               value={startDateTime}
