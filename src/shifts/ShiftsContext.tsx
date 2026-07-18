@@ -193,6 +193,11 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
         const rows = input.assignments.map((assignment) => ({ shift_schedule_id: remoteId, worker_id: assignment.workerId, shift_definition_id: assignment.shiftDefinitionId, date: assignment.date, is_override: assignment.isOverride, notes: assignment.notes }));
         if (rows.length) await supabase.from('shift_assignments').upsert(rows, { onConflict: 'shift_schedule_id,worker_id,date' });
       }
+      // Refetch authoritative server state (real ids, version) instead of trusting the realtime
+      // channel to echo our own write — echo is unreliable, so a saved week could otherwise stay
+      // stale until a reload. Mirrors Machines/Workers. The returned local `nextSchedule` still
+      // carries the incremented version the caller uses for its snapshot/version bookkeeping.
+      await loadRemote();
     }
     return nextSchedule;
   }
@@ -251,13 +256,19 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
     setDefinitions((current) => [...current.filter((definition) => definition.id !== id), next]);
     if (supabase) {
       await supabase.from('shift_definitions').upsert({ id, name_hr: input.nameHr, name_en: input.nameEn, start_time: input.startTime, end_time: input.endTime, color_code: input.color, is_active: input.isActive });
+      // Refetch rather than relying on the realtime echo of our own write (see saveSchedule).
+      await loadRemote();
     }
   }
 
   async function saveAbsence(input: Omit<Absence, 'id'>) {
     const next = { ...input, id: Math.max(0, ...absences.map((absence) => absence.id)) + 1 };
     setAbsences((current) => [...current, next]);
-    if (supabase) await supabase.from('absences').insert({ worker_id: input.workerId, start_date: input.startDate, end_date: input.endDate, type: input.type, notes: input.notes });
+    if (supabase) {
+      await supabase.from('absences').insert({ worker_id: input.workerId, start_date: input.startDate, end_date: input.endDate, type: input.type, notes: input.notes });
+      // Refetch (through the masking absences_visible view) rather than trusting realtime echo.
+      await loadRemote();
+    }
   }
 
   function exportIcs(workerId: number, workerName: string) {
