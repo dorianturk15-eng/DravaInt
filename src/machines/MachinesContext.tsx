@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../supabase/client';
 
 export type MachineType = 'mill' | 'lathe' | 'saw' | 'qc' | 'other';
@@ -53,10 +53,16 @@ function saveFallbackMachines(machines: Machine[]) {
 
 let nextFallbackId = 1000;
 
+/** Outcome of a machine write. `duplicate`/`invalid` are validation results the UI already has
+ * copy for; `db` carries the real Supabase/Postgres message so it isn't mislabeled as a duplicate. */
+export type MachineWriteResult =
+  | { ok: true }
+  | { ok: false; reason: 'duplicate' | 'invalid' | 'db'; message?: string };
+
 interface MachinesContextValue {
   machines: Machine[];
-  addMachine: (machine: Omit<Machine, 'id'>) => Promise<boolean>;
-  updateMachine: (id: number, patch: Partial<Omit<Machine, 'id'>>) => Promise<boolean>;
+  addMachine: (machine: Omit<Machine, 'id'>) => Promise<MachineWriteResult>;
+  updateMachine: (id: number, patch: Partial<Omit<Machine, 'id'>>) => Promise<MachineWriteResult>;
   removeMachine: (id: number) => Promise<void>;
 }
 
@@ -72,35 +78,47 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     return loaded;
   });
 
+  const loadMachines = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from('machines').select('*').order('id');
+    if (error) console.warn('[machines] load failed:', error.message);
+    else if (data) setMachines(data as MachineRow[]);
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
-
-    async function loadMachines() {
-      const { data, error } = await supabase!.from('machines').select('*').order('id');
-      if (error) console.warn('[machines] load failed:', error.message);
-      else if (data) setMachines(data as MachineRow[]);
-    }
-    loadMachines();
+    void loadMachines();
 
     const channel = supabase
       .channel('machines-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'machines' }, loadMachines)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'machines' }, () => void loadMachines())
       .subscribe();
 
     return () => {
       supabase!.removeChannel(channel);
     };
-  }, []);
+  }, [loadMachines]);
 
-  async function addMachine(machine: Omit<Machine, 'id'>): Promise<boolean> {
+  async function addMachine(machine: Omit<Machine, 'id'>): Promise<MachineWriteResult> {
     const trimmed = machine.name.trim();
-    if (!trimmed) return false;
-    if (machines.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) return false;
+    if (!trimmed) return { ok: false, reason: 'invalid' };
+    if (machines.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) return { ok: false, reason: 'duplicate' };
     const axis = machine.type === 'mill' ? machine.axis : null;
 
     if (supabase) {
       const { error } = await supabase.from('machines').insert({ name: trimmed, type: machine.type, axis });
-      if (error) return false;
+      if (error) {
+        // 23505 = unique violation: the machine exists server-side even though the local list
+        // didn't show it (e.g. an earlier attempt landed but the refresh was missed) — resync so
+        // the hidden row becomes visible alongside the duplicate message.
+        if (error.code === '23505') {
+          void loadMachines();
+          return { ok: false, reason: 'duplicate', message: error.message };
+        }
+        return { ok: false, reason: 'db', message: error.message };
+      }
+      // Refresh directly rather than relying on the realtime channel to echo our own write.
+      await loadMachines();
     } else {
       setMachines((prev) => {
         const next = [...prev, { id: nextFallbackId++, name: trimmed, type: machine.type, axis }];
@@ -108,21 +126,28 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
         return next;
       });
     }
-    return true;
+    return { ok: true };
   }
 
-  async function updateMachine(id: number, patch: Partial<Omit<Machine, 'id'>>): Promise<boolean> {
+  async function updateMachine(id: number, patch: Partial<Omit<Machine, 'id'>>): Promise<MachineWriteResult> {
     if (patch.name !== undefined) {
       const trimmed = patch.name.trim();
-      if (!trimmed) return false;
-      if (machines.some((m) => m.id !== id && m.name.toLowerCase() === trimmed.toLowerCase())) return false;
+      if (!trimmed) return { ok: false, reason: 'invalid' };
+      if (machines.some((m) => m.id !== id && m.name.toLowerCase() === trimmed.toLowerCase())) return { ok: false, reason: 'duplicate' };
       patch = { ...patch, name: trimmed };
     }
     if (patch.type !== undefined && patch.type !== 'mill') patch = { ...patch, axis: null };
 
     if (supabase) {
       const { error } = await supabase.from('machines').update(patch).eq('id', id);
-      if (error) return false;
+      if (error) {
+        if (error.code === '23505') {
+          void loadMachines();
+          return { ok: false, reason: 'duplicate', message: error.message };
+        }
+        return { ok: false, reason: 'db', message: error.message };
+      }
+      await loadMachines();
     } else {
       setMachines((prev) => {
         const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m));
@@ -130,12 +155,14 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
         return next;
       });
     }
-    return true;
+    return { ok: true };
   }
 
   async function removeMachine(id: number) {
     if (supabase) {
-      await supabase.from('machines').delete().eq('id', id);
+      const { error } = await supabase.from('machines').delete().eq('id', id);
+      if (error) console.warn('[machines] delete failed:', error.message);
+      await loadMachines();
     } else {
       setMachines((prev) => {
         const next = prev.filter((m) => m.id !== id);

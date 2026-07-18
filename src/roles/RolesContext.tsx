@@ -39,9 +39,14 @@ function saveFallbackRoles(roles: Role[]) {
 
 let nextFallbackId = 1000;
 
+/** Mirrors MachineWriteResult: `db` carries the real Supabase error so the UI can show it. */
+export type RoleWriteResult =
+  | { ok: true }
+  | { ok: false; reason: 'duplicate' | 'invalid' | 'db'; message?: string };
+
 interface RolesContextValue {
   roles: Role[];
-  addRole: (name: string) => Promise<boolean>;
+  addRole: (name: string) => Promise<RoleWriteResult>;
   removeRole: (id: number) => Promise<void>;
   setRoleActive: (id: number, isActive: boolean) => Promise<void>;
 }
@@ -80,14 +85,20 @@ export function RolesProvider({ children }: { children: ReactNode }) {
     };
   }, [queryClient]);
 
-  async function addRole(name: string): Promise<boolean> {
+  async function addRole(name: string): Promise<RoleWriteResult> {
     const trimmed = name.trim();
-    if (!trimmed) return false;
-    if (roles.some((r) => r.name.toLowerCase() === trimmed.toLowerCase())) return false;
+    if (!trimmed) return { ok: false, reason: 'invalid' };
+    if (roles.some((r) => r.name.toLowerCase() === trimmed.toLowerCase())) return { ok: false, reason: 'duplicate' };
 
     if (supabase) {
       const { error } = await supabase.from('roles').insert({ name: trimmed });
-      if (error) return false;
+      if (error) {
+        if (error.code === '23505') {
+          void queryClient.invalidateQueries({ queryKey: ['roles'] });
+          return { ok: false, reason: 'duplicate', message: error.message };
+        }
+        return { ok: false, reason: 'db', message: error.message };
+      }
       await queryClient.invalidateQueries({ queryKey: ['roles'] });
     } else {
       setFallbackRoles((prev) => {
@@ -96,7 +107,7 @@ export function RolesProvider({ children }: { children: ReactNode }) {
         return next;
       });
     }
-    return true;
+    return { ok: true };
   }
 
   async function removeRole(id: number) {

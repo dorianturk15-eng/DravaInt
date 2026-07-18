@@ -120,11 +120,13 @@ export default function Admin() {
 
   async function submitMachine() {
     setMachineError('');
-    const ok = editingMachineId
+    const result = editingMachineId
       ? await updateMachine(editingMachineId, { name: machineName, type: machineType, axis: machineAxis })
       : await addMachine({ name: machineName, type: machineType, axis: machineAxis });
-    if (!ok) {
-      setMachineError(t.admin.machineExists);
+    if (!result.ok) {
+      // Only a genuine duplicate/validation gets the "already exists" copy; a database failure
+      // (RLS, network, constraint) shows its real message instead of masquerading as a duplicate.
+      setMachineError(result.reason === 'db' ? (result.message || t.admin.machineExists) : t.admin.machineExists);
       return;
     }
     resetMachineForm();
@@ -140,9 +142,9 @@ export default function Admin() {
 
   async function submitRole() {
     setRoleError('');
-    const ok = await addRole(newRoleName);
-    if (!ok) {
-      setRoleError(t.admin.machineExists);
+    const result = await addRole(newRoleName);
+    if (!result.ok) {
+      setRoleError(result.reason === 'db' ? (result.message || t.admin.machineExists) : t.admin.machineExists);
       return;
     }
     setNewRoleName('');
