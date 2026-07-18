@@ -241,6 +241,156 @@ describe('DravaGantt interaction', () => {
     expect(parseFloat(barFor(container, 'wo-1').style.left)).toBeCloseTo(leftBefore, 3);
   });
 
+  it('ctrl-click builds a multi-select, shows the pill, and Esc clears it', () => {
+    const onSelect = vi.fn();
+    const lanes: GanttLane[] = [{
+      id: 'M',
+      label: 'M',
+      tasks: [
+        task('wo-1', '2026-07-14T08:00', '2026-07-14T16:00'),
+        task('wo-2', '2026-07-15T08:00', '2026-07-15T16:00'),
+      ],
+    }];
+    const { container } = renderGantt(lanes, { onSelect, selectionHint: (count) => `${count} selected` });
+    fireEvent.pointerDown(barFor(container, 'wo-1'), { pointerId: 1, clientX: 100, button: 0 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 100 });
+    fireEvent.pointerDown(barFor(container, 'wo-2'), { pointerId: 2, clientX: 100, button: 0, ctrlKey: true });
+    fireEvent.pointerUp(window, { pointerId: 2, clientX: 100 });
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'wo-1' }), true);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'wo-2' }), true);
+    expect(container.querySelectorAll('.dg-bar--selected')).toHaveLength(2);
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(container.querySelectorAll('.dg-bar--selected')).toHaveLength(0);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'wo-1' }), false);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'wo-2' }), false);
+  });
+
+  it('moves co-selected bars together during a group drag (optimistic)', () => {
+    const onDateChange = vi.fn();
+    const lanes: GanttLane[] = [{
+      id: 'M',
+      label: 'M',
+      tasks: [
+        task('wo-1', '2026-07-14T08:00', '2026-07-14T16:00'),
+        task('wo-2', '2026-07-20T08:00', '2026-07-20T16:00'),
+      ],
+    }];
+    const { container } = renderGantt(lanes, { onDateChange });
+    const otherLeftBefore = parseFloat(barFor(container, 'wo-2').style.left);
+
+    fireEvent.pointerDown(barFor(container, 'wo-1'), { pointerId: 1, clientX: 100, button: 0 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 100 });
+    fireEvent.pointerDown(barFor(container, 'wo-2'), { pointerId: 2, clientX: 100, button: 0, ctrlKey: true });
+    fireEvent.pointerUp(window, { pointerId: 2, clientX: 100 });
+
+    fireEvent.pointerDown(barFor(container, 'wo-1'), { pointerId: 3, clientX: 300, button: 0 });
+    fireEvent.pointerMove(window, { pointerId: 3, clientX: 300 + COLUMN_WIDTHS.day });
+    fireEvent.pointerUp(window, { pointerId: 3, clientX: 300 + COLUMN_WIDTHS.day });
+
+    // Only the dragged bar reports; the page applies the delta to the rest of the selection.
+    expect(onDateChange).toHaveBeenCalledTimes(1);
+    // But the co-selected bar keeps the shifted position optimistically.
+    expect(parseFloat(barFor(container, 'wo-2').style.left)).toBeCloseTo(otherLeftBefore + COLUMN_WIDTHS.day, 3);
+  });
+
+  it('applies live snapTime to the dragged start', () => {
+    const onDateChange = vi.fn();
+    // Snap everything to 06:00 of its day.
+    const snapTime = (ms: number) => {
+      const date = new Date(ms);
+      date.setHours(6, 0, 0, 0);
+      return date.getTime();
+    };
+    const lanes: GanttLane[] = [{ id: 'M', label: 'M', tasks: [task('wo-1', '2026-07-14T08:00', '2026-07-14T16:00')] }];
+    const { container } = renderGantt(lanes, { onDateChange, snapTime });
+    fireEvent.pointerDown(barFor(container, 'wo-1'), { pointerId: 1, clientX: 300, button: 0 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 300 + 2 * COLUMN_WIDTHS.day });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 300 + 2 * COLUMN_WIDTHS.day });
+
+    const moved = onDateChange.mock.calls[0][0] as GanttTask;
+    expect(moved.start).toEqual(new Date('2026-07-16T06:00'));
+  });
+
+  it('shows the conflict tint, drag tooltip reasons and cascade previews from getDragPreview', () => {
+    const getDragPreview = vi.fn().mockReturnValue({
+      conflicts: ['Overlaps RN-2041'],
+      cascades: [{ taskId: 'wo-2', start: new Date('2026-07-17T08:00'), end: new Date('2026-07-17T16:00') }],
+    });
+    const lanes: GanttLane[] = [{
+      id: 'M',
+      label: 'M',
+      tasks: [
+        task('wo-1', '2026-07-14T08:00', '2026-07-14T16:00'),
+        task('wo-2', '2026-07-15T08:00', '2026-07-15T16:00', { dependencies: ['wo-1'] }),
+      ],
+    }];
+    const { container } = renderGantt(lanes, { getDragPreview });
+    fireEvent.pointerDown(barFor(container, 'wo-1'), { pointerId: 1, clientX: 300, button: 0 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 300 + COLUMN_WIDTHS.day, clientY: 40 });
+
+    expect(getDragPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'wo-1' }),
+      expect.any(Date),
+      expect.any(Date),
+      'M',
+    );
+    expect(barFor(container, 'wo-1').classList.contains('dg-bar--conflict')).toBe(true);
+    expect(screen.getByText('⚠ Overlaps RN-2041')).toBeInTheDocument();
+    expect(container.querySelector('.dg-cascade-preview')).toBeTruthy();
+    expect(container.querySelector('.dg-drag-ghost')).toBeTruthy();
+    expect(container.querySelector('.dg-snap-guide')).toBeTruthy();
+
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 300 + COLUMN_WIDTHS.day });
+    expect(container.querySelector('.dg-drag-tooltip')).toBeNull();
+  });
+
+  it('reports a lane change when a laneChangeable bar is dropped on another lane', () => {
+    const onLaneChange = vi.fn();
+    const onDateChange = vi.fn();
+    const lanes: GanttLane[] = [
+      { id: 'A', label: 'A', tasks: [task('wo-1', '2026-07-14T08:00', '2026-07-14T16:00', { laneChangeable: true })] },
+      { id: 'B', label: 'B', tasks: [] },
+    ];
+    const { container } = renderGantt(lanes, { onLaneChange, onDateChange });
+    // Lane A spans y [0, 96) (46px header + 50px row); lane B starts at 96. The scroll
+    // container has a zero rect in jsdom, so clientY maps straight onto body y + header.
+    fireEvent.pointerDown(barFor(container, 'wo-1'), { pointerId: 1, clientX: 300, clientY: 70, button: 0 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 300 + COLUMN_WIDTHS.day, clientY: 50 + 96 + 30 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 300 + COLUMN_WIDTHS.day, clientY: 50 + 96 + 30 });
+
+    expect(onDateChange).not.toHaveBeenCalled();
+    expect(onLaneChange).toHaveBeenCalledTimes(1);
+    expect(onLaneChange.mock.calls[0][1]).toBe('B');
+  });
+
+  it('nudges the selected bar with arrow keys and resizes with Alt+arrows', () => {
+    const onDateChange = vi.fn();
+    const lanes: GanttLane[] = [{ id: 'M', label: 'M', tasks: [task('wo-1', '2026-07-14T08:00', '2026-07-14T16:00')] }];
+    const { container } = renderGantt(lanes, { onDateChange });
+    fireEvent.pointerDown(barFor(container, 'wo-1'), { pointerId: 1, clientX: 100, button: 0 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 100 });
+
+    // Day view nudge unit is one 8h shift.
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    let moved = onDateChange.mock.calls[0][0] as GanttTask;
+    expect(moved.start).toEqual(new Date('2026-07-14T16:00'));
+    expect(moved.end).toEqual(new Date('2026-07-15T00:00'));
+
+    // Shift+arrow is the fine 15-minute nudge, applied on top of the optimistic position.
+    fireEvent.keyDown(window, { key: 'ArrowLeft', shiftKey: true });
+    moved = onDateChange.mock.calls[1][0] as GanttTask;
+    expect(moved.start).toEqual(new Date('2026-07-14T15:45'));
+
+    // Alt+arrow resizes the end edge only.
+    fireEvent.keyDown(window, { key: 'ArrowRight', altKey: true });
+    moved = onDateChange.mock.calls[2][0] as GanttTask;
+    expect(moved.start).toEqual(new Date('2026-07-14T15:45'));
+    expect(moved.end).toEqual(new Date('2026-07-15T07:45'));
+  });
+
   it('does not drag project rows', () => {
     const onDateChange = vi.fn();
     const lanes: GanttLane[] = [{

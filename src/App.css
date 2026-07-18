@@ -1583,3 +1583,10 @@ select {
 .board-toast { position: fixed; right: 20px; bottom: 20px; z-index: var(--z-toast); max-width: 320px; padding: 11px 14px; border-radius: var(--radius-inner); color: white; font-size: 12px; font-weight: 600; box-shadow: 0 14px 30px rgba(15,23,42,.28); cursor: pointer; }
 .board-toast-warning { background: #b45309; }
 .board-toast-error { background: var(--danger-color); }
+
+/* Gantt post-drop undo toast (Phase 3): one-tap revert without knowing Ctrl+Z exists. */
+.gantt-undo-toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: var(--z-toast); display: flex; align-items: center; gap: 10px; max-width: min(420px, 90vw); padding: 10px 14px; border-radius: 999px; background: var(--text-primary); color: var(--bg-card); font-size: 12px; font-weight: 600; box-shadow: 0 14px 30px rgba(15,23,42,.32); }
+.gantt-undo-toast > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt-undo-toast button { border: none; background: transparent; color: inherit; font-size: 12px; font-weight: 800; cursor: pointer; padding: 2px 4px; }
+.gantt-undo-toast button:first-of-type { color: var(--primary-light, #93c5fd); }
+.gantt-undo-toast-close { opacity: .7; }

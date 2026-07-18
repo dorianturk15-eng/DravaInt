@@ -2,6 +2,7 @@
    One scroll container, sticky time header, sticky name column, machine swimlanes. */
 
 .dg-root {
+  position: relative;
   margin-top: 15px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-card);
@@ -404,6 +405,143 @@
 .dg-bar:hover .dg-progress-handle,
 .dg-bar--selected .dg-progress-handle {
   opacity: 1;
+}
+
+/* --- drag feedback (Phase 3) -------------------------------------------- */
+
+.dg-bar--conflict {
+  outline: 2px solid var(--danger-color);
+  outline-offset: 1px;
+  filter: brightness(1.02) saturate(1.3);
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, .22), var(--shadow-hover);
+}
+
+.dg-drag-ghost {
+  fill: color-mix(in srgb, var(--text-secondary) 14%, transparent);
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: .7;
+}
+
+.dg-snap-guide {
+  stroke: var(--primary-color);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  opacity: .9;
+}
+
+.dg-snap-guide--conflict {
+  stroke: var(--danger-color);
+}
+
+.dg-cascade-preview {
+  fill: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  stroke: var(--primary-color);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  opacity: .85;
+}
+
+.dg-lane-target {
+  fill: color-mix(in srgb, var(--primary-color) 9%, transparent);
+  stroke: var(--primary-color);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+.dg-lane-target--conflict {
+  fill: rgba(239, 68, 68, .1);
+  stroke: var(--danger-color);
+}
+
+.dg-lane-row--target {
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-step));
+  box-shadow: inset 3px 0 0 var(--primary-color);
+}
+
+.dg-drag-tooltip {
+  position: fixed;
+  z-index: var(--z-modal, 1000);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 280px;
+  padding: 8px 11px;
+  border-radius: var(--radius-inner, 8px);
+  background: var(--bg-card);
+  border: 1px solid var(--primary-color);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, .28);
+  font-size: 11px;
+  color: var(--text-primary);
+  pointer-events: none;
+}
+
+.dg-drag-tooltip strong {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dg-drag-tooltip--conflict {
+  border-color: var(--danger-color);
+  background: color-mix(in srgb, var(--danger-color) 7%, var(--bg-card));
+}
+
+.dg-drag-tooltip em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--danger-color);
+}
+
+.dg-drag-tooltip-lane {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.dg-drag-tooltip-cascade {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* --- multi-select pill --------------------------------------------------- */
+
+.dg-selection-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 8;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .3);
+  pointer-events: none;
+}
+
+/* --- live playhead clock ------------------------------------------------- */
+
+.dg-now-clock {
+  fill: var(--danger-color);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* --- a11y ---------------------------------------------------------------- */
+
+.dg-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --- tooltip ------------------------------------------------------------ */
