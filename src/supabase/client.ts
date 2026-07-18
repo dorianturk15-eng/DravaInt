@@ -18,3 +18,24 @@ export const supabase = isSupabaseConfigured ? createClient(url!, anonKey, {
   },
   realtime: { params: { eventsPerSecond: 10 } },
 }) : null;
+
+/**
+ * Invoke `callback` whenever a (different) user signs in. The data providers mount above the
+ * login screen, so their initial fetch can fire before any session exists — it then runs as
+ * `anon`, which has no table grants, and the empty result would otherwise stick until a full
+ * page reload. Returns an unsubscribe function for useEffect cleanup.
+ */
+export function onAuthUserChange(callback: () => void): () => void {
+  if (!supabase) return () => {};
+  let lastUserId: string | null = null;
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const userId = session?.user?.id ?? null;
+    if (userId !== null && userId !== lastUserId) {
+      lastUserId = userId;
+      callback();
+    } else if (userId === null) {
+      lastUserId = null;
+    }
+  });
+  return () => data.subscription.unsubscribe();
+}

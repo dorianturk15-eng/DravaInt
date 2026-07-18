@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { supabase } from '../supabase/client';
+import { supabase, onAuthUserChange } from '../supabase/client';
 
 export type MachineType = 'mill' | 'lathe' | 'saw' | 'qc' | 'other';
 export type MillAxis = 3 | 5;
@@ -93,9 +93,11 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
       .channel('machines-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'machines' }, () => void loadMachines())
       .subscribe();
+    const unsubscribeAuth = onAuthUserChange(() => void loadMachines());
 
     return () => {
       supabase!.removeChannel(channel);
+      unsubscribeAuth();
     };
   }, [loadMachines]);
 

@@ -17,7 +17,7 @@ export default function Admin() {
   const lastLogins = getLastLogins();
   const { machines, addMachine, updateMachine, removeMachine } = useMachines();
   const { roles, addRole, removeRole, setRoleActive } = useRoles();
-  const { workers: workersList, addWorker, updateWorker, archiveWorker, displayName } = useWorkers();
+  const { workers: workersList, addWorker, updateWorker, archiveWorker, removeWorker, displayName } = useWorkers();
 
   const [pendingLogo, setPendingLogo] = useState<string | null>(logo);
   const [savedMsg, setSavedMsg] = useState(false);
@@ -216,6 +216,15 @@ export default function Admin() {
 
   async function handleDeleteWorker(id: number) {
     await archiveWorker(id);
+  }
+
+  async function handleRemoveWorker(w: Worker) {
+    const confirmed = window.confirm(lang === 'hr'
+      ? `Trajno izbrisati radnika ${displayName(w)}? Brišu se i sve njegove dodjele smjena i izostanci. Ovo se ne može poništiti.`
+      : `Permanently delete ${displayName(w)}? All of their shift assignments and absences are deleted too. This cannot be undone.`);
+    if (!confirmed) return;
+    const ok = await removeWorker(w.id);
+    if (!ok) setWorkerError(lang === 'hr' ? 'Brisanje nije uspjelo — pogledajte sinkronizacijsku grešku.' : 'Delete failed — check the sync error.');
   }
 
   // System Key-Value configs
@@ -494,6 +503,12 @@ export default function Admin() {
                           <IconTrash style={{ width: 12, height: 12 }} />
                           {w.isActive ? (lang === 'hr' ? 'Arhiviraj' : 'Archive') : (lang === 'hr' ? 'Aktiviraj' : 'Activate')}
                         </button>
+                        {!w.isActive && (
+                          <button className="btn btn-red btn-sm" onClick={() => void handleRemoveWorker(w)}>
+                            <IconTrash style={{ width: 12, height: 12 }} />
+                            {lang === 'hr' ? 'Izbriši trajno' : 'Delete permanently'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

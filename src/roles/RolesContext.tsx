@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { supabase } from '../supabase/client';
+import { supabase, onAuthUserChange } from '../supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export interface Role {
@@ -79,9 +79,11 @@ export function RolesProvider({ children }: { children: ReactNode }) {
         void queryClient.invalidateQueries({ queryKey: ['roles'] });
       })
       .subscribe();
+    const unsubscribeAuth = onAuthUserChange(() => void queryClient.invalidateQueries({ queryKey: ['roles'] }));
 
     return () => {
       supabase!.removeChannel(channel);
+      unsubscribeAuth();
     };
   }, [queryClient]);
 

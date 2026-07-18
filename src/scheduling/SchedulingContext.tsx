@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { supabase } from '../supabase/client';
+import { supabase, onAuthUserChange } from '../supabase/client';
 import { getJobConflicts, type JobConflicts } from './cpm';
 import { enqueueMutation } from '../sync/offlineQueue';
 
@@ -603,11 +603,13 @@ export function SchedulingProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('visibilitychange', onFocus);
     window.addEventListener('focus', onFocus);
+    const unsubscribeAuth = onAuthUserChange(() => void loadJobs());
 
     return () => {
       supabase!.removeChannel(channel);
       window.removeEventListener('visibilitychange', onFocus);
       window.removeEventListener('focus', onFocus);
+      unsubscribeAuth();
     };
   }, []);
 

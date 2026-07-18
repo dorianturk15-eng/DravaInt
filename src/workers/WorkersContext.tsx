@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { supabase } from '../supabase/client';
+import { supabase, onAuthUserChange } from '../supabase/client';
 import { enqueueMutation } from '../sync/offlineQueue';
 
 export type WorkerStatus = 'available' | 'busy' | 'break' | 'absent';
@@ -27,6 +27,7 @@ interface WorkersContextValue {
   addWorker: (worker: WorkerInput) => Promise<boolean>;
   updateWorker: (id: number, patch: Partial<Worker>) => Promise<boolean>;
   archiveWorker: (id: number) => Promise<void>;
+  removeWorker: (id: number) => Promise<boolean>;
   setWorkerStatus: (id: number, status: WorkerStatus) => Promise<void>;
   displayName: (worker: Worker) => string;
 }
@@ -136,8 +137,12 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
       .channel('workers-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'workers' }, () => void loadRemote())
       .subscribe();
+    // The mount fetch above can fire before login (as anon, which has no table grants);
+    // refetch once a user signs in so the list doesn't stay empty until a reload.
+    const unsubscribeAuth = onAuthUserChange(() => void loadRemote());
     return () => {
       void client.removeChannel(channel);
+      unsubscribeAuth();
     };
   }, [loadRemote]);
 
@@ -207,6 +212,25 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  /** Permanent removal. Unlike archiveWorker this hard-deletes the row; the database cascades
+   * away the worker's shift assignments and absences (audit_logs keeps the row images). The
+   * Admin UI only offers this for already-archived workers, behind a confirm dialog. */
+  async function removeWorker(id: number): Promise<boolean> {
+    if (supabase) {
+      const { error } = await supabase.from('workers').delete().eq('id', id);
+      if (error) {
+        setSyncError(error.message);
+        return false;
+      }
+      await loadRemote();
+      return true;
+    }
+    const next = workers.filter((worker) => worker.id !== id);
+    setWorkers(next);
+    persist(next);
+    return true;
+  }
+
   async function setWorkerStatus(id: number, status: WorkerStatus) {
     await updateWorker(id, { status });
   }
@@ -219,6 +243,7 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
     addWorker,
     updateWorker,
     archiveWorker,
+    removeWorker,
     setWorkerStatus,
     displayName: (worker) => `${worker.firstName} ${worker.lastName}`.trim(),
   };

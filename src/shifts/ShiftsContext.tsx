@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { supabase } from '../supabase/client';
+import { supabase, onAuthUserChange } from '../supabase/client';
 
 export interface ShiftDefinition {
   id: number;
@@ -169,7 +169,8 @@ export function ShiftsProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_assignments' }, () => void loadRemote())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_definitions' }, () => void loadRemote())
       .subscribe();
-    return () => { void client.removeChannel(channel); };
+    const unsubscribeAuth = onAuthUserChange(() => void loadRemote());
+    return () => { void client.removeChannel(channel); unsubscribeAuth(); };
   }, [loadRemote]);
 
   useEffect(() => persist(definitions, schedules), [definitions, schedules]);
