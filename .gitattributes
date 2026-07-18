@@ -1,0 +1,4 @@
+# Normalize all text files to LF in the repository and in the working tree.
+# Prevents CRLF/LF churn and the phantom "modified" state on Windows checkouts.
+# Binary files (images, etc.) are auto-detected and left untouched.
+* text=auto eol=lf
