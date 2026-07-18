@@ -49,7 +49,7 @@ export function MachineBoard() {
   const { machines } = useMachines();
   const { settings } = useSettings();
   const isMobile = useNarrowViewport(680);
-  const [openConflictId, setOpenConflictId] = useState<number | null>(null);
+  const [openConflictKey, setOpenConflictKey] = useState<string | null>(null);
 
   const controller = useMachineBoardController({
     jobs,
@@ -62,29 +62,31 @@ export function MachineBoard() {
     locale: lang === 'hr' ? 'hr-HR' : 'en-GB',
     rejectedMessage: lang === 'hr' ? 'Taj termin je već zauzet na tom stroju ili kod tog operatera.' : 'That slot is already booked for this machine or operator.',
     versionConflictMessage: lang === 'hr' ? 'Netko drugi je upravo izmijenio ovaj nalog — podaci su osvježeni.' : 'Someone else just updated this job — data refreshed.',
+    sequentialRouteMessage: t.machineBoard.sequentialRouteHint,
+    chainSegmentMessage: t.machineBoard.chainSegmentHint,
   });
 
   const machineByName = useMemo(() => new Map(machines.map((machine) => [machine.name, machine])), [machines]);
   const jobById = useMemo(() => new Map(jobs.map((job) => [job.id, job])), [jobs]);
 
+  // Dependencies are job-level: a connector anchors from the predecessor route's last slot to the
+  // successor route's first slot (the two ends of each order's chain of operation cards).
   const connectors: RenderedConnector[] = [];
-  controller.board.lanes.forEach((lane) => {
-    lane.jobs.forEach((boardJob) => {
-      (boardJob.job.dependencies ?? []).forEach((dependency) => {
-        const predecessorLayout = controller.cardLayouts.get(dependency.jobId);
-        const successorLayout = controller.cardLayouts.get(boardJob.job.id);
-        if (!predecessorLayout || !successorLayout) return;
-        const { sourceEdge, targetEdge } = edgesForDependencyType(dependency.type);
-        const source = cardEdgeAnchor(predecessorLayout, sourceEdge);
-        const target = cardEdgeAnchor(successorLayout, targetEdge);
-        connectors.push({
-          key: `${dependency.jobId}-${boardJob.job.id}`,
-          path: buildConnectorPath(source, target),
-          predecessorId: dependency.jobId,
-          successorId: boardJob.job.id,
-          dashed: dependency.type === 'SS' || dependency.type === 'SF',
-          selected: controller.selectedConnection?.predecessorId === dependency.jobId && controller.selectedConnection?.successorId === boardJob.job.id,
-        });
+  jobs.forEach((job) => {
+    (job.dependencies ?? []).forEach((dependency) => {
+      const predecessorAnchor = controller.jobAnchors.get(dependency.jobId);
+      const successorAnchor = controller.jobAnchors.get(job.id);
+      if (!predecessorAnchor || !successorAnchor) return;
+      const { sourceEdge, targetEdge } = edgesForDependencyType(dependency.type);
+      const source = cardEdgeAnchor(sourceEdge === 'end' ? predecessorAnchor.last : predecessorAnchor.first, sourceEdge);
+      const target = cardEdgeAnchor(targetEdge === 'end' ? successorAnchor.last : successorAnchor.first, targetEdge);
+      connectors.push({
+        key: `${dependency.jobId}-${job.id}`,
+        path: buildConnectorPath(source, target),
+        predecessorId: dependency.jobId,
+        successorId: job.id,
+        dashed: dependency.type === 'SS' || dependency.type === 'SF',
+        selected: controller.selectedConnection?.predecessorId === dependency.jobId && controller.selectedConnection?.successorId === job.id,
       });
     });
   });
@@ -93,8 +95,9 @@ export function MachineBoard() {
   let liveValid: boolean | null = null;
   let connectSourceId: number | null = controller.connectSource;
   if (controller.interaction?.kind === 'link') {
-    const sourceLayout = controller.cardLayouts.get(controller.interaction.sourceJobId);
-    if (sourceLayout) {
+    const sourceAnchor = controller.jobAnchors.get(controller.interaction.sourceJobId);
+    if (sourceAnchor) {
+      const sourceLayout = controller.interaction.sourceEdge === 'end' ? sourceAnchor.last : sourceAnchor.first;
       const source = cardEdgeAnchor(sourceLayout, controller.interaction.sourceEdge);
       livePath = buildConnectorPath(source, { x: controller.interaction.pointerX, y: controller.interaction.pointerY });
       liveValid = controller.interaction.classification === 'valid';
@@ -107,7 +110,7 @@ export function MachineBoard() {
     [controller.originMs, controller.spanHours, controller.pixelsPerHour, controller.zoom, controller.locale],
   );
 
-  const draggingJobId = controller.interaction && controller.interaction.kind !== 'link' ? controller.interaction.jobId : null;
+  const draggingKey = controller.interaction && controller.interaction.kind !== 'link' ? controller.interaction.ref.key : null;
   const dropTargetMachine = controller.interaction?.kind === 'move' ? controller.interaction.targetMachine : null;
 
   const cycleLabel = controller.cycle?.map((id) => jobById.get(id)?.order || `#${id}`).join(' → ');
@@ -133,7 +136,7 @@ export function MachineBoard() {
         onExportPng={() => void controller.exportPng()}
         onJumpToConflict={() => controller.jumpToConflict()}
         onChainSelected={controller.chainSelected}
-        selectionCount={controller.selectedIds.size}
+        selectionCount={controller.selectedKeys.size}
         views={controller.views}
         onSaveView={controller.saveView}
         onApplyView={controller.applyView}
@@ -196,13 +199,13 @@ export function MachineBoard() {
 
           {controller.laneOrder.map((lane) => {
             const layout = controller.laneLayouts.find((item) => item.machine === lane.machine)!;
-            const hours = lane.jobs.reduce((sum, item) => sum + (item.effectiveEnd - item.effectiveStart) / 3_600_000, 0);
+            const hours = lane.slots.reduce((sum, item) => sum + (item.slot.endMs - item.slot.startMs) / 3_600_000, 0);
             return (
               <MachineLane
                 key={lane.machine}
                 lane={layout}
                 machine={machineByName.get(lane.machine)}
-                jobCount={lane.jobs.length}
+                jobCount={lane.slots.length}
                 loadPercent={(hours / getWeeklyCapacityHours()) * 100}
                 emptyLabel={t.machineBoard.emptyLane}
                 isDropTarget={dropTargetMachine === lane.machine}
@@ -219,29 +222,30 @@ export function MachineBoard() {
             onSelectConnector={(predecessorId, successorId) => controller.setSelectedConnection({ predecessorId, successorId })}
           />
 
-          {controller.board.lanes.flatMap((lane) => lane.jobs).map((boardJob) => {
-            const layout = controller.cardLayouts.get(boardJob.job.id);
+          {controller.board.lanes.flatMap((lane) => lane.slots).map((boardSlot) => {
+            const { slot } = boardSlot;
+            const layout = controller.cardLayouts.get(slot.key);
             if (!layout) return null;
             return (
               <TaskCard
-                key={boardJob.job.id}
-                job={boardJob.job}
+                key={slot.key}
+                slot={slot}
                 layout={layout}
-                color={STATUS_COLORS[boardJob.job.status]}
-                conflicts={getJobConflicts(boardJob.job)}
-                selected={controller.selectedIds.has(boardJob.job.id)}
-                isDragging={draggingJobId === boardJob.job.id}
-                isConnectSource={connectSourceId === boardJob.job.id}
-                conflictsOpen={openConflictId === boardJob.job.id}
-                onToggleConflicts={() => setOpenConflictId((current) => (current === boardJob.job.id ? null : boardJob.job.id))}
-                onPointerDown={(event) => controller.beginMove(event, boardJob.job.id)}
-                onResizePointerDown={(event, edge) => controller.beginResize(event, boardJob.job.id, edge)}
-                onConnectPointerDown={(event, edge) => controller.beginLink(event, boardJob.job.id, edge)}
+                color={STATUS_COLORS[slot.job.status]}
+                conflicts={getJobConflicts(slot.job)}
+                selected={controller.selectedKeys.has(slot.key)}
+                isDragging={draggingKey === slot.key}
+                isConnectSource={connectSourceId === slot.jobId}
+                conflictsOpen={openConflictKey === slot.key}
+                onToggleConflicts={() => setOpenConflictKey((current) => (current === slot.key ? null : slot.key))}
+                onPointerDown={(event) => controller.beginMove(event, slot)}
+                onResizePointerDown={(event, edge) => controller.beginResize(event, slot, edge)}
+                onConnectPointerDown={(event, edge) => controller.beginLink(event, slot.jobId, edge)}
                 onPointerMove={controller.handlePointerMove}
                 onPointerUp={controller.handlePointerUp}
                 onPointerCancel={controller.handlePointerCancel}
-                onToggleSelect={(additive) => controller.toggleSelect(boardJob.job.id, additive)}
-                onRemove={() => controller.removeJob(boardJob.job.id)}
+                onToggleSelect={(additive) => controller.toggleSelect(slot.key, additive)}
+                onRemove={() => controller.removeSlot(slot)}
               />
             );
           })}

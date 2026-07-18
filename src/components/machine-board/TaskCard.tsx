@@ -1,12 +1,12 @@
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import type { Job } from '../../scheduling/SchedulingContext';
 import type { JobConflicts } from '../../scheduling/cpm';
+import type { OperationSlot } from '../../scheduling/operationSlots';
 import type { CardEdge } from '../../scheduling/boardGeometry';
 import type { CardLayout } from './useMachineBoardController';
 import { IconAlert } from '../Icons';
 
 interface TaskCardProps {
-  job: Job;
+  slot: OperationSlot;
   layout: CardLayout;
   color: string;
   conflicts: JobConflicts;
@@ -32,7 +32,7 @@ function hasAnyConflict(conflicts: JobConflicts): boolean {
 }
 
 export function TaskCard({
-  job,
+  slot,
   layout,
   color,
   conflicts,
@@ -51,6 +51,12 @@ export function TaskCard({
   onRemove,
 }: TaskCardProps) {
   const flagged = hasAnyConflict(conflicts);
+  const job = slot.job;
+  // A route's operation cards are chained left→right; only the ends carry a connector handle
+  // (dependencies are job-level), and a subtle chain glyph marks a card that has a sibling op.
+  const isRoutePart = slot.slotCount > 1;
+  const title = job.order || slot.machine;
+  const subtitle = slot.isOperation ? slot.name || slot.machine : slot.operator || job.operator || '—';
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -73,9 +79,10 @@ export function TaskCard({
 
   return (
     <div
-      className={`board-task-card${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${isConnectSource ? ' is-connect-source' : ''}${flagged ? ' has-conflict' : ''}`}
+      className={`board-task-card${slot.isOperation ? ' is-operation' : ''}${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${isConnectSource ? ' is-connect-source' : ''}${flagged ? ' has-conflict' : ''}`}
       style={{ left: layout.x, top: layout.y, width: layout.width, height: layout.height, borderLeftColor: color, touchAction: 'none' }}
       data-job-id={job.id}
+      data-slot-key={slot.key}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -83,14 +90,15 @@ export function TaskCard({
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      aria-label={job.order || job.machine}
+      aria-label={slot.isOperation ? `${title} · ${subtitle}` : title}
       aria-pressed={selected}
     >
+      {!slot.isFirstSlot && <span className="board-task-card-chain" aria-hidden="true">‹</span>}
       <div className="board-task-card-resize left" onPointerDown={(event) => onResizePointerDown(event, 'start')} />
-      <div className="board-task-card-connect left" onPointerDown={(event) => onConnectPointerDown(event, 'start')} title="Drag to link" />
+      {slot.isFirstSlot && <div className="board-task-card-connect left" onPointerDown={(event) => onConnectPointerDown(event, 'start')} title="Drag to link" />}
       <div className="board-task-card-body">
-        <strong>{job.order || job.machine}</strong>
-        <small>{job.operator || '—'}</small>
+        <strong>{title}</strong>
+        <small>{subtitle}</small>
         <div className="progress-bar-track">
           <div className="progress-bar-fill" style={{ width: `${job.progress}%`, background: job.status === 'done' ? 'var(--success-color)' : color }} />
         </div>
@@ -111,8 +119,9 @@ export function TaskCard({
           {conflictMessages.map((message) => <span key={message}>{message}</span>)}
         </div>
       )}
-      <div className="board-task-card-connect right" onPointerDown={(event) => onConnectPointerDown(event, 'end')} title="Drag to link" />
+      {slot.isLastSlot && <div className="board-task-card-connect right" onPointerDown={(event) => onConnectPointerDown(event, 'end')} title="Drag to link" />}
       <div className="board-task-card-resize right" onPointerDown={(event) => onResizePointerDown(event, 'end')} />
+      {isRoutePart && !slot.isLastSlot && <span className="board-task-card-chain-end" aria-hidden="true">›</span>}
     </div>
   );
 }

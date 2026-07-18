@@ -331,6 +331,16 @@ export function splitMachineChain(machine: string | undefined | null): string[] 
   return (machine || '').split('→').map((name) => name.trim()).filter(Boolean);
 }
 
+/**
+ * Joins machine names back into the canonical routing-chain display string. The inverse of
+ * {@link splitMachineChain} and the single source of truth for the ' → ' separator — the same
+ * format WorkOrderCreator writes (`operations.map(op => op.machine).join(' → ')`), so a chain the
+ * board regenerates after an operation's machine changes still round-trips through splitMachineChain.
+ */
+export function joinMachineChain(machines: string[]): string {
+  return machines.map((name) => name.trim()).filter(Boolean).join(' → ');
+}
+
 interface MachineInterval {
   machine: string;
   start: number;

@@ -4,8 +4,9 @@ import type { UpdateResult } from '../../scheduling/SchedulingContext';
 import type { Machine } from '../../machines/MachinesContext';
 import type { AppSettings } from '../../settings/SettingsContext';
 import type { JobConflicts } from '../../scheduling/cpm';
-import { findDependencyCycle, jobsToScheduleInput, cascadeDependents, toLocalDateTimeString, computeEffectiveSchedule } from '../../scheduling/cpm';
+import { findDependencyCycle, jobsToScheduleInput, cascadeDependents, toLocalDateTimeString, computeEffectiveSchedule, joinMachineChain } from '../../scheduling/cpm';
 import { buildBoardLanes, classifyLinkCandidate, type BoardModel, type BoardLane, type LinkClassification } from '../../scheduling/boardData';
+import type { OperationSlot } from '../../scheduling/operationSlots';
 import { hasChildren } from '../../scheduling/hierarchy';
 import {
   ZOOM_PRESETS,
@@ -26,14 +27,45 @@ import {
 export type SortBy = 'name' | 'load';
 export type { LinkClassification } from '../../scheduling/boardData';
 
+const MIN_OP_HOURS = 0.25;
+
+/** A slot's key plus the descriptors an interaction needs to decide which write a gesture maps to. */
+interface SlotRef {
+  key: string;
+  jobId: number;
+  opId: number | null;
+  opIndex: number | null;
+  isOperation: boolean;
+  isChainSegment: boolean;
+  isFirstSlot: boolean;
+  machine: string;
+}
+
+function slotRefOf(slot: OperationSlot): SlotRef {
+  return {
+    key: slot.key,
+    jobId: slot.jobId,
+    opId: slot.opId,
+    opIndex: slot.opIndex,
+    isOperation: slot.isOperation,
+    isChainSegment: slot.isChainSegment,
+    isFirstSlot: slot.isFirstSlot,
+    machine: slot.machine,
+  };
+}
+
 interface MoveInteraction {
   kind: 'move';
-  jobId: number;
+  ref: SlotRef;
   pointerId: number;
   startClientX: number;
   startClientY: number;
-  originStartMs: number;
-  originEndMs: number;
+  /** The dragged slot's own window — drives the live card position. */
+  slotStartMs: number;
+  slotEndMs: number;
+  /** The owning job's window — what a time-move actually rewrites. */
+  jobStartMs: number;
+  jobEndMs: number;
   originMachine: string;
   liveDeltaXPx: number;
   liveDeltaYPx: number;
@@ -43,11 +75,14 @@ interface MoveInteraction {
 
 interface ResizeInteraction {
   kind: 'resize-start' | 'resize-end';
-  jobId: number;
+  ref: SlotRef;
   pointerId: number;
   startClientX: number;
-  originStartMs: number;
-  originEndMs: number;
+  slotStartMs: number;
+  slotEndMs: number;
+  jobStartMs: number;
+  jobEndMs: number;
+  originHours: number;
   liveDeltaXPx: number;
 }
 
@@ -66,7 +101,9 @@ interface LinkInteraction {
 type Interaction = MoveInteraction | ResizeInteraction | LinkInteraction;
 
 export interface CardLayout {
+  key: string;
   jobId: number;
+  slot: OperationSlot;
   x: number;
   y: number;
   width: number;
@@ -97,6 +134,8 @@ export interface MachineBoardControllerOptions {
   locale: string;
   rejectedMessage: string;
   versionConflictMessage: string;
+  sequentialRouteMessage: string;
+  chainSegmentMessage: string;
 }
 
 const CLICK_THRESHOLD_PX = 4;
@@ -124,13 +163,27 @@ function schedulingOptionsFrom(settings: AppSettings) {
   return { holidays: settings.holidays, workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, skipWeekends: true };
 }
 
+/** Rewrites one operation's machine and regenerates the job's legacy display chain to match. */
+function patchOperationMachine(job: Job, opIndex: number, newMachine: string): Partial<Job> {
+  const operations = (job.operations ?? []).map((op, index) => (index === opIndex ? { ...op, machine: newMachine } : op));
+  return { operations, machine: joinMachineChain(operations.map((op) => op.machine)) };
+}
+
+/** Edits one operation's hours (reflowing later ops) and keeps the job's parent window in step. */
+function patchOperationHours(job: Job, opIndex: number, newHours: number): Partial<Job> {
+  const operations = (job.operations ?? []).map((op, index) => (index === opIndex ? { ...op, hours: newHours } : op));
+  const totalHours = operations.reduce((sum, op) => sum + (op.hours || 0), 0);
+  const start = new Date(job.start).getTime();
+  return { operations, end: toLocalDateTimeString(new Date(start + totalHours * 3_600_000)) };
+}
+
 export function useMachineBoardController(options: MachineBoardControllerOptions) {
-  const { jobs, machines, updateJob, removeJob, restoreBackup, getJobConflicts, settings, locale, rejectedMessage, versionConflictMessage } = options;
+  const { jobs, machines, updateJob, removeJob, restoreBackup, getJobConflicts, settings, locale, rejectedMessage, versionConflictMessage, sequentialRouteMessage, chainSegmentMessage } = options;
 
   const [zoom, setZoom] = useState<ZoomPreset>('day');
   const [sortBy, setSortBy] = useState<SortBy>('name');
   const [statusFilter, setStatusFilter] = useState<Job['status'] | 'all'>('all');
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [interaction, setInteraction] = useState<Interaction | null>(null);
   const [history, setHistory] = useState<Job[][]>([]);
   const [future, setFuture] = useState<Job[][]>([]);
@@ -174,7 +227,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     const lanes = [...board.lanes];
     if (sortBy === 'name') lanes.sort((a, b) => a.machine.localeCompare(b.machine));
     else lanes.sort((a, b) => {
-      const loadOf = (lane: BoardLane) => lane.jobs.reduce((sum, item) => sum + (item.effectiveEnd - item.effectiveStart), 0);
+      const loadOf = (lane: BoardLane) => lane.slots.reduce((sum, item) => sum + (item.slot.endMs - item.slot.startMs), 0);
       return loadOf(b) - loadOf(a);
     });
     return lanes;
@@ -182,21 +235,41 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
 
   const { laneLayouts, cardLayouts, totalHeight } = useMemo(() => {
     const lanes: LaneLayout[] = [];
-    const cards = new Map<number, CardLayout>();
+    const cards = new Map<string, CardLayout>();
     let cursorY = 0;
     laneOrder.forEach((lane) => {
       const laneHeight = LANE_HEADER_HEIGHT + lane.rowCount * CARD_ROW_HEIGHT + LANE_GAP;
       lanes.push({ machine: lane.machine, top: cursorY, height: laneHeight });
-      lane.jobs.forEach((boardJob) => {
-        const x = timeToX(boardJob.effectiveStart, originMs, pixelsPerHour);
-        const width = Math.max(MIN_CARD_WIDTH, timeToX(boardJob.effectiveEnd, originMs, pixelsPerHour) - x);
-        const y = cursorY + LANE_HEADER_HEIGHT + boardJob.row * CARD_ROW_HEIGHT + (CARD_ROW_HEIGHT - CARD_HEIGHT) / 2;
-        cards.set(boardJob.job.id, { jobId: boardJob.job.id, x, y, width, height: CARD_HEIGHT, laneMachine: lane.machine });
+      lane.slots.forEach((boardSlot) => {
+        const { slot } = boardSlot;
+        const x = timeToX(slot.startMs, originMs, pixelsPerHour);
+        const width = Math.max(MIN_CARD_WIDTH, timeToX(slot.endMs, originMs, pixelsPerHour) - x);
+        const y = cursorY + LANE_HEADER_HEIGHT + boardSlot.row * CARD_ROW_HEIGHT + (CARD_ROW_HEIGHT - CARD_HEIGHT) / 2;
+        cards.set(slot.key, { key: slot.key, jobId: slot.jobId, slot, x, y, width, height: CARD_HEIGHT, laneMachine: lane.machine });
       });
       cursorY += laneHeight;
     });
     return { laneLayouts: lanes, cardLayouts: cards, totalHeight: cursorY };
   }, [laneOrder, originMs, pixelsPerHour]);
+
+  // First/last slot layout per job — dependency connectors anchor to the route's ends (edges are
+  // job-level; op-to-op links inside a strictly sequential route would be meaningless).
+  const jobAnchors = useMemo(() => {
+    const anchors = new Map<number, { first: CardLayout; last: CardLayout }>();
+    board.lanes.forEach((lane) => {
+      lane.slots.forEach(({ slot }) => {
+        const layout = cardLayouts.get(slot.key);
+        if (!layout) return;
+        const existing = anchors.get(slot.jobId);
+        if (!existing) anchors.set(slot.jobId, { first: layout, last: layout });
+        else {
+          if (layout.slot.startMs < existing.first.slot.startMs) existing.first = layout;
+          if (layout.slot.endMs > existing.last.slot.endMs) existing.last = layout;
+        }
+      });
+    });
+    return anchors;
+  }, [board.lanes, cardLayouts]);
 
   useEffect(() => {
     document.documentElement.dataset.ganttDragging = interaction ? 'true' : 'false';
@@ -213,6 +286,8 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
       if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     };
   }, [toast]);
+
+  const warn = useCallback((message: string) => setToast({ id: Date.now(), tone: 'warning', message }), []);
 
   const showResult = useCallback((result: UpdateResult) => {
     if (result.ok) return;
@@ -256,11 +331,11 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     return { x: clientX - rect.left, y: clientY - rect.top };
   }, []);
 
-  const toggleSelect = useCallback((jobId: number, additive: boolean) => {
-    setSelectedIds((current) => {
-      const next = additive ? new Set(current) : new Set<number>();
-      if (next.has(jobId) && additive) next.delete(jobId);
-      else next.add(jobId);
+  const toggleSelect = useCallback((slotKey: string, additive: boolean) => {
+    setSelectedKeys((current) => {
+      const next = additive ? new Set(current) : new Set<string>();
+      if (next.has(slotKey) && additive) next.delete(slotKey);
+      else next.add(slotKey);
       return next;
     });
   }, []);
@@ -280,38 +355,47 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
 
   const findLaneAt = useCallback((y: number) => laneLayouts.find((lane) => y >= lane.top && y < lane.top + lane.height) ?? null, [laneLayouts]);
 
-  const beginMove = useCallback((event: ReactPointerEvent<HTMLElement>, jobId: number) => {
-    const job = jobs.find((item) => item.id === jobId);
-    if (!job || !job.start || !job.end) return;
+  const beginMove = useCallback((event: ReactPointerEvent<HTMLElement>, slot: OperationSlot) => {
+    const job = jobs.find((item) => item.id === slot.jobId);
+    if (!job || !job.start) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    const jobStartMs = new Date(job.start).getTime();
+    const jobEndMs = job.end ? new Date(job.end).getTime() : jobStartMs;
     setInteractionBoth({
       kind: 'move',
-      jobId,
+      ref: slotRefOf(slot),
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
-      originStartMs: new Date(job.start).getTime(),
-      originEndMs: new Date(job.end).getTime(),
-      originMachine: job.machine,
+      slotStartMs: slot.startMs,
+      slotEndMs: slot.endMs,
+      jobStartMs,
+      jobEndMs,
+      originMachine: slot.machine,
       liveDeltaXPx: 0,
       liveDeltaYPx: 0,
-      targetMachine: job.machine,
+      targetMachine: slot.machine,
       moved: false,
     });
   }, [jobs, setInteractionBoth]);
 
-  const beginResize = useCallback((event: ReactPointerEvent<HTMLElement>, jobId: number, edge: 'start' | 'end') => {
-    const job = jobs.find((item) => item.id === jobId);
-    if (!job || !job.start || !job.end) return;
+  const beginResize = useCallback((event: ReactPointerEvent<HTMLElement>, slot: OperationSlot, edge: 'start' | 'end') => {
+    const job = jobs.find((item) => item.id === slot.jobId);
+    if (!job || !job.start) return;
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    const jobStartMs = new Date(job.start).getTime();
+    const jobEndMs = job.end ? new Date(job.end).getTime() : jobStartMs;
     setInteractionBoth({
       kind: edge === 'start' ? 'resize-start' : 'resize-end',
-      jobId,
+      ref: slotRefOf(slot),
       pointerId: event.pointerId,
       startClientX: event.clientX,
-      originStartMs: new Date(job.start).getTime(),
-      originEndMs: new Date(job.end).getTime(),
+      slotStartMs: slot.startMs,
+      slotEndMs: slot.endMs,
+      jobStartMs,
+      jobEndMs,
+      originHours: slot.hours,
       liveDeltaXPx: 0,
     });
   }, [jobs, setInteractionBoth]);
@@ -337,44 +421,101 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
   // card's badge after commit but never block a drop here — advisory-only, matching how the rest
   // of the app (edit modal, add-job form) already treats getJobConflicts.
   const commitMove = useCallback((state: MoveInteraction) => {
+    const { ref } = state;
+    const machineChanged = Boolean(state.targetMachine) && state.targetMachine !== state.originMachine;
+    const job = jobs.find((item) => item.id === ref.jobId);
+    if (!job) return;
+
+    // --- Lane move: dropping a card on a different machine's lane. ---
+    if (machineChanged) {
+      if (ref.isOperation && ref.opIndex !== null) {
+        pushHistory();
+        void updateJob(ref.jobId, patchOperationMachine(job, ref.opIndex, state.targetMachine)).then(showResult);
+        return;
+      }
+      if (ref.isChainSegment) {
+        warn(chainSegmentMessage);
+        return;
+      }
+      // Synthetic single-machine job: reassign the machine (and honour any horizontal drag too).
+      const deltaMs = (state.liveDeltaXPx / pixelsPerHour) * 3_600_000;
+      const newStart = snapToShiftBoundary(state.jobStartMs + deltaMs, settings.workdayStart, settings.workdayEnd);
+      const duration = state.jobEndMs - state.jobStartMs;
+      const startStr = toLocalDateTimeString(new Date(newStart));
+      const endStr = toLocalDateTimeString(new Date(newStart + duration));
+      pushHistory();
+      void updateJob(ref.jobId, { start: startStr, end: endStr, machine: state.targetMachine }).then(showResult);
+      runCascade(ref.jobId, startStr, endStr);
+      return;
+    }
+
+    // --- Horizontal (time) move. Only a route/chain's first slot — or a plain synthetic card —
+    //     may move the job's start; a middle operation is strictly sequential, so it can't. ---
+    if (!ref.isFirstSlot) {
+      warn(sequentialRouteMessage);
+      return;
+    }
     const deltaMs = (state.liveDeltaXPx / pixelsPerHour) * 3_600_000;
-    const rawStart = state.originStartMs + deltaMs;
-    const newStart = snapToShiftBoundary(rawStart, settings.workdayStart, settings.workdayEnd);
-    const duration = state.originEndMs - state.originStartMs;
+    const newStart = snapToShiftBoundary(state.jobStartMs + deltaMs, settings.workdayStart, settings.workdayEnd);
+    const duration = state.jobEndMs - state.jobStartMs;
     const newEnd = newStart + duration;
     const startStr = toLocalDateTimeString(new Date(newStart));
     const endStr = toLocalDateTimeString(new Date(newEnd));
-    const machineChanged = state.targetMachine && state.targetMachine !== state.originMachine;
 
     pushHistory();
-    void updateJob(state.jobId, { start: startStr, end: endStr, ...(machineChanged ? { machine: state.targetMachine } : {}) }).then(showResult);
-    runCascade(state.jobId, startStr, endStr);
+    void updateJob(ref.jobId, { start: startStr, end: endStr }).then(showResult);
+    runCascade(ref.jobId, startStr, endStr);
 
-    if (selectedIds.has(state.jobId)) {
-      const snappedDelta = newStart - state.originStartMs;
-      selectedIds.forEach((otherId) => {
-        if (otherId === state.jobId) return;
-        const other = jobs.find((job) => job.id === otherId);
-        if (!other || !other.start || !other.end) return;
+    // Group move: shift every other selected job that can move by time, by the same snapped delta.
+    if (selectedKeys.has(ref.key)) {
+      const snappedDelta = newStart - state.jobStartMs;
+      const movedJobIds = new Set<number>([ref.jobId]);
+      selectedKeys.forEach((otherKey) => {
+        const layout = cardLayouts.get(otherKey);
+        if (!layout || !layout.slot.isFirstSlot || movedJobIds.has(layout.jobId)) return;
+        movedJobIds.add(layout.jobId);
+        const other = jobs.find((item) => item.id === layout.jobId);
+        if (!other || !other.start) return;
         const otherStart = new Date(other.start).getTime() + snappedDelta;
-        const otherEnd = new Date(other.end).getTime() + snappedDelta;
-        void updateJob(otherId, { start: toLocalDateTimeString(new Date(otherStart)), end: toLocalDateTimeString(new Date(otherEnd)) }).then(showResult);
+        const otherEnd = (other.end ? new Date(other.end).getTime() : new Date(other.start).getTime()) + snappedDelta;
+        void updateJob(layout.jobId, { start: toLocalDateTimeString(new Date(otherStart)), end: toLocalDateTimeString(new Date(otherEnd)) }).then(showResult);
       });
     }
-  }, [jobs, pixelsPerHour, pushHistory, runCascade, selectedIds, settings.workdayEnd, settings.workdayStart, showResult, updateJob]);
+  }, [cardLayouts, chainSegmentMessage, jobs, pixelsPerHour, pushHistory, runCascade, selectedKeys, sequentialRouteMessage, settings.workdayEnd, settings.workdayStart, showResult, updateJob, warn]);
 
   const commitResize = useCallback((state: ResizeInteraction) => {
+    const { ref } = state;
+    const job = jobs.find((item) => item.id === ref.jobId);
+    if (!job) return;
     const deltaMs = (state.liveDeltaXPx / pixelsPerHour) * 3_600_000;
-    let newStartMs = state.originStartMs;
-    let newEndMs = state.originEndMs;
-    if (state.kind === 'resize-start') newStartMs = Math.min(state.originEndMs - 15 * 60_000, state.originStartMs + deltaMs);
-    else newEndMs = Math.max(state.originStartMs + 15 * 60_000, state.originEndMs + deltaMs);
+
+    // --- Operation card: resize edits the operation's hours (reflowing the rest of the route). The
+    //     op stays anchored at its start; dragging the end grows it, dragging the start shrinks it. ---
+    if (ref.isOperation && ref.opIndex !== null) {
+      const deltaHours = (state.kind === 'resize-end' ? deltaMs : -deltaMs) / 3_600_000;
+      const newHours = Math.max(MIN_OP_HOURS, state.originHours + deltaHours);
+      pushHistory();
+      const patch = patchOperationHours(job, ref.opIndex, newHours);
+      void updateJob(ref.jobId, patch).then(showResult);
+      if (patch.end) runCascade(ref.jobId, job.start, patch.end);
+      return;
+    }
+    if (ref.isChainSegment) {
+      warn(chainSegmentMessage);
+      return;
+    }
+
+    // --- Synthetic single-machine card: resize the job's own window (unchanged behaviour). ---
+    let newStartMs = state.jobStartMs;
+    let newEndMs = state.jobEndMs;
+    if (state.kind === 'resize-start') newStartMs = Math.min(state.jobEndMs - 15 * 60_000, state.jobStartMs + deltaMs);
+    else newEndMs = Math.max(state.jobStartMs + 15 * 60_000, state.jobEndMs + deltaMs);
     const startStr = toLocalDateTimeString(new Date(newStartMs));
     const endStr = toLocalDateTimeString(new Date(newEndMs));
     pushHistory();
-    void updateJob(state.jobId, { start: startStr, end: endStr }).then(showResult);
-    runCascade(state.jobId, startStr, endStr);
-  }, [pixelsPerHour, pushHistory, runCascade, showResult, updateJob]);
+    void updateJob(ref.jobId, { start: startStr, end: endStr }).then(showResult);
+    runCascade(ref.jobId, startStr, endStr);
+  }, [chainSegmentMessage, jobs, pixelsPerHour, pushHistory, runCascade, showResult, updateJob, warn]);
 
   // Cycle/self/duplicate checks are the only hard blocks (classification !== 'valid'); this is the
   // single write every other page's dependency view (Gantt connectors, capacity, conflict badges)
@@ -427,16 +568,17 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     switch (current.kind) {
       case 'move': {
         if (!current.moved) {
-          toggleSelect(current.jobId, event.shiftKey || event.ctrlKey || event.metaKey);
+          toggleSelect(current.ref.key, event.shiftKey || event.ctrlKey || event.metaKey);
           if (connectMode) {
+            const jobId = current.ref.jobId;
             if (connectSource == null) {
-              setConnectSource(current.jobId);
-            } else if (connectSource === current.jobId) {
+              setConnectSource(jobId);
+            } else if (connectSource === jobId) {
               setConnectSource(null);
             } else {
-              const classification = classifyLinkTarget(connectSource, current.jobId);
+              const classification = classifyLinkTarget(connectSource, jobId);
               if (classification === 'valid') {
-                const successor = jobs.find((job) => job.id === current.jobId);
+                const successor = jobs.find((job) => job.id === jobId);
                 if (successor) {
                   pushHistory();
                   void updateJob(successor.id, { dependencies: [...(successor.dependencies ?? []), { jobId: connectSource, type: 'FS', lagHours: 0 }] }).then(showResult);
@@ -505,27 +647,34 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
   }, [originMs, pixelsPerHour]);
 
   /** Packs every leaf job onto its machine back-to-back, respecting dependency starts (same
-   *  greedy scheduler the Gantt page offers, so both pages resolve overlaps identically). */
+   *  greedy scheduler the Gantt page offers, so both pages resolve overlaps identically). Routed
+   *  orders pack on their first machine's lane and shift `job.start` only — never reorder ops. */
   const autoSchedule = useCallback(async () => {
     pushHistory();
     const effective = computeEffectiveSchedule(jobsToScheduleInput(jobs), schedulingOptions);
     const machineEnd = new Map<string, number>();
+    /** The lane a job first occupies: its first operation's machine, else its (possibly-chain) machine. */
+    const packingKey = (job: Job): string => {
+      if (job.operations?.length) return (job.operations.find((op) => op.machine.trim())?.machine ?? '').trim();
+      return job.machine.trim();
+    };
     for (const job of [...jobs].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())) {
       if (hasChildren(jobs, job.id) || !job.start || !job.end) continue;
       const duration = Math.max(0, new Date(job.end).getTime() - new Date(job.start).getTime());
       const dependencyStart = effective.get(job.id)?.start ?? new Date(job.start).getTime();
-      const previousEnd = machineEnd.get(job.machine) ?? 0;
+      const key = packingKey(job);
+      const previousEnd = machineEnd.get(key) ?? 0;
       const start = Math.max(dependencyStart, previousEnd);
-      machineEnd.set(job.machine, start + duration);
+      machineEnd.set(key, start + duration);
       if (start !== new Date(job.start).getTime()) {
         await updateJob(job.id, { start: toLocalDateTimeString(new Date(start)), end: toLocalDateTimeString(new Date(start + duration)) }).then(showResult);
       }
     }
   }, [jobs, pushHistory, schedulingOptions, showResult, updateJob]);
 
-  // Arrow-key nudge: moves every selected card by one zoom-sized step without pointer dragging.
+  // Arrow-key nudge: moves every selected (movable) job by one zoom-sized step without pointer dragging.
   useEffect(() => {
-    if (selectedIds.size === 0) return;
+    if (selectedKeys.size === 0) return;
     const stepHours = zoom === 'week' ? 24 : zoom === 'day' ? 8 : 1;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -534,31 +683,35 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
       event.preventDefault();
       const deltaMs = (event.key === 'ArrowLeft' ? -stepHours : stepHours) * 3_600_000;
       pushHistory();
-      selectedIds.forEach((id) => {
-        const job = jobs.find((item) => item.id === id);
-        if (!job || !job.start || !job.end) return;
+      const movedJobIds = new Set<number>();
+      selectedKeys.forEach((key) => {
+        const layout = cardLayouts.get(key);
+        if (!layout || !layout.slot.isFirstSlot || movedJobIds.has(layout.jobId)) return;
+        movedJobIds.add(layout.jobId);
+        const job = jobs.find((item) => item.id === layout.jobId);
+        if (!job || !job.start) return;
         const start = new Date(job.start).getTime() + deltaMs;
-        const end = new Date(job.end).getTime() + deltaMs;
-        void updateJob(id, { start: toLocalDateTimeString(new Date(start)), end: toLocalDateTimeString(new Date(end)) }).then(showResult);
+        const end = (job.end ? new Date(job.end).getTime() : new Date(job.start).getTime()) + deltaMs;
+        void updateJob(layout.jobId, { start: toLocalDateTimeString(new Date(start)), end: toLocalDateTimeString(new Date(end)) }).then(showResult);
       });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [jobs, pushHistory, selectedIds, showResult, updateJob, zoom]);
+  }, [cardLayouts, jobs, pushHistory, selectedKeys, showResult, updateJob, zoom]);
 
   const exportCsv = useCallback(() => {
-    const header = ['machine', 'order', 'operator', 'start', 'end', 'status', 'progress'];
-    const rows = board.lanes.flatMap((lane) => lane.jobs.map(({ job }) =>
-      [job.machine, job.order, job.operator, job.start, job.end, job.status, String(job.progress)]
+    const header = ['machine', 'order', 'operation', 'operator', 'start', 'end', 'status', 'progress'];
+    const rows = board.slots.map((slot) =>
+      [slot.machine, slot.job.order, slot.name ?? '', slot.operator ?? slot.job.operator, toLocalDateTimeString(new Date(slot.startMs)), toLocalDateTimeString(new Date(slot.endMs)), slot.job.status, String(slot.job.progress)]
         .map((value) => `"${(value ?? '').replace(/"/g, '""')}"`).join(','),
-    ));
+    );
     const blob = new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `dravaint-machine-schedule-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
-  }, [board.lanes]);
+  }, [board.slots]);
 
   const setZoomPreset = useCallback((next: ZoomPreset) => setZoom(next), []);
   const cycleZoom = useCallback((direction: 1 | -1) => {
@@ -569,15 +722,15 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     });
   }, []);
 
-  /** Cycles the selection through every card that currently has a conflict, scrolling it into view. */
+  /** Cycles the selection through every slot that currently has a conflict, scrolling it into view. */
   const conflictCursorRef = useRef(0);
   const jumpToConflict = useCallback(() => {
-    const flagged = board.lanes.flatMap((lane) => lane.jobs).filter(({ job }) => Object.keys(getJobConflicts(job)).length > 0);
+    const flagged = board.lanes.flatMap((lane) => lane.slots).filter(({ slot }) => Object.keys(getJobConflicts(slot.job)).length > 0);
     if (flagged.length === 0) return 0;
     const next = flagged[conflictCursorRef.current % flagged.length];
     conflictCursorRef.current += 1;
-    setSelectedIds(new Set([next.job.id]));
-    const layout = cardLayouts.get(next.job.id);
+    setSelectedKeys(new Set([next.slot.key]));
+    const layout = cardLayouts.get(next.slot.key);
     const container = scrollRef.current;
     if (layout && container) {
       container.scrollTo({ left: Math.max(0, layout.x - 200), top: Math.max(0, layout.y - 120), behavior: 'smooth' });
@@ -585,12 +738,17 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     return flagged.length;
   }, [board.lanes, cardLayouts, getJobConflicts]);
 
-  /** Chains the currently selected cards Finish-to-Start in start-time order (skips edges that
-   *  already exist or would close a cycle). */
+  /** Chains the jobs of the currently selected cards Finish-to-Start in start-time order (skips
+   *  edges that already exist or would close a cycle). */
   const chainSelected = useCallback(() => {
-    if (selectedIds.size < 2) return;
+    const selectedJobIds = new Set<number>();
+    selectedKeys.forEach((key) => {
+      const layout = cardLayouts.get(key);
+      if (layout) selectedJobIds.add(layout.jobId);
+    });
+    if (selectedJobIds.size < 2) return;
     const ordered = jobs
-      .filter((job) => selectedIds.has(job.id) && job.start)
+      .filter((job) => selectedJobIds.has(job.id) && job.start)
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
     if (ordered.length < 2) return;
     pushHistory();
@@ -604,7 +762,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
       working = working.map((job) => (job.id === successor.id ? { ...job, dependencies: nextDependencies } : job));
       void updateJob(successor.id, { dependencies: nextDependencies }).then(showResult);
     }
-  }, [jobs, pushHistory, selectedIds, showResult, updateJob]);
+  }, [cardLayouts, jobs, pushHistory, selectedKeys, showResult, updateJob]);
 
   const [views, setViews] = useState<BoardView[]>(loadBoardViews);
   const saveView = useCallback((name: string) => {
@@ -631,6 +789,27 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     });
   }, []);
 
+  /** A card's "×": on an operation card it deletes that operation (regenerating the display chain
+   *  and parent window); on a plain/synthetic card it removes the whole order. */
+  const removeSlot = useCallback((slot: OperationSlot) => {
+    const job = jobs.find((item) => item.id === slot.jobId);
+    if (!job) return;
+    if (slot.isOperation && slot.opIndex !== null && job.operations && job.operations.length > 1) {
+      const operations = job.operations.filter((_, index) => index !== slot.opIndex);
+      const totalHours = operations.reduce((sum, op) => sum + (op.hours || 0), 0);
+      const start = new Date(job.start).getTime();
+      pushHistory();
+      void updateJob(job.id, {
+        operations,
+        machine: joinMachineChain(operations.map((op) => op.machine)),
+        end: toLocalDateTimeString(new Date(start + totalHours * 3_600_000)),
+      }).then(showResult);
+      return;
+    }
+    pushHistory();
+    void removeJob(job.id);
+  }, [jobs, pushHistory, removeJob, showResult, updateJob]);
+
   /** PNG snapshot of the whole board content for shift-handover printouts. */
   const exportPng = useCallback(async () => {
     if (!contentRef.current) return;
@@ -650,6 +829,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     laneOrder,
     laneLayouts,
     cardLayouts,
+    jobAnchors,
     totalHeight,
     contentWidth,
     zoom,
@@ -674,7 +854,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     pixelsPerHour,
     spanHours,
     locale,
-    selectedIds,
+    selectedKeys,
     toggleSelect,
     interaction,
     connectMode,
@@ -704,6 +884,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     cycle,
     getJobConflicts,
     removeJob,
+    removeSlot,
     toContentCoords,
   };
 }
