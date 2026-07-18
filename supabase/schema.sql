@@ -410,6 +410,22 @@ drop policy if exists audit_admin_read on public.audit_logs;
 create policy audit_admin_read on public.audit_logs for select to authenticated using (public.current_app_role() in ('admin','boss'));
 
 -- ---------------------------------------------------------------------------
+-- Base table privileges. Do NOT rely on the project's default privileges: on some
+-- Supabase projects tables created here get no automatic grants for `authenticated`,
+-- and the privilege check runs BEFORE RLS — every direct read/write then fails with
+-- "permission denied for table …" regardless of role. Grant explicitly so the RLS
+-- policies above are the only gate. (The column-hardening section below deliberately
+-- narrows some of these again and must stay AFTER this block.)
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public grant usage, select on sequences to authenticated;
+-- audit_logs rows are written only by the SECURITY DEFINER audit trigger; SELECT is
+-- RLS-restricted to admin/boss, and clients need no direct write access at all.
+revoke insert, update, delete on public.audit_logs from authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Column-level credential hardening (RLS is row-level only; PostgREST honours
 -- column privileges, so we revoke table-level SELECT and re-grant safe columns).
 --   * profiles.rfid_code   — a badge is an authentication credential; a logged-in
