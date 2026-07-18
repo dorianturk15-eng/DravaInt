@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { DravaGantt, type DravaGanttHandle } from '../components/drava-gantt/DravaGantt';
+import { DravaGantt, type DravaGanttHandle, type GanttDragPreview } from '../components/drava-gantt/DravaGantt';
 import type { GanttLane, GanttTask, GanttViewMode } from '../components/drava-gantt/types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
 import { useScheduling, type DependencyType, type UpdateResult } from '../scheduling/SchedulingContext';
 import { buildGanttTasks, jobIdFromTaskId, hasChildren, computeOperationSchedule } from '../scheduling/hierarchy';
-import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, computeScheduleSlack, cascadeDependents, toLocalDateTimeString, splitMachineChain } from '../scheduling/cpm';
+import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, computeScheduleSlack, cascadeDependents, toLocalDateTimeString, splitMachineChain, type JobConflicts } from '../scheduling/cpm';
+import { snapToShiftBoundary } from '../scheduling/boardGeometry';
 import { useSettings } from '../settings/SettingsContext';
 import { useMachines } from '../machines/MachinesContext';
 import type { Job } from '../scheduling/SchedulingContext';
@@ -41,6 +42,20 @@ function normalizeViewMode(value: unknown): GanttViewMode {
   return LEGACY_VIEW_MODES[String(value)] ?? 'day';
 }
 
+/** Flattens the conflict object into short human-readable reasons for the drag tooltip. */
+function summarizeConflicts(conflicts: JobConflicts, hr: boolean): string[] {
+  const overlap = (label: string, other?: { otherOrder: string }) => (other ? `${label} ${other.otherOrder}` : undefined);
+  return [
+    overlap(hr ? 'Preklapanje:' : 'Overlaps', conflicts.machineOverlap),
+    overlap(hr ? 'Operater zauzet:' : 'Operator busy:', conflicts.operatorOverlap),
+    conflicts.unqualified?.message,
+    conflicts.shiftOutside?.message,
+    conflicts.hoursExceeded?.message,
+    conflicts.restViolation?.message,
+    conflicts.absent?.message,
+  ].filter(Boolean) as string[];
+}
+
 export default function GanttChart() {
   const { t, lang } = useLanguage();
   const { jobs, loading, addJob, updateJob, removeJob, restoreBackup, getJobConflicts } = useScheduling();
@@ -54,6 +69,8 @@ export default function GanttChart() {
   const [depError, setDepError] = useState('');
   const [writeWarning, setWriteWarning] = useState('');
   const writeWarningTimerRef = useRef<number | null>(null);
+  const [undoToast, setUndoToast] = useState('');
+  const undoToastTimerRef = useRef<number | null>(null);
   const [viewMode, setViewMode] = useState<GanttViewMode>('day');
   const [search, setSearch] = useState('');
   const [highlightCritical, setHighlightCritical] = useState(true);
@@ -85,6 +102,14 @@ export default function GanttChart() {
   useEffect(() => () => {
     if (dependencyUpdateTimerRef.current !== null) window.clearTimeout(dependencyUpdateTimerRef.current);
     if (writeWarningTimerRef.current !== null) window.clearTimeout(writeWarningTimerRef.current);
+    if (undoToastTimerRef.current !== null) window.clearTimeout(undoToastTimerRef.current);
+  }, []);
+
+  /** One-tap Undo toast after a drop — the touch-friendly complement to Ctrl+Z. */
+  const showUndoToast = useCallback((message: string) => {
+    setUndoToast(message);
+    if (undoToastTimerRef.current !== null) window.clearTimeout(undoToastTimerRef.current);
+    undoToastTimerRef.current = window.setTimeout(() => setUndoToast(''), 6000);
   }, []);
 
   const viewModeOptions = useMemo((): { label: string; value: GanttViewMode }[] => [
@@ -155,6 +180,43 @@ export default function GanttChart() {
       {job?.materialStatus && job.materialStatus !== 'ready' ? <em>{lang === 'hr' ? 'Materijal na čekanju' : 'Material pending'}</em> : null}
     </div>;
   }, [jobs, lang, scheduleSlack]);
+  // Live snap during drag: shift boundaries everywhere except hour zoom, where the planner is
+  // deliberately working fine-grained (same rule the old drop-snap and the mobile timeline use).
+  const ganttSnapTime = useMemo(() => (
+    viewMode === 'hour' ? undefined : (ms: number) => snapToShiftBoundary(ms, settings.workdayStart, settings.workdayEnd)
+  ), [viewMode, settings.workdayEnd, settings.workdayStart]);
+
+  /**
+   * Conflict + cascade preview while a bar is being dragged: runs the same engine as the
+   * post-drop checks (cpm.getJobConflicts, cascadeDependents) against the *proposed* times so
+   * the planner sees the consequence before releasing — not via banner-and-snap-back after.
+   */
+  const getGanttDragPreview = useCallback((task: GanttTask, start: Date, end: Date, laneId: string): GanttDragPreview => {
+    // Operation rows shift the whole route; previewing that is the route editor's job.
+    if (task.id.startsWith('op-')) return { conflicts: [], cascades: [] };
+    const jobId = jobIdFromTaskId(task.id);
+    const job = jobId ? jobs.find((item) => item.id === jobId) : null;
+    if (!job) return { conflicts: [], cascades: [] };
+    const startStr = toLocalDateTimeString(start);
+    const endStr = toLocalDateTimeString(end);
+    const machine = task.laneChangeable && laneId && !splitMachineChain(job.machine).includes(laneId) ? laneId : job.machine;
+    const conflicts = summarizeConflicts(getJobConflicts({ ...job, machine, start: startStr, end: endStr }), lang === 'hr');
+    const pending = cascadeDependents(jobId!, startStr, endStr, jobsToScheduleInput(validJobs), {
+      holidays: settings.holidays,
+      workdayStart: settings.workdayStart,
+      workdayEnd: settings.workdayEnd,
+      skipWeekends: true,
+    });
+    const cascades = [...pending].map(([id, patch]) => ({ taskId: `wo-${id}`, start: new Date(patch.start), end: new Date(patch.end) }));
+    return { conflicts, cascades };
+  }, [getJobConflicts, jobs, lang, settings.holidays, settings.workdayEnd, settings.workdayStart, validJobs]);
+
+  const selectionHint = useCallback((count: number) => (
+    lang === 'hr'
+      ? `${count} odabrano · povuci za skupno pomicanje · Esc za poništenje`
+      : `${count} selected · drag to move together · Esc to clear`
+  ), [lang]);
+
   const predecessorOptions = useMemo(() => {
     const targetId = Number(depForm.jobId);
     if (!targetId) return schedulableJobs;
@@ -170,21 +232,32 @@ export default function GanttChart() {
     setFuture([]);
   }, [jobs]);
 
+  /** Undo/redo must not race the debounced cascade writes: a pending dependency-cascade firing
+   *  after the restore would re-apply part of the change that was just undone. */
+  const cancelPendingCascade = useCallback(() => {
+    if (dependencyUpdateTimerRef.current !== null) {
+      window.clearTimeout(dependencyUpdateTimerRef.current);
+      dependencyUpdateTimerRef.current = null;
+    }
+  }, []);
+
   const undo = useCallback(() => {
     const previous = history[history.length - 1];
     if (!previous) return;
+    cancelPendingCascade();
     setFuture((current) => [structuredClone(jobs), ...current].slice(0, 30));
     setHistory((current) => current.slice(0, -1));
     void restoreBackup(previous);
-  }, [history, jobs, restoreBackup]);
+  }, [cancelPendingCascade, history, jobs, restoreBackup]);
 
   const redo = useCallback(() => {
     const next = future[0];
     if (!next) return;
+    cancelPendingCascade();
     setHistory((current) => [...current, structuredClone(jobs)].slice(-30));
     setFuture((current) => current.slice(1));
     void restoreBackup(next);
-  }, [future, jobs, restoreBackup]);
+  }, [cancelPendingCascade, future, jobs, restoreBackup]);
 
   useEffect(() => {
     const handleHistoryKey = (event: KeyboardEvent) => {
@@ -266,6 +339,12 @@ export default function GanttChart() {
 
     if (task.dependencies?.length && job.dependencies?.length) {
       decorated.dependencyTypes = Object.fromEntries(job.dependencies.map((dependency) => [`wo-${dependency.jobId}`, dependency.type]));
+    }
+
+    // Cross-machine drag: only plain single-machine leaf jobs can be dropped on another lane.
+    // Routed orders (operations pin machines) and machine chains keep their lane assignment.
+    if (isWorkOrderBar && task.type === 'task' && !job.operations?.length && splitMachineChain(job.machine).length <= 1) {
+      decorated.laneChangeable = true;
     }
     return decorated;
   }), [baseline, jobs, lang, showBaseline]);
@@ -376,29 +455,46 @@ export default function GanttChart() {
     }
     const jobId = jobIdFromTaskId(task.id);
     if (!jobId) return;
+    const job = jobs.find((item) => item.id === jobId);
     pushHistory();
-    const snappedStart = new Date(task.start);
-    if (viewMode !== 'hour') {
-      const hours = snappedStart.getHours();
-      const candidates = [settings.workdayStart, settings.workdayStart + 8, settings.workdayEnd];
-      snappedStart.setHours(candidates.reduce((best, candidate) => Math.abs(candidate - hours) < Math.abs(best - hours) ? candidate : best), 0, 0, 0);
-    }
-    const delta = snappedStart.getTime() - new Date(jobs.find((job) => job.id === jobId)?.start ?? task.start).getTime();
-    const snappedEnd = new Date(task.end.getTime() + (snappedStart.getTime() - task.start.getTime()));
-    const startStr = toLocalDateTimeString(snappedStart);
-    const endStr = toLocalDateTimeString(snappedEnd);
+    // Snapping already happened live during the drag (DravaGantt's snapTime prop) — the task
+    // arrives with its final times; snapping again here would fight keyboard fine-nudges.
+    const delta = task.start.getTime() - new Date(job?.start ?? task.start).getTime();
+    const startStr = toLocalDateTimeString(task.start);
+    const endStr = toLocalDateTimeString(task.end);
 
     void updateJob(jobId, {
       start: startStr,
       end: endStr,
     }).then(reportWriteResult);
     adjustDependencies(jobId, startStr, endStr, jobs);
-    selectedIds.forEach((selectedId) => {
-      if (selectedId === jobId) return;
-      const selected = jobs.find((job) => job.id === selectedId);
-      if (!selected) return;
-      void updateJob(selectedId, { start: toLocalDateTimeString(new Date(new Date(selected.start).getTime() + delta)), end: toLocalDateTimeString(new Date(new Date(selected.end).getTime() + delta)) }).then(reportWriteResult);
-    });
+    // Bulk move: co-selected jobs shift by the same delta — but only when the dragged job is
+    // itself part of the selection (dragging an unselected bar must not move the selection).
+    if (selectedIds.has(jobId)) {
+      selectedIds.forEach((selectedId) => {
+        if (selectedId === jobId) return;
+        const selected = jobs.find((item) => item.id === selectedId);
+        if (!selected) return;
+        void updateJob(selectedId, { start: toLocalDateTimeString(new Date(new Date(selected.start).getTime() + delta)), end: toLocalDateTimeString(new Date(new Date(selected.end).getTime() + delta)) }).then(reportWriteResult);
+      });
+    }
+    const movedCount = selectedIds.has(jobId) ? selectedIds.size : 1;
+    const label = job?.order || job?.machine || task.name;
+    showUndoToast(`${movedCount > 1 ? `${movedCount} × · ` : ''}${label} → ${task.start.toLocaleString(lang === 'hr' ? 'hr-HR' : 'en-US', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`);
+  }
+
+  /** A bar was dropped on another machine's lane: reassign the machine along with the new times. */
+  function handleLaneChange(task: GanttTask, laneId: string) {
+    const jobId = jobIdFromTaskId(task.id);
+    if (!jobId) return;
+    const job = jobs.find((item) => item.id === jobId);
+    if (!job || job.operations?.length || splitMachineChain(job.machine).length > 1) return;
+    pushHistory();
+    const startStr = toLocalDateTimeString(task.start);
+    const endStr = toLocalDateTimeString(task.end);
+    void updateJob(jobId, { machine: laneId, start: startStr, end: endStr }).then(reportWriteResult);
+    adjustDependencies(jobId, startStr, endStr, jobs);
+    showUndoToast(`${job.order || job.machine} → ${laneId}`);
   }
 
   function handleProgressChange(task: GanttTask) {
@@ -809,7 +905,11 @@ export default function GanttChart() {
             onDelete={handleDelete}
             onDoubleClick={(task) => setEditingJobId(jobIdFromTaskId(task.id))}
             onSelect={handleSelect}
+            onLaneChange={handleLaneChange}
             renderTooltip={renderGanttTooltip}
+            snapTime={ganttSnapTime}
+            getDragPreview={getGanttDragPreview}
+            selectionHint={selectionHint}
             revertNonce={ganttRevertNonce}
           />
         </div>
@@ -818,6 +918,23 @@ export default function GanttChart() {
       {editingJob && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingJobId(null); }}><div className="modal-content gantt-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="gantt-edit-title"><div className="modal-header"><div><span className="eyebrow">{editingJob.order}</span><h3 id="gantt-edit-title">{lang === 'hr' ? 'Detalji radnog naloga' : 'Work order details'}</h3></div><button className="drawer-close-btn" onClick={() => setEditingJobId(null)}>×</button></div><div className="modal-body"><div className="gantt-edit-grid"><label>{lang === 'hr' ? 'Proizvod' : 'Product'}<input defaultValue={editingJob.product} onBlur={(event) => updateJob(editingJob.id, { product: event.target.value })} /></label><label>{lang === 'hr' ? 'Operater' : 'Operator'}<input defaultValue={editingJob.operator} onBlur={(event) => updateJob(editingJob.id, { operator: event.target.value })} /></label><label>{t.common.start}<input type="datetime-local" defaultValue={editingJob.start} onBlur={(event) => updateJob(editingJob.id, { start: event.target.value })} /></label><label>{t.common.end}<input type="datetime-local" defaultValue={editingJob.end} onBlur={(event) => updateJob(editingJob.id, { end: event.target.value })} /></label><label>{lang === 'hr' ? 'Priprema (h)' : 'Setup (h)'}<input type="number" min={0} step="0.25" defaultValue={editingJob.setupHours ?? 0} onBlur={(event) => updateJob(editingJob.id, { setupHours: Number(event.target.value) })} /></label><label>{lang === 'hr' ? 'Materijal' : 'Material'}<select value={editingJob.materialStatus ?? 'ready'} onChange={(event) => updateJob(editingJob.id, { materialStatus: event.target.value as Job['materialStatus'] })}><option value="ready">Ready</option><option value="waiting">Waiting</option><option value="delayed">Delayed</option></select></label><label className="full-field">{lang === 'hr' ? 'Napomene' : 'Comments'}<textarea defaultValue={editingJob.comments} onBlur={(event) => updateJob(editingJob.id, { comments: event.target.value })} /></label></div>
       {editingJob.operations?.length ? <div className="operation-reorder-list"><strong>{lang === 'hr' ? 'Redoslijed operacija' : 'Operation route'}</strong>{editingJob.operations.map((operation, index) => <div key={operation.id} draggable onDragStart={() => setDraggedOperation({ jobId: editingJob.id, operationId: operation.id })} onDragOver={(event) => event.preventDefault()} onDrop={() => dropOperation(editingJob, operation.id)}><span className="operation-drag-handle">{index + 1}</span><b>{operation.name}</b><small>{operation.machine} · {operation.hours}h</small><button onClick={() => moveOperation(editingJob, operation.id, -1)} disabled={index === 0}>↑</button><button onClick={() => moveOperation(editingJob, operation.id, 1)} disabled={index === editingJob.operations!.length - 1}>↓</button></div>)}</div> : null}
       {editingConflicts && Object.values(editingConflicts).length > 0 && <div className="conflict-summary">{Object.entries(editingConflicts).map(([key, value]) => <span key={key}><b>{key}</b>{'message' in value ? value.message : value.otherOrder}</span>)}</div>}</div><div className="modal-footer"><button className="btn btn-blue" onClick={() => setEditingJobId(null)}>{lang === 'hr' ? 'Gotovo' : 'Done'}</button></div></div></div>}
+
+      {undoToast && (
+        <div className="gantt-undo-toast" role="status">
+          <span>{undoToast}</span>
+          <button
+            type="button"
+            onClick={() => {
+              undo();
+              if (undoToastTimerRef.current !== null) window.clearTimeout(undoToastTimerRef.current);
+              setUndoToast('');
+            }}
+          >
+            ↶ {lang === 'hr' ? 'Poništi' : 'Undo'}
+          </button>
+          <button type="button" className="gantt-undo-toast-close" onClick={() => setUndoToast('')} aria-label={lang === 'hr' ? 'Zatvori' : 'Dismiss'}>×</button>
+        </div>
+      )}
 
       {/* Floating Scroll-to-Today Button */}
       <button

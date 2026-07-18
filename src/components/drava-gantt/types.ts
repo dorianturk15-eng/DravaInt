@@ -44,6 +44,9 @@ export interface GanttTask {
   baseline?: { start: Date; end: Date };
   /** When set, renders a warning badge on the bar with this text as its tooltip. */
   warning?: string;
+  /** Allows a move-drag to drop the bar on another lane (cross-machine reassignment). Set only
+   *  for plain single-machine leaf jobs — routed/chained/container orders keep their lanes. */
+  laneChangeable?: boolean;
 }
 
 /** One machine swimlane: a header row followed by that machine's task rows. */
