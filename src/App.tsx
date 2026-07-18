@@ -21,6 +21,7 @@ import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from './scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput, getJobConflicts } from './scheduling/cpm';
 import { supabase } from './supabase/client';
+import { canAccessTab as canAccess } from './auth/access';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const ShiftSchedule = lazy(() => import('./pages/ShiftSchedule'));
@@ -43,12 +44,6 @@ function SearchIcon() {
 }
 
 const ALL_TABS: AppTab[] = ['dashboard', 'shifts', 'machines', 'workOrders', 'progress', 'gantt', 'admin'];
-
-function canAccess(role: string, tab: AppTab) {
-  if (role === 'admin' || role === 'boss') return true;
-  if (role === 'managers' || role === 'level between admin and managers') return tab !== 'admin';
-  return ['dashboard', 'machines', 'progress', 'gantt'].includes(tab);
-}
 
 function App() {
   const { t, lang, setLang } = useLanguage();

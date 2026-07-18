@@ -166,6 +166,11 @@ export interface TranslationShape {
     opNumber: string;
     parentOrder: string;
     noParent: string;
+    edit: string;
+    editingOrder: string;
+    saveChanges: string;
+    cancelEdit: string;
+    updated: string;
   };
   login: {
     title: string;
@@ -381,6 +386,11 @@ export const translations: Record<Lang, TranslationShape> = {
       opNumber: 'R.br.',
       parentOrder: 'Nadređeni radni nalog',
       noParent: '(bez nadređenog - glavni nalog)',
+      edit: 'Uredi',
+      editingOrder: 'Uređujete nalog',
+      saveChanges: 'Spremi izmjene',
+      cancelEdit: 'Odustani od uređivanja',
+      updated: 'Radni nalog je ažuriran. Izmjene su vidljive u svim prikazima.',
     },
     login: {
       title: 'Prijava',
@@ -594,6 +604,11 @@ export const translations: Record<Lang, TranslationShape> = {
       opNumber: 'No.',
       parentOrder: 'Parent work order',
       noParent: '(no parent - top-level order)',
+      edit: 'Edit',
+      editingOrder: 'Editing order',
+      saveChanges: 'Save changes',
+      cancelEdit: 'Cancel editing',
+      updated: 'Work order updated. The changes are visible in every view.',
     },
     login: {
       title: 'Sign in',
