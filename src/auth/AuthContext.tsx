@@ -119,8 +119,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The signed-in user's role is unknown until their own profile row is present in `users`. Use
   // isFetching (not isLoading) because the pre-login anon fetch errors out — after login isLoading is
   // already false while the authenticated refetch is still running, so isLoading would clear too early.
+  // sessionLoading alone (regardless of username) must also count as resolving: on a hard reload,
+  // getSession() hasn't resolved yet, so username is still null and Boolean(username) would be false,
+  // letting the route guard fire with the default 'workers' role before the real session is known.
   const currentUserResolved = users.some((user) => user.username.toLowerCase() === (username ?? '').toLowerCase());
-  const roleResolving = Boolean(supabase) && Boolean(username) && !currentUserResolved && (sessionLoading || profilesQuery.isFetching);
+  const roleResolving = Boolean(supabase) && (sessionLoading || (Boolean(username) && !currentUserResolved && profilesQuery.isFetching));
 
   useEffect(() => {
     if (!supabase) return;
