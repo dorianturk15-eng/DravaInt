@@ -3,7 +3,7 @@ import { Gantt, ViewMode, type Task } from 'gantt-task-react';
 import 'gantt-task-react/dist/index.css';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
-import { useScheduling, type DependencyType } from '../scheduling/SchedulingContext';
+import { useScheduling, type DependencyType, type UpdateResult } from '../scheduling/SchedulingContext';
 import { buildGanttTasks, jobIdFromTaskId, hasChildren, computeOperationSchedule } from '../scheduling/hierarchy';
 import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, computeScheduleSlack, cascadeDependents, toLocalDateTimeString, splitMachineChain } from '../scheduling/cpm';
 import { useSettings } from '../settings/SettingsContext';
@@ -242,6 +242,8 @@ export default function GanttChart() {
   const [form, setForm] = useState({ name: '', start: '', end: '' });
   const [depForm, setDepForm] = useState({ jobId: '', predecessorId: '', type: 'FS' as DependencyType, lagHours: '0' });
   const [depError, setDepError] = useState('');
+  const [writeWarning, setWriteWarning] = useState('');
+  const writeWarningTimerRef = useRef<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Day);
   const [search, setSearch] = useState('');
   const [highlightCritical, setHighlightCritical] = useState(true);
@@ -268,6 +270,7 @@ export default function GanttChart() {
 
   useEffect(() => () => {
     if (dependencyUpdateTimerRef.current !== null) window.clearTimeout(dependencyUpdateTimerRef.current);
+    if (writeWarningTimerRef.current !== null) window.clearTimeout(writeWarningTimerRef.current);
   }, []);
 
   const viewModeOptions = useMemo(() => [
@@ -758,6 +761,22 @@ export default function GanttChart() {
     setForm({ name: '', start: '', end: '' });
   }
 
+  /**
+   * Surface a failed drag/edit write. In Supabase mode a write can be rejected by the DB
+   * double-booking trigger or lose an optimistic-version race; the realtime refetch then snaps the
+   * bar back, which without a message reads as a silent glitch (the machine board already toasts
+   * these — the Gantt swallowed them).
+   */
+  const reportWriteResult = useCallback((result: UpdateResult) => {
+    if (result.ok || result.reason === 'offline') return;
+    const message = result.reason === 'rejected'
+      ? (result.message || (lang === 'hr' ? 'Baza je odbila promjenu (npr. zauzet termin) — vraćeno na prethodno stanje.' : 'The database rejected the change (e.g. a booked slot) — reverted.'))
+      : (lang === 'hr' ? 'Nalog je u međuvremenu izmijenjen drugdje — vraćeno na svježe stanje.' : 'The order was changed elsewhere in the meantime — reloaded the fresh state.');
+    setWriteWarning(message);
+    if (writeWarningTimerRef.current !== null) window.clearTimeout(writeWarningTimerRef.current);
+    writeWarningTimerRef.current = window.setTimeout(() => setWriteWarning(''), 6000);
+  }, [lang]);
+
   // Recursive propagation of scheduling constraints (CPM logic, shared with the Machine Scheduling board)
   function adjustDependencies(updatedJobId: number, startStr: string, endStr: string, currentJobsList: typeof jobs) {
     const pending = cascadeDependents(updatedJobId, startStr, endStr, jobsToScheduleInput(currentJobsList), {
@@ -768,7 +787,7 @@ export default function GanttChart() {
     });
     if (dependencyUpdateTimerRef.current !== null) window.clearTimeout(dependencyUpdateTimerRef.current);
     dependencyUpdateTimerRef.current = window.setTimeout(() => {
-      void Promise.all([...pending].map(([id, patch]) => updateJob(id, patch)));
+      void Promise.all([...pending].map(([id, patch]) => updateJob(id, patch).then(reportWriteResult)));
       dependencyUpdateTimerRef.current = null;
     }, 120);
   }
@@ -801,7 +820,7 @@ export default function GanttChart() {
     const endStr = toLocalDateTimeString(new Date(start.getTime() + totalHours * 3_600_000));
 
     pushHistory();
-    updateJob(jobId, { operations, start: startStr, end: endStr });
+    void updateJob(jobId, { operations, start: startStr, end: endStr }).then(reportWriteResult);
     adjustDependencies(jobId, startStr, endStr, jobs);
     document.documentElement.dataset.ganttDragging = 'false';
   }
@@ -825,16 +844,16 @@ export default function GanttChart() {
     const startStr = toLocalDateTimeString(snappedStart);
     const endStr = toLocalDateTimeString(snappedEnd);
 
-    updateJob(jobId, {
+    void updateJob(jobId, {
       start: startStr,
       end: endStr,
-    });
+    }).then(reportWriteResult);
     adjustDependencies(jobId, startStr, endStr, jobs);
     selectedIds.forEach((selectedId) => {
       if (selectedId === jobId) return;
       const selected = jobs.find((job) => job.id === selectedId);
       if (!selected) return;
-      updateJob(selectedId, { start: toLocalDateTimeString(new Date(new Date(selected.start).getTime() + delta)), end: toLocalDateTimeString(new Date(new Date(selected.end).getTime() + delta)) });
+      void updateJob(selectedId, { start: toLocalDateTimeString(new Date(new Date(selected.start).getTime() + delta)), end: toLocalDateTimeString(new Date(new Date(selected.end).getTime() + delta)) }).then(reportWriteResult);
     });
     document.documentElement.dataset.ganttDragging = 'false';
   }
@@ -845,7 +864,7 @@ export default function GanttChart() {
     const jobId = jobIdFromTaskId(task.id);
     if (!jobId) return;
     pushHistory();
-    updateJob(jobId, { progress: Math.round(task.progress) });
+    void updateJob(jobId, { progress: Math.round(task.progress) }).then(reportWriteResult);
   }
 
   function handleDelete(task: Task): boolean {
@@ -1033,6 +1052,7 @@ export default function GanttChart() {
     <div ref={pageContainerRef} className={`wizard-container gantt-page${settings.compactMode ? ' gantt-compact' : ''}`}>
       <div className="page-heading-row"><div><span className="eyebrow">CPM · live planning</span><h2>{t.gantt.title}</h2><p className="subtitle-text">{t.gantt.subtitle}</p></div><div className="sync-badge"><span className="sync-dot" />{jobs.length} {lang === 'hr' ? 'naloga' : 'orders'}</div></div>
       {cycle && <div className="gantt-cycle-banner" role="alert"><strong>{lang === 'hr' ? 'Kružna ovisnost' : 'Dependency cycle'}</strong><span>{cycleLabel}</span></div>}
+      {writeWarning && <div className="gantt-cycle-banner" role="alert"><strong>{lang === 'hr' ? 'Promjena nije spremljena' : 'Change not saved'}</strong><span>{writeWarning}</span></div>}
 
       <div className="gantt-command-deck glass-panel">
         <div className="gantt-search"><span>⌕</span><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setActivePresetId(''); }} placeholder={lang === 'hr' ? 'Traži nalog, operatera, proizvod…' : 'Search order, operator, product…'} /></div>

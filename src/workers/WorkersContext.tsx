@@ -108,7 +108,16 @@ function rowToWorker(row: Record<string, unknown>): Worker {
 const WorkersContext = createContext<WorkersContextValue | null>(null);
 
 export function WorkersProvider({ children }: { children: ReactNode }) {
-  const [workers, setWorkers] = useState<Worker[]>(loadWorkers);
+  const [workers, setWorkers] = useState<Worker[]>(() => {
+    const loaded = loadWorkers();
+    // Persist immediately: cpm.getJobConflicts reads workers straight from localStorage, so until
+    // this key exists every worker-based check (qualifications, absences, shifts) silently no-ops.
+    // In demo mode nothing else ever wrote it, leaving the conflict engine blind on a fresh device.
+    try {
+      if (!localStorage.getItem(STORAGE_KEY)) persist(loaded);
+    } catch { /* storage unavailable — nothing to persist to */ }
+    return loaded;
+  });
   const [loading, setLoading] = useState(Boolean(supabase));
   const [syncError, setSyncError] = useState<string | null>(null);
 

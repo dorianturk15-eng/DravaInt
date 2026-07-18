@@ -316,9 +316,19 @@ begin
   for week_index in 0..least(greatest(p_week_count,1),52)-1 loop
     target_date := p_start_date + week_index * 7;
     insert into public.shift_schedules(week_number,year,start_date,end_date,department,status,created_by,modified_by)
-    values (extract(week from target_date)::int,extract(year from target_date)::int,target_date,target_date+6,p_department,'draft',auth.uid(),auth.uid())
+    -- isoyear, not year: extract(week) is the ISO week, and around New Year the calendar year
+    -- pairs it with the wrong unique key — a schedule for 2025-12-29 (ISO week 1 of 2026) would
+    -- collide with, and clobber, the real week 1 of 2025 (see migration 0006).
+    values (extract(week from target_date)::int,extract(isoyear from target_date)::int,target_date,target_date+6,p_department,'draft',auth.uid(),auth.uid())
     on conflict (week_number,year,department) do update set start_date=excluded.start_date,end_date=excluded.end_date,modified_by=auth.uid()
     returning * into schedule_row;
+    -- Regeneration cleanup: drop the week's auto-generated rows for workers no longer in the
+    -- requested roster or on days now covered by an absence; manual overrides are kept.
+    delete from public.shift_assignments sa
+     where sa.shift_schedule_id = schedule_row.id
+       and sa.is_override = false
+       and (sa.worker_id <> all(p_worker_ids)
+            or exists(select 1 from public.absences a where a.worker_id = sa.worker_id and sa.date between a.start_date and a.end_date));
     for day_index in 0..4 loop
       for worker_index in 1..coalesce(array_length(p_worker_ids,1),0) loop
         v_worker_id := p_worker_ids[worker_index];

@@ -409,7 +409,9 @@ export function getMonday(d: Date): string {
   const diff = date.getDate() - day + (day === 0 ? -6 : 1);
   const monday = new Date(date.setDate(diff));
   monday.setHours(0, 0, 0, 0);
-  return monday.toISOString().split('T')[0];
+  // Local-date formatting, not toISOString(): east of UTC, local Monday 00:00 is still Sunday in
+  // UTC, so the ISO string named the wrong day and shifted the whole weekly-hours window.
+  return toLocalDateTimeString(monday).slice(0, 10);
 }
 
 /**
@@ -418,7 +420,8 @@ export function getMonday(d: Date): string {
  */
 function calculateWeeklyHours(operator: string, weekMondayStr: string, jobs: Job[]): number {
   if (!operator) return 0;
-  const targetMonday = new Date(weekMondayStr);
+  // Parse as local midnight (a bare date string would parse as UTC and skew the window east of UTC).
+  const targetMonday = new Date(`${weekMondayStr}T00:00:00`);
   const targetSundayEnd = new Date(targetMonday.getTime() + 7 * 24 * 60 * 60 * 1000);
   const normalizedOp = operator.trim().toLowerCase();
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWorkingTime, cascadeDependents, computeCriticalPath, computeEffectiveSchedule, computeScheduleSlack, findDependencyCycle, splitMachineChain, toLocalDateTimeString, type ScheduleInput } from './cpm';
+import { addWorkingTime, cascadeDependents, computeCriticalPath, computeEffectiveSchedule, computeScheduleSlack, findDependencyCycle, getMonday, splitMachineChain, toLocalDateTimeString, type ScheduleInput } from './cpm';
 
 const date = (hours: number) => `2026-07-13T${String(hours).padStart(2, '0')}:00`;
 
@@ -11,6 +11,17 @@ describe('splitMachineChain', () => {
     expect(splitMachineChain('CNC-1')).toEqual(['CNC-1']);
     expect(splitMachineChain('')).toEqual([]);
     expect(splitMachineChain(undefined)).toEqual([]);
+  });
+});
+
+describe('getMonday', () => {
+  it('returns the local Monday of the week, not the UTC date of local Monday midnight', () => {
+    // 2026-07-15 is a Wednesday. East of UTC (e.g. Europe/Zagreb), Monday 00:00 local is still
+    // Sunday in UTC, so the old toISOString() formatting returned the Sunday date and shifted the
+    // whole weekly-hours window. Runs correctly in any test timezone.
+    expect(getMonday(new Date('2026-07-15T12:00:00'))).toBe('2026-07-13');
+    expect(getMonday(new Date('2026-07-13T00:00:00'))).toBe('2026-07-13'); // Monday maps to itself
+    expect(getMonday(new Date('2026-07-19T23:30:00'))).toBe('2026-07-13'); // Sunday belongs to the week before
   });
 });
 

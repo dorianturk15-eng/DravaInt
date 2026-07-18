@@ -42,6 +42,14 @@ function getIsoWeek(value: string) {
   return 1 + Math.round(((date.getTime() - weekOne.getTime()) / DAY_MS - 3 + ((weekOne.getDay() + 6) % 7)) / 7);
 }
 
+/** The ISO week-numbering year the date belongs to — NOT the calendar year. 2025-12-29 is week 1
+ *  of 2026; pairing week 1 with calendar year 2025 collides with the real week 1/2025 record. */
+function getIsoWeekYear(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+  return date.getFullYear();
+}
+
 function shiftDuration(start: string, end: string) {
   const [startHour, startMinute] = start.split(':').map(Number);
   const [endHour, endMinute] = end.split(':').map(Number);
@@ -76,7 +84,7 @@ function downloadCsv(schedules: Array<{ weekNumber: number; assignments: ShiftAs
 export default function ShiftSchedule() {
   const { lang, t } = useLanguage();
   const { username } = useAuth();
-  const { activeWorkers, displayName } = useWorkers();
+  const { workers, activeWorkers, displayName } = useWorkers();
   const { logo } = useLogo();
   const { definitions, schedules, publications, absences, saveSchedule, publishSchedule, generateSchedule: generateRemoteSchedule, saveAbsence, exportIcs } = useShifts();
   const today = isoDate(new Date());
@@ -124,7 +132,9 @@ export default function ShiftSchedule() {
 
   useEffect(() => localStorage.setItem('shift-board-weekend', String(showWeekend)), [showWeekend]);
 
-  const workerById = useMemo(() => new Map(activeWorkers.map((worker) => [worker.id, worker])), [activeWorkers]);
+  // Name lookup spans ALL workers (including archived): existing schedules, the publication archive
+  // and reprinted PDFs must keep showing a departed worker's name, not degrade to "#7".
+  const workerById = useMemo(() => new Map(workers.map((worker) => [worker.id, worker])), [workers]);
   const definitionById = useMemo(() => new Map(definitions.map((definition) => [definition.id, definition])), [definitions]);
   const maxWeeklyHours = Number(localStorage.getItem('cfg-max-hours')) || 48;
   const dayCount = showWeekend ? FULL_WEEK_COUNT : WORKDAY_COUNT;
@@ -244,7 +254,7 @@ export default function ShiftSchedule() {
       generated.push({
         id: scheduleId,
         weekNumber: getIsoWeek(currentWeekStart),
-        year: new Date(`${currentWeekStart}T12:00:00`).getFullYear(),
+        year: getIsoWeekYear(currentWeekStart),
         startDate: currentWeekStart,
         endDate: addDays(currentWeekStart, 6),
         department,
@@ -311,7 +321,7 @@ export default function ShiftSchedule() {
       ...schedule,
       assignments: schedule.assignments.map((assignment) => assignment.id === dragged.id ? moved : assignment),
     };
-    return weeklyHours(preview, moved.workerId) > maxWeeklyHours || hasRestViolation(preview, moved);
+    return weeklyHours(preview, moved.workerId) > maxWeeklyHours || hasRestViolation(preview, moved) || isAbsent(moved.workerId, date);
   }
 
   async function saveAll() {
@@ -587,9 +597,11 @@ export default function ShiftSchedule() {
                           const hours = weeklyHours(schedule, assignment.workerId);
                           const overHours = hours > maxWeeklyHours;
                           const restViolation = hasRestViolation(schedule, assignment);
+                          // Absence recorded after generation: the assignment survives, so at least flag it.
+                          const absentConflict = isAbsent(assignment.workerId, assignment.date);
                           const worker = workerById.get(assignment.workerId);
-                          return <div key={assignment.id} draggable={!locked} onDragStart={() => setDragged(assignment)} onDoubleClick={() => { if (!locked) setEditing({ scheduleId: schedule.id, assignmentId: assignment.id }); }} className={`assignment-chip${assignment.isOverride ? ' is-override' : ''}${overHours || restViolation ? ' has-warning' : ''}`} title={`${nameForWorker(assignment.workerId)} · ${hours}h${restViolation ? ' · Rest period warning' : ''}`}>
-                            {editing?.scheduleId === schedule.id && editing.assignmentId === assignment.id ? <select autoFocus value={assignment.workerId} onChange={(event) => reassignWorker(schedule.id, assignment.id, Number(event.target.value))} onBlur={() => setEditing(null)}>{activeWorkers.filter((candidate) => !isAbsent(candidate.id, date)).map((candidate) => <option key={candidate.id} value={candidate.id}>{displayName(candidate)}</option>)}</select> : <><span className="mini-avatar">{worker?.firstName[0]}{worker?.lastName[0]}</span><span>{nameForWorker(assignment.workerId)}</span>{assignment.isOverride && <b>•</b>}{(overHours || restViolation) && <span className="warning-mark">!</span>}</>}
+                          return <div key={assignment.id} draggable={!locked} onDragStart={() => setDragged(assignment)} onDoubleClick={() => { if (!locked) setEditing({ scheduleId: schedule.id, assignmentId: assignment.id }); }} className={`assignment-chip${assignment.isOverride ? ' is-override' : ''}${overHours || restViolation || absentConflict ? ' has-warning' : ''}`} title={`${nameForWorker(assignment.workerId)} · ${hours}h${restViolation ? (lang === 'hr' ? ' · Upozorenje: odmor između smjena' : ' · Rest period warning') : ''}${absentConflict ? (lang === 'hr' ? ' · Upozorenje: radnik ima evidentiranu odsutnost' : ' · Warning: worker has a recorded absence') : ''}`}>
+                            {editing?.scheduleId === schedule.id && editing.assignmentId === assignment.id ? <select autoFocus value={assignment.workerId} onChange={(event) => reassignWorker(schedule.id, assignment.id, Number(event.target.value))} onBlur={() => setEditing(null)}>{activeWorkers.filter((candidate) => !isAbsent(candidate.id, date)).map((candidate) => <option key={candidate.id} value={candidate.id}>{displayName(candidate)}</option>)}</select> : <><span className="mini-avatar">{worker?.firstName[0]}{worker?.lastName[0]}</span><span>{nameForWorker(assignment.workerId)}</span>{assignment.isOverride && <b>•</b>}{(overHours || restViolation || absentConflict) && <span className="warning-mark">!</span>}</>}
                           </div>;
                         })}
                       </div>;
