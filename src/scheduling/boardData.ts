@@ -2,6 +2,7 @@ import type { Job, DependencyType } from './SchedulingContext';
 import type { Machine } from '../machines/MachinesContext';
 import { hasChildren } from './hierarchy';
 import { computeEffectiveSchedule, findDependencyCycle, jobsToScheduleInput, type SchedulingOptions, type EffectiveSchedule } from './cpm';
+import { expandToOperationSlots, type OperationSlot } from './operationSlots';
 
 export type LinkClassification = 'valid' | 'invalid-self' | 'invalid-duplicate' | 'invalid-cycle';
 
@@ -29,30 +30,28 @@ export const STATUS_COLORS: Record<Job['status'], string> = {
   delayed: '#ef4444',
 };
 
-export interface BoardJob {
-  job: Job;
-  effectiveStart: number;
-  effectiveEnd: number;
-  /** Sub-row within the lane, so time-overlapping jobs stack instead of occluding one another. */
+export interface BoardSlot {
+  slot: OperationSlot;
+  /** Sub-row within the lane, so time-overlapping slots stack instead of occluding one another. */
   row: number;
 }
 
 export interface BoardLane {
   machine: string;
-  jobs: BoardJob[];
+  slots: BoardSlot[];
   rowCount: number;
 }
 
-/** Greedy interval-graph row assignment: each job gets the lowest row whose last job already ended. */
-function assignRows(jobs: Array<{ effectiveStart: number; effectiveEnd: number }>): number[] {
+/** Greedy interval-graph row assignment: each slot gets the lowest row whose last slot already ended. */
+function assignRows(slots: Array<{ startMs: number; endMs: number }>): number[] {
   const rowEndTimes: number[] = [];
-  return jobs.map((job) => {
-    let row = rowEndTimes.findIndex((endTime) => endTime <= job.effectiveStart);
+  return slots.map((slot) => {
+    let row = rowEndTimes.findIndex((endTime) => endTime <= slot.startMs);
     if (row === -1) {
       row = rowEndTimes.length;
-      rowEndTimes.push(job.effectiveEnd);
+      rowEndTimes.push(slot.endMs);
     } else {
-      rowEndTimes[row] = job.effectiveEnd;
+      rowEndTimes[row] = slot.endMs;
     }
     return row;
   });
@@ -61,46 +60,35 @@ function assignRows(jobs: Array<{ effectiveStart: number; effectiveEnd: number }
 export interface BoardModel {
   lanes: BoardLane[];
   effective: Map<number, EffectiveSchedule>;
+  /** Every rendered slot, flattened — the board's card list and hit-testing derive from this. */
+  slots: OperationSlot[];
 }
 
 /**
- * Jobs the board can render: leaf work orders (no sub-assemblies) with a single machine
- * assignment. Container/tool nodes and multi-step operations routes stay off this v1 board —
- * they already have a dedicated view in the Gantt chart's hierarchy rendering, and reassigning
- * "which machine" is ambiguous for a job whose steps span several machines.
+ * The board's per-machine lanes, built from operation slots rather than the legacy single `machine`
+ * string. Every leaf job — plain, chain-string, or multi-operation routed — expands via
+ * {@link expandToOperationSlots} into the (machine, time-window) segments it actually occupies, so a
+ * routed order finally shows up on each machine its route touches (the Phase 6 stress-test bug).
+ * Container/tool nodes contribute no slots; their leaves do.
  */
-export function boardEligibleJobs(jobs: Job[]): Job[] {
-  return jobs.filter((job) => !hasChildren(jobs, job.id) && !(job.operations && job.operations.length > 0));
-}
-
 export function buildBoardLanes(jobs: Job[], machines: Machine[], schedulingOptions: SchedulingOptions = {}): BoardModel {
-  const eligible = boardEligibleJobs(jobs);
-  const effective = computeEffectiveSchedule(jobsToScheduleInput(eligible), schedulingOptions);
+  const leaves = jobs.filter((job) => !hasChildren(jobs, job.id));
+  const effective = computeEffectiveSchedule(jobsToScheduleInput(leaves), schedulingOptions);
+  const slots = expandToOperationSlots(jobs, effective);
 
   const names = new Set<string>();
   machines.forEach((machine) => names.add(machine.name));
-  eligible.forEach((job) => {
-    const name = job.machine.trim();
-    if (name) names.add(name);
-  });
+  slots.forEach((slot) => names.add(slot.machine));
   if (names.size === 0) names.add('General / Unassigned');
 
   const lanes: BoardLane[] = Array.from(names).map((machine) => {
-    const laneJobs = eligible
-      .filter((job) => job.machine.trim() === machine)
-      .map((job) => {
-        const eff = effective.get(job.id);
-        return {
-          job,
-          effectiveStart: eff?.start ?? (job.start ? new Date(job.start).getTime() : Date.now()),
-          effectiveEnd: eff?.end ?? (job.end ? new Date(job.end).getTime() : Date.now() + 3_600_000),
-        };
-      })
-      .sort((a, b) => a.effectiveStart - b.effectiveStart);
-    const rows = assignRows(laneJobs);
-    const boardJobs: BoardJob[] = laneJobs.map((job, index) => ({ ...job, row: rows[index] }));
-    return { machine, jobs: boardJobs, rowCount: Math.max(1, ...rows.map((r) => r + 1)) };
+    const laneSlots = slots
+      .filter((slot) => slot.machine === machine)
+      .sort((a, b) => a.startMs - b.startMs);
+    const rows = assignRows(laneSlots);
+    const boardSlots: BoardSlot[] = laneSlots.map((slot, index) => ({ slot, row: rows[index] }));
+    return { machine, slots: boardSlots, rowCount: Math.max(1, ...rows.map((r) => r + 1)) };
   });
 
-  return { lanes, effective };
+  return { lanes, effective, slots };
 }

@@ -85,6 +85,8 @@ export interface TranslationShape {
     dropInvalidSelf: string;
     dropInvalidDuplicate: string;
     dragHint: string;
+    sequentialRouteHint: string;
+    chainSegmentHint: string;
     filterAll: string;
     autoSchedule: string;
     exportCsv: string;
@@ -305,6 +307,8 @@ export const translations: Record<Lang, TranslationShape> = {
       dropInvalidSelf: 'Nalog se ne može povezati sam sa sobom.',
       dropInvalidDuplicate: 'Ova veza već postoji.',
       dragHint: 'Povucite karticu za promjenu termina ili stroja. Povucite iz ruba kartice za povezivanje naloga.',
+      sequentialRouteHint: 'Ova operacija je dio slijedne rute — povucite prvu operaciju za pomak naloga ili uredite u Ganttu.',
+      chainSegmentHint: 'Naslijeđeni lanac strojeva — uredite nalog u Kreatoru radnih naloga za promjenu strojeva.',
       filterAll: 'Sve',
       autoSchedule: 'Automatski rasporedi',
       exportCsv: 'Izvoz CSV',
@@ -523,6 +527,8 @@ export const translations: Record<Lang, TranslationShape> = {
       dropInvalidSelf: 'A job cannot link to itself.',
       dropInvalidDuplicate: 'This link already exists.',
       dragHint: 'Drag a card to reschedule or reassign it. Drag from a card edge to link two orders.',
+      sequentialRouteHint: 'This step is part of a sequential route — drag the first step to move the order, or edit it in the Gantt.',
+      chainSegmentHint: 'Legacy machine chain — edit this order in the Work Order Creator to change its machines.',
       filterAll: 'All',
       autoSchedule: 'Auto-schedule',
       exportCsv: 'Export CSV',

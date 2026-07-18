@@ -39,7 +39,7 @@ export function MachineBoardMobile({ lanes, machineByName, statusLabels, t, remo
     <div className="board-mobile-list">
       {lanes.map((lane) => {
         const machine = machineByName.get(lane.machine);
-        const hours = lane.jobs.reduce((sum, item) => sum + (item.effectiveEnd - item.effectiveStart) / 3_600_000, 0);
+        const hours = lane.slots.reduce((sum, item) => sum + (item.slot.endMs - item.slot.startMs) / 3_600_000, 0);
         const loadPercent = Math.round((hours / getWeeklyCapacityHours()) * 100);
         return (
           <section className="board-mobile-lane" key={lane.machine}>
@@ -51,21 +51,23 @@ export function MachineBoardMobile({ lanes, machineByName, statusLabels, t, remo
               <span className="board-mobile-load" data-over={loadPercent > 100 || undefined}>{loadPercent}%</span>
             </header>
 
-            {lane.jobs.length === 0 ? (
+            {lane.slots.length === 0 ? (
               <p className="board-mobile-empty">{t.emptyLane}</p>
             ) : (
               <div className="board-mobile-cards">
-                {lane.jobs.map(({ job, effectiveStart, effectiveEnd }) => {
+                {lane.slots.map(({ slot }) => {
+                  const job = slot.job;
                   const conflicts = getJobConflicts(job);
                   const messages = conflictMessages(conflicts);
+                  const stepLabel = slot.isOperation ? slot.name : slot.operator || job.operator;
                   return (
-                    <article className="board-mobile-card" key={job.id} style={{ borderLeftColor: STATUS_COLORS[job.status] }}>
+                    <article className="board-mobile-card" key={slot.key} style={{ borderLeftColor: STATUS_COLORS[job.status] }}>
                       <div className="board-mobile-card-top">
-                        <strong>{job.order || job.machine}</strong>
+                        <strong>{job.order || slot.machine}</strong>
                         <span className={`status-pill status-${job.status}`}>{statusLabels[job.status]}</span>
                       </div>
-                      <small className="board-mobile-card-time">{formatRange(effectiveStart, effectiveEnd, locale)}</small>
-                      {job.operator && <small className="board-mobile-card-operator">{job.operator}</small>}
+                      <small className="board-mobile-card-time">{formatRange(slot.startMs, slot.endMs, locale)}</small>
+                      {stepLabel && <small className="board-mobile-card-operator">{stepLabel}</small>}
                       <div className="progress-bar-track">
                         <div className="progress-bar-fill" style={{ width: `${job.progress}%`, background: job.status === 'done' ? 'var(--success-color)' : STATUS_COLORS[job.status] }} />
                       </div>
@@ -75,9 +77,11 @@ export function MachineBoardMobile({ lanes, machineByName, statusLabels, t, remo
                           <span>{messages.join(' · ')}</span>
                         </div>
                       )}
-                      <button type="button" className="board-mobile-card-remove" onClick={() => onRemove(job.id)} aria-label={removeLabel}>
-                        {removeLabel}
-                      </button>
+                      {slot.isFirstSlot && (
+                        <button type="button" className="board-mobile-card-remove" onClick={() => onRemove(job.id)} aria-label={removeLabel}>
+                          {removeLabel}
+                        </button>
+                      )}
                     </article>
                   );
                 })}

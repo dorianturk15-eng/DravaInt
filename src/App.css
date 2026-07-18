@@ -1555,6 +1555,13 @@ select {
 .board-task-conflict-popover { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 190px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-inner); background: var(--bg-card); box-shadow: var(--shadow-hover); font-size: 11px; color: var(--danger-color); }
 .board-task-card:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
 .board-task-card-connect:focus-visible::after,.board-task-card-resize:focus-visible { outline: 2px solid var(--primary-color); }
+/* Operation cards (one step of a routed order) read as lighter, dashed-topped tiles so a route's
+   steps are visually distinct from a plain single-machine job card. The ‹ / › glyphs hint that the
+   card chains to a sibling operation on another machine's lane. */
+.board-task-card.is-operation { background: color-mix(in srgb,var(--bg-card) 88%,var(--primary-color)); border-top: 1px dashed color-mix(in srgb,var(--primary-color) 40%,transparent); }
+.board-task-card-chain,.board-task-card-chain-end { position: absolute; top: 50%; z-index: 5; color: var(--text-secondary); font-size: 12px; line-height: 1; transform: translateY(-50%); pointer-events: none; opacity: .6; }
+.board-task-card-chain { left: -9px; }
+.board-task-card-chain-end { right: -9px; }
 
 .board-connection-layer { position: absolute; top: 0; left: 0; z-index: 4; pointer-events: none; overflow: visible; }
 .board-connector { fill: none; stroke: color-mix(in srgb,var(--primary-color) 68%,#64748b); stroke-width: 1.75; opacity: .55; pointer-events: none; transition: opacity .16s,stroke-width .16s; }
