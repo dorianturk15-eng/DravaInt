@@ -1,4 +1,7 @@
 :root {
+  /* Native form controls (date/time picker icons and popups, scrollbars) follow this,
+     not the CSS variables — declare it per theme so the calendar icon stays visible. */
+  color-scheme: light;
   /* Surfaces */
   --bg-page: #f8fafc;
   --bg-card: #ffffff;
@@ -50,6 +53,7 @@
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --bg-page: #0b0f19;
   --bg-card: #151f32;
   --bg-step: #1e293b;

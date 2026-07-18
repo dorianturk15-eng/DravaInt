@@ -55,12 +55,9 @@ export default function WorkOrderCreator() {
   }, [jobs]);
 
   const [orderNumber, setOrderNumber] = useState('');
-  // Auto-generated next id in the shop's RN-YYYY-NNN convention, derived from the live job
-  // list. It pre-fills the field but stays editable — planners can still assign a custom id.
+  // Next id in the shop's RN-YYYY-NNN convention, derived from the live job list. Filled in
+  // only on explicit request (the Generiraj button) — the field itself stays free-form.
   const suggestedOrder = useMemo(() => suggestOrderNumber(jobs.map((job) => job.order)), [jobs]);
-  useEffect(() => {
-    setOrderNumber((current) => current.trim() ? current : suggestedOrder);
-  }, [suggestedOrder]);
   const [product, setProduct] = useState('');
   const [operatorId, setOperatorId] = useState('');
   const [priority, setPriority] = useState<JobPriority>('normal');
@@ -170,9 +167,7 @@ export default function WorkOrderCreator() {
     setMessage(result.ok
       ? t.workOrders.created
       : (lang === 'hr' ? 'Izvan mreže — nalog je spremljen u red čekanja i sinkronizirat će se po povratku veze.' : 'Offline — the order was queued and will sync when the connection returns.'));
-    // Refill with the next id right away, counting the order just created — the jobs list
-    // refresh may lag (or never come, for a queued offline write).
-    setOrderNumber(suggestOrderNumber([...jobs.map((job) => job.order), draft.order]));
+    setOrderNumber('');
     setProduct('');
     setOperatorId('');
     setPriority('normal');
@@ -265,7 +260,12 @@ export default function WorkOrderCreator() {
         <div className="grid-inputs time-settings">
           <div>
             <label>{t.workOrders.orderNumber}</label>
-            <input type="text" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="text" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder={suggestedOrder} style={{ flex: 1, minWidth: 0 }} />
+              <button type="button" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setOrderNumber(suggestedOrder)} title={lang === 'hr' ? `Sljedeći broj: ${suggestedOrder}` : `Next number: ${suggestedOrder}`}>
+                {lang === 'hr' ? 'Generiraj' : 'Generate'}
+              </button>
+            </div>
           </div>
           <div>
             <label>{t.workOrders.product}</label>
