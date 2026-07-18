@@ -1,4 +1,4 @@
-import type { Task } from 'gantt-task-react';
+import type { GanttTask as Task } from '../components/drava-gantt/types';
 import type { Job, OperationStep } from './SchedulingContext';
 import { computeEffectiveSchedule, computeCriticalPath, jobsToScheduleInput, type SchedulingOptions } from './cpm';
 
@@ -69,9 +69,9 @@ const STATUS_COLORS: Record<Job['status'], string> = {
 
 /**
  * Flattens the parent/child work-order tree (tool -> assembly -> sub-assembly
- * -> part) plus each leaf's operation route into gantt-task-react's Task
- * list, using its native "project" rows for containers so parent bars
- * automatically span their children.
+ * -> part) plus each leaf's operation route into DravaGantt's task list,
+ * using "project" rows for containers so parent bars automatically span
+ * their children.
  */
 export interface GanttBuildOptions {
   highlightCritical?: boolean;
@@ -162,7 +162,7 @@ export function buildGanttTasks(jobs: Job[], options: GanttBuildOptions = {}): T
   return tasks;
 }
 
-/** Reverses a gantt-task-react task id ("wo-12" / "op-12-3") back to a job id. */
+/** Reverses a Gantt task id ("wo-12" / "op-12-3") back to a job id. */
 export function jobIdFromTaskId(taskId: string): number | null {
   const match = taskId.match(/^(?:wo|op)-(\d+)/);
   return match ? Number(match[1]) : null;

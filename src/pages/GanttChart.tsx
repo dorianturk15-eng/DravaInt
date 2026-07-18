@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Gantt, ViewMode, type Task } from 'gantt-task-react';
-import 'gantt-task-react/dist/index.css';
+import { DravaGantt, type DravaGanttHandle } from '../components/drava-gantt/DravaGantt';
+import type { GanttLane, GanttTask, GanttViewMode } from '../components/drava-gantt/types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
 import { useScheduling, type DependencyType, type UpdateResult } from '../scheduling/SchedulingContext';
@@ -19,216 +19,26 @@ interface GanttViewPreset {
   search: string;
   machineSort: 'name' | 'jobs' | 'load';
   highlightCritical: boolean;
-  viewMode: ViewMode;
+  viewMode: GanttViewMode;
 }
 
-interface OverlapPeriod {
-  start: Date;
-  end: Date;
-}
+/** Maps view modes persisted by the old gantt-task-react implementation onto DravaGantt's. */
+const LEGACY_VIEW_MODES: Record<string, GanttViewMode> = {
+  'Hour': 'hour',
+  'Quarter Day': 'shift',
+  'Half Day': 'shift',
+  'Day': 'day',
+  'Week': 'week',
+  'Month': 'month',
+  hour: 'hour',
+  shift: 'shift',
+  day: 'day',
+  week: 'week',
+  month: 'month',
+};
 
-function getGanttDateRange(tasks: Task[], viewMode: ViewMode): [Date, Date] {
-  if (tasks.length === 0) return [new Date(), new Date()];
-
-  let newStartDate = new Date(tasks[0].start);
-  let newEndDate = new Date(tasks[0].end);
-
-  for (const task of tasks) {
-    const start = new Date(task.start);
-    const end = new Date(task.end);
-    if (start < newStartDate) newStartDate = start;
-    if (end > newEndDate) newEndDate = end;
-  }
-
-  const preStepsCount = 1;
-
-  const addToDate = (date: Date, quantity: number, scale: string) => {
-    return new Date(
-      date.getFullYear() + (scale === "year" ? quantity : 0),
-      date.getMonth() + (scale === "month" ? quantity : 0),
-      date.getDate() + (scale === "day" ? quantity : 0),
-      date.getHours() + (scale === "hour" ? quantity : 0),
-      date.getMinutes() + (scale === "minute" ? quantity : 0)
-    );
-  };
-
-  const startOfDate = (date: Date, scale: string) => {
-    const scores = ["millisecond", "second", "minute", "hour", "day", "month", "year"];
-    const shouldReset = (_scale: string) => {
-      return scores.indexOf(_scale) <= scores.indexOf(scale);
-    };
-    return new Date(
-      date.getFullYear(),
-      shouldReset("year") ? 0 : date.getMonth(),
-      shouldReset("month") ? 1 : date.getDate(),
-      shouldReset("day") ? 0 : date.getHours(),
-      shouldReset("hour") ? 0 : date.getMinutes()
-    );
-  };
-
-  const getMonday = (date: Date) => {
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.setDate(diff));
-  };
-
-  switch (viewMode) {
-    case ViewMode.Month:
-      newStartDate = addToDate(newStartDate, -1 * preStepsCount, "month");
-      newStartDate = startOfDate(newStartDate, "month");
-      newEndDate = addToDate(newEndDate, 1, "year");
-      newEndDate = startOfDate(newEndDate, "year");
-      break;
-
-    case ViewMode.Week:
-      newStartDate = startOfDate(newStartDate, "day");
-      newStartDate = addToDate(getMonday(new Date(newStartDate)), -7 * preStepsCount, "day");
-      newEndDate = startOfDate(newEndDate, "day");
-      newEndDate = addToDate(newEndDate, 1.5, "month");
-      break;
-
-    case ViewMode.Day:
-      newStartDate = startOfDate(newStartDate, "day");
-      newStartDate = addToDate(newStartDate, -1 * preStepsCount, "day");
-      newEndDate = startOfDate(newEndDate, "day");
-      newEndDate = addToDate(newEndDate, 19, "day");
-      break;
-
-    case ViewMode.HalfDay:
-      newStartDate = startOfDate(newStartDate, "day");
-      newStartDate = addToDate(newStartDate, -1 * preStepsCount, "day");
-      newEndDate = startOfDate(newEndDate, "day");
-      newEndDate = addToDate(newEndDate, 108, "hour");
-      break;
-
-    case ViewMode.QuarterDay:
-      newStartDate = startOfDate(newStartDate, "day");
-      newStartDate = addToDate(newStartDate, -1 * preStepsCount, "day");
-      newEndDate = startOfDate(newEndDate, "day");
-      newEndDate = addToDate(newEndDate, 66, "hour");
-      break;
-
-    case ViewMode.Hour:
-      newStartDate = startOfDate(newStartDate, "hour");
-      newStartDate = addToDate(newStartDate, -1 * preStepsCount, "hour");
-      newEndDate = startOfDate(newEndDate, "day");
-      newEndDate = addToDate(newEndDate, 1, "day");
-      break;
-  }
-
-  return [newStartDate, newEndDate];
-}
-
-function seedDates(startDate: Date, endDate: Date, viewMode: ViewMode): Date[] {
-  let currentDate = new Date(startDate);
-  const dates = [currentDate];
-  while (currentDate < endDate) {
-    switch (viewMode) {
-      case ViewMode.Month:
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate(), currentDate.getHours());
-        break;
-      case ViewMode.Week:
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 7, currentDate.getHours());
-        break;
-      case ViewMode.Day:
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 1, currentDate.getHours());
-        break;
-      case ViewMode.HalfDay:
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentDate.getHours() + 12);
-        break;
-      case ViewMode.QuarterDay:
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentDate.getHours() + 6);
-        break;
-      case ViewMode.Hour:
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), currentDate.getHours() + 1);
-        break;
-      default:
-        currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 1, currentDate.getHours());
-        break;
-    }
-    dates.push(currentDate);
-  }
-  return dates;
-}
-
-function getXCoordinate(date: Date, dates: Date[], columnWidth: number): number {
-  const time = date.getTime();
-  const index = dates.findIndex((d) => d.getTime() >= time) - 1;
-  if (index < 0 || index >= dates.length - 1) {
-    if (time <= dates[0].getTime()) return 0;
-    return (dates.length - 1) * columnWidth;
-  }
-  const remainderMillis = time - dates[index].getTime();
-  const intervalMillis = dates[index + 1].getTime() - dates[index].getTime();
-  const percentOfInterval = remainderMillis / intervalMillis;
-  return index * columnWidth + percentOfInterval * columnWidth;
-}
-
-function findOverlaps(tasks: Task[]): OverlapPeriod[] {
-  const actualTasks = tasks.filter(t => t.type === 'task');
-  if (actualTasks.length <= 1) return [];
-
-  const events: { time: number; isStart: boolean }[] = [];
-  actualTasks.forEach(t => {
-    events.push({ time: t.start.getTime(), isStart: true });
-    events.push({ time: t.end.getTime(), isStart: false });
-  });
-
-  events.sort((a, b) => {
-    if (a.time !== b.time) return a.time - b.time;
-    return a.isStart ? 1 : -1;
-  });
-
-  const overlaps: OverlapPeriod[] = [];
-  let activeCount = 0;
-  let periodStart: number | null = null;
-
-  for (const event of events) {
-    if (event.isStart) {
-      activeCount++;
-      if (activeCount === 2) {
-        periodStart = event.time;
-      }
-    } else {
-      if (activeCount === 2 && periodStart !== null) {
-        if (event.time > periodStart) {
-          overlaps.push({
-            start: new Date(periodStart),
-            end: new Date(event.time)
-          });
-        }
-        periodStart = null;
-      }
-      activeCount--;
-      if (activeCount === 1 && periodStart !== null) {
-        if (event.time > periodStart) {
-          overlaps.push({
-            start: new Date(periodStart),
-            end: new Date(event.time)
-          });
-        }
-        periodStart = null;
-      }
-    }
-  }
-
-  if (overlaps.length <= 1) return overlaps;
-
-  overlaps.sort((a, b) => a.start.getTime() - b.start.getTime());
-  const merged: OverlapPeriod[] = [{ start: overlaps[0].start, end: overlaps[0].end }];
-  for (let i = 1; i < overlaps.length; i++) {
-    const last = merged[merged.length - 1];
-    const curr = overlaps[i];
-    if (curr.start.getTime() <= last.end.getTime()) {
-      if (curr.end.getTime() > last.end.getTime()) {
-        last.end = curr.end;
-      }
-    } else {
-      merged.push({ start: curr.start, end: curr.end });
-    }
-  }
-
-  return merged;
+function normalizeViewMode(value: unknown): GanttViewMode {
+  return LEGACY_VIEW_MODES[String(value)] ?? 'day';
 }
 
 export default function GanttChart() {
@@ -244,7 +54,7 @@ export default function GanttChart() {
   const [depError, setDepError] = useState('');
   const [writeWarning, setWriteWarning] = useState('');
   const writeWarningTimerRef = useRef<number | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Day);
+  const [viewMode, setViewMode] = useState<GanttViewMode>('day');
   const [search, setSearch] = useState('');
   const [highlightCritical, setHighlightCritical] = useState(true);
   const [machineSort, setMachineSort] = useState<'name' | 'jobs' | 'load'>('name');
@@ -259,7 +69,11 @@ export default function GanttChart() {
   const [draggedOperation, setDraggedOperation] = useState<{ jobId: number; operationId: number } | null>(null);
   const [planningToolsOpen, setPlanningToolsOpen] = useState(() => localStorage.getItem('gantt-planning-tools-open') === 'true');
   const [viewPresets, setViewPresets] = useState<GanttViewPreset[]>(() => {
-    try { return JSON.parse(localStorage.getItem(presetStorageKey) || '[]') as GanttViewPreset[]; } catch { return []; }
+    try {
+      const parsed = JSON.parse(localStorage.getItem(presetStorageKey) || '[]') as GanttViewPreset[];
+      // Presets saved by the old gantt-task-react build stored its ViewMode strings ("Half Day"…).
+      return parsed.map((preset) => ({ ...preset, viewMode: normalizeViewMode(preset.viewMode) }));
+    } catch { return []; }
   });
   const [activePresetId, setActivePresetId] = useState('');
   const [presetEditorOpen, setPresetEditorOpen] = useState(false);
@@ -273,12 +87,12 @@ export default function GanttChart() {
     if (writeWarningTimerRef.current !== null) window.clearTimeout(writeWarningTimerRef.current);
   }, []);
 
-  const viewModeOptions = useMemo(() => [
-    { label: lang === 'hr' ? 'Sat' : 'Hour', value: ViewMode.Hour },
-    { label: lang === 'hr' ? 'Smjena' : 'Shift', value: ViewMode.HalfDay },
-    { label: lang === 'hr' ? 'Dan' : 'Day', value: ViewMode.Day },
-    { label: lang === 'hr' ? 'Tjedan' : 'Week', value: ViewMode.Week },
-    { label: lang === 'hr' ? 'Mjesec' : 'Month', value: ViewMode.Month },
+  const viewModeOptions = useMemo((): { label: string; value: GanttViewMode }[] => [
+    { label: lang === 'hr' ? 'Sat' : 'Hour', value: 'hour' },
+    { label: lang === 'hr' ? 'Smjena' : 'Shift', value: 'shift' },
+    { label: lang === 'hr' ? 'Dan' : 'Day', value: 'day' },
+    { label: lang === 'hr' ? 'Tjedan' : 'Week', value: 'week' },
+    { label: lang === 'hr' ? 'Mjesec' : 'Month', value: 'month' },
   ], [lang]);
 
   // Baseline schedule tracking state
@@ -326,12 +140,12 @@ export default function GanttChart() {
     skipWeekends: true,
   }), [settings.holidays, settings.workdayEnd, settings.workdayStart, validJobs]);
   const scheduleSlack = useMemo(() => computeScheduleSlack(jobsToScheduleInput(validJobs), effectiveSchedule), [effectiveSchedule, validJobs]);
-  const GanttTooltip = useCallback(({ task, fontSize, fontFamily }: { task: Task; fontSize: string; fontFamily: string }) => {
+  const renderGanttTooltip = useCallback((task: GanttTask) => {
     const jobId = jobIdFromTaskId(task.id);
     const job = jobs.find((item) => item.id === jobId);
     const durationHours = Math.max(0, (task.end.getTime() - task.start.getTime()) / 3_600_000);
     const slackHours = jobId ? (scheduleSlack.get(jobId) ?? 0) / 3_600_000 : 0;
-    return <div className="gantt-premium-tooltip" style={{ fontFamily, fontSize }}>
+    return <div className="gantt-premium-tooltip">
       <strong>{task.name}</strong>
       <span>{task.start.toLocaleString(lang === 'hr' ? 'hr-HR' : 'en-US')} → {task.end.toLocaleString(lang === 'hr' ? 'hr-HR' : 'en-US')}</span>
       <span>{lang === 'hr' ? 'Trajanje' : 'Duration'}: {durationHours.toFixed(1)}h</span>
@@ -383,7 +197,7 @@ export default function GanttChart() {
   }, [redo, undo]);
 
   // Builds task hierarchies per machine
-  const buildTasksForMachine = useCallback((machineName: string): Task[] => {
+  const buildTasksForMachine = useCallback((machineName: string): GanttTask[] => {
     const normalizedSearch = search.trim().toLowerCase();
     const matchingJobs = jobs.filter((j) => {
       if (normalizedSearch && !`${j.order} ${j.operator} ${j.product ?? ''} ${j.machine}`.toLowerCase().includes(normalizedSearch)) return false;
@@ -419,324 +233,53 @@ export default function GanttChart() {
     });
   }, [collapsedIds, highlightCritical, jobs, search, settings.criticalToleranceMs, settings.holidays, settings.workdayEnd, settings.workdayStart]);
 
-  // Setup scroll synchronization & over-allocation highlights
-  useEffect(() => {
-    let cleanupScroll: (() => void) | undefined;
+  /**
+   * Attaches the visual decorations (in-progress texture, setup stripe, baseline ghost, warning
+   * badge, dependency-arrow types) to the base tasks. The old implementation injected these into
+   * gantt-task-react's rendered DOM after the fact; DravaGantt renders them first-class.
+   */
+  const decorateTasks = useCallback((tasks: GanttTask[]): GanttTask[] => tasks.map((task) => {
+    const jobId = jobIdFromTaskId(task.id);
+    const job = jobs.find((item) => item.id === jobId);
+    if (!job) return task;
+    const decorated: GanttTask = { ...task };
+    const isWorkOrderBar = task.id.startsWith('wo-');
 
-    const updateGanttDOM = () => {
-      const containerEl = pageContainerRef.current;
-      if (!containerEl) return;
+    if (job.status === 'inProgress') decorated.texture = true;
 
-      // 1. Scroll Synchronization Setup
-      if (cleanupScroll) cleanupScroll();
-      const scrollContainers: HTMLElement[] = [];
-      const containers = containerEl.querySelectorAll('.gantt-container');
-
-      containers.forEach(container => {
-        const el = container.querySelector('[class*="scrollWrapper"]') || container.querySelector('._2k9Ys');
-        if (el) {
-          scrollContainers.push(el as HTMLElement);
-        }
-      });
-
-      let isSyncing = false;
-      const handleScroll = (e: Event) => {
-        if (isSyncing) return;
-        isSyncing = true;
-        const target = e.currentTarget as HTMLElement;
-        const scrollPos = target.scrollLeft;
-        scrollContainers.forEach(el => {
-          if (el !== target) {
-            el.scrollLeft = scrollPos;
-          }
-        });
-        isSyncing = false;
-      };
-
-      scrollContainers.forEach(el => {
-        el.addEventListener('scroll', handleScroll);
-      });
-
-      cleanupScroll = () => {
-        scrollContainers.forEach(el => {
-          el.removeEventListener('scroll', handleScroll);
-        });
-      };
-
-      // 2. Over-allocation Warning Highlights Setup
-      containers.forEach(container => {
-        const mach = container.getAttribute('data-machine');
-        if (!mach) return;
-
-        const machineTasks = buildTasksForMachine(mach);
-        if (machineTasks.length === 0) return;
-
-        const svgs = container.querySelectorAll('svg');
-        if (svgs.length < 2) return;
-        const svg = svgs[1]; // The main grid/tasks SVG
-
-        // Calculate overlap periods
-        const overlaps = findOverlaps(machineTasks);
-
-        // Remove any existing overlap group
-        const existingGroup = svg.querySelector('.overlap-highlights-group');
-        if (existingGroup) {
-          existingGroup.remove();
-        }
-        svg.querySelectorAll('.dravaint-enhancement').forEach((element) => element.remove());
-
-        // Compute date ranges and columns width
-        const [startDate, endDate] = getGanttDateRange(machineTasks, viewMode);
-        const dates = seedDates(startDate, endDate, viewMode);
-        const columnWidth = viewMode === ViewMode.Month ? 300 : viewMode === ViewMode.Week ? 250 : viewMode === ViewMode.HalfDay ? 100 : 65;
-
-        // Create overlap group
-        const overlapGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        overlapGroup.setAttribute('class', 'overlap-highlights-group');
-
-        overlaps.forEach(period => {
-          const xStart = getXCoordinate(period.start, dates, columnWidth);
-          const xEnd = getXCoordinate(period.end, dates, columnWidth);
-          const width = Math.max(2, xEnd - xStart);
-
-          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          rect.setAttribute('x', String(xStart));
-          rect.setAttribute('y', '0');
-          rect.setAttribute('width', String(width));
-          rect.setAttribute('height', '100%');
-          rect.setAttribute('fill', 'rgba(239, 68, 68, 0.12)'); // soft premium light red backdrop highlight
-          rect.setAttribute('stroke', 'rgba(239, 68, 68, 0.25)');
-          rect.setAttribute('stroke-width', '1');
-
-          const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-          const startStr = period.start.toLocaleString();
-          const endStr = period.end.toLocaleString();
-          title.textContent = lang === 'hr'
-            ? `Preklapanje / Preopterećenje: ${startStr} - ${endStr}`
-            : `Over-allocation / Overlap: ${startStr} - ${endStr}`;
-          rect.appendChild(title);
-
-          overlapGroup.appendChild(rect);
-        });
-
-        // Insert group at the very beginning of the SVG so it stays under the task bars/grid lines
-        if (svg.firstChild) {
-          svg.insertBefore(overlapGroup, svg.firstChild);
-        } else {
-          svg.appendChild(overlapGroup);
-        }
-
-        const patternSuffix = mach.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-        const patternId = `gantt-active-${patternSuffix}`;
-        const setupPatternId = `gantt-setup-${patternSuffix}`;
-        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        defs.setAttribute('class', 'dravaint-enhancement');
-        const activePattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
-        activePattern.setAttribute('id', patternId);
-        activePattern.setAttribute('width', '8');
-        activePattern.setAttribute('height', '8');
-        activePattern.setAttribute('patternUnits', 'userSpaceOnUse');
-        activePattern.setAttribute('patternTransform', 'rotate(35)');
-        const activeStripe = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        activeStripe.setAttribute('width', '3');
-        activeStripe.setAttribute('height', '8');
-        activeStripe.setAttribute('fill', 'rgba(255,255,255,.25)');
-        activePattern.appendChild(activeStripe);
-        const setupPattern = activePattern.cloneNode(true) as SVGPatternElement;
-        setupPattern.setAttribute('id', setupPatternId);
-        setupPattern.querySelector('rect')?.setAttribute('fill', 'rgba(251,191,36,.8)');
-        defs.append(activePattern, setupPattern);
-        svg.prepend(defs);
-
-        const backgroundGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        backgroundGroup.setAttribute('class', 'dravaint-enhancement gantt-time-bands');
-        for (let index = 0; index < dates.length - 1; index++) {
-          const date = dates[index];
-          if (date.getDay() !== 0 && date.getDay() !== 6) continue;
-          const weekend = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          weekend.setAttribute('x', String(index * columnWidth));
-          weekend.setAttribute('y', '0');
-          weekend.setAttribute('width', String(columnWidth));
-          weekend.setAttribute('height', '100%');
-          weekend.setAttribute('class', 'gantt-weekend-band');
-          backgroundGroup.appendChild(weekend);
-        }
-        const now = new Date();
-        if (now >= startDate && now <= endDate) {
-          const todayLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          const todayX = getXCoordinate(now, dates, columnWidth);
-          todayLine.setAttribute('x1', String(todayX));
-          todayLine.setAttribute('x2', String(todayX));
-          todayLine.setAttribute('y1', '0');
-          todayLine.setAttribute('y2', '100%');
-          todayLine.setAttribute('class', 'gantt-exact-today-line');
-          backgroundGroup.appendChild(todayLine);
-        }
-        if (svg.firstChild) svg.insertBefore(backgroundGroup, svg.firstChild.nextSibling);
-        else svg.appendChild(backgroundGroup);
-
-        const barGroups = Array.from(svg.querySelectorAll('g._KxSXS')) as SVGGElement[];
-        const taskRects = new Map<string, SVGRectElement>();
-        barGroups.forEach((group, index) => {
-          const task = machineTasks[index];
-          const rect = group.querySelector('rect._31ERP') as SVGRectElement | null;
-          if (!task || !rect) return;
-          taskRects.set(task.id, rect);
-          const jobId = jobIdFromTaskId(task.id);
-          const job = jobs.find((item) => item.id === jobId);
-          if (!job) return;
-
-          if (job.status === 'inProgress') {
-            const texture = rect.cloneNode(false) as SVGRectElement;
-            texture.setAttribute('class', 'dravaint-enhancement gantt-status-texture');
-            texture.setAttribute('fill', `url(#${patternId})`);
-            texture.setAttribute('pointer-events', 'none');
-            group.appendChild(texture);
-          }
-
-          if (job.setupHours && task.id.startsWith('wo-')) {
-            const totalHours = Math.max(.01, (task.end.getTime() - task.start.getTime()) / 3_600_000);
-            const setup = rect.cloneNode(false) as SVGRectElement;
-            setup.setAttribute('class', 'dravaint-enhancement gantt-setup-overlay');
-            setup.setAttribute('width', String(Math.max(3, Number(rect.getAttribute('width') || 0) * Math.min(1, job.setupHours / totalHours))));
-            setup.setAttribute('fill', `url(#${setupPatternId})`);
-            setup.setAttribute('pointer-events', 'none');
-            const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-            title.textContent = `${lang === 'hr' ? 'Priprema' : 'Setup'}: ${job.setupHours}h`;
-            setup.appendChild(title);
-            group.appendChild(setup);
-          }
-
-          if (showBaseline && task.id.startsWith('wo-') && baseline[job.id]) {
-            const baselineStart = new Date(baseline[job.id].start);
-            const baselineEnd = new Date(baseline[job.id].end);
-            const ghost = rect.cloneNode(false) as SVGRectElement;
-            ghost.setAttribute('class', 'dravaint-enhancement gantt-baseline-ghost');
-            ghost.setAttribute('x', String(getXCoordinate(baselineStart, dates, columnWidth)));
-            ghost.setAttribute('width', String(Math.max(2, getXCoordinate(baselineEnd, dates, columnWidth) - getXCoordinate(baselineStart, dates, columnWidth))));
-            group.appendChild(ghost);
-          }
-
-          const hasOperatorConflict = Boolean(job.operator) && jobs.some((other) => other.id !== job.id && other.operator.trim().toLowerCase() === job.operator.trim().toLowerCase() && new Date(job.start) < new Date(other.end) && new Date(other.start) < new Date(job.end));
-          if (task.id.startsWith('wo-') && (hasOperatorConflict || (job.materialStatus && job.materialStatus !== 'ready'))) {
-            const badge = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            badge.setAttribute('class', 'dravaint-enhancement gantt-warning-badge');
-            badge.setAttribute('cx', String(Number(rect.getAttribute('x') || 0) + Number(rect.getAttribute('width') || 0) - 2));
-            badge.setAttribute('cy', String(Number(rect.getAttribute('y') || 0) + 2));
-            badge.setAttribute('r', '5');
-            const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-            title.textContent = hasOperatorConflict
-              ? (lang === 'hr' ? 'Sukob rasporeda operatera' : 'Operator schedule conflict')
-              : (lang === 'hr' ? 'Materijal nije spreman' : 'Material is not ready');
-            badge.appendChild(title);
-            group.appendChild(badge);
-          }
-        });
-
-        const connectorGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        connectorGroup.setAttribute('class', 'dravaint-enhancement gantt-custom-connectors');
-        machineTasks.forEach((task) => (task.dependencies ?? []).forEach((predecessorId) => {
-          const from = taskRects.get(predecessorId);
-          const to = taskRects.get(task.id);
-          if (!from || !to) return;
-          const job = jobs.find((item) => item.id === jobIdFromTaskId(task.id));
-          const dependency = job?.dependencies?.find((item) => item.jobId === jobIdFromTaskId(predecessorId));
-          const fromStart = Number(from.getAttribute('x') || 0);
-          const fromEnd = fromStart + Number(from.getAttribute('width') || 0);
-          const toStart = Number(to.getAttribute('x') || 0);
-          const toEnd = toStart + Number(to.getAttribute('width') || 0);
-          const sourceX = dependency?.type === 'SS' || dependency?.type === 'SF' ? fromStart : fromEnd;
-          const targetX = dependency?.type === 'FF' || dependency?.type === 'SF' ? toEnd : toStart;
-          const sourceY = Number(from.getAttribute('y') || 0) + Number(from.getAttribute('height') || 0) / 2;
-          const targetY = Number(to.getAttribute('y') || 0) + Number(to.getAttribute('height') || 0) / 2;
-          const bend = Math.max(18, Math.abs(targetX - sourceX) * .35);
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', `M ${sourceX} ${sourceY} C ${sourceX + bend} ${sourceY}, ${targetX - bend} ${targetY}, ${targetX} ${targetY}`);
-          path.setAttribute('class', 'gantt-custom-connector');
-          path.setAttribute('data-from', predecessorId);
-          path.setAttribute('data-to', task.id);
-          if (dependency?.type === 'SS' || dependency?.type === 'SF') path.setAttribute('stroke-dasharray', '5 4');
-          connectorGroup.appendChild(path);
-        }));
-        if (barGroups[0]?.parentNode) barGroups[0].parentNode.insertBefore(connectorGroup, barGroups[0]);
-        else svg.appendChild(connectorGroup);
-        barGroups.forEach((group, index) => {
-          const taskId = machineTasks[index]?.id;
-          if (!taskId) return;
-          group.onmouseenter = () => connectorGroup.querySelectorAll('.gantt-custom-connector').forEach((path) => path.classList.toggle('is-related', path.getAttribute('data-from') === taskId || path.getAttribute('data-to') === taskId));
-          group.onmouseleave = () => connectorGroup.querySelectorAll('.gantt-custom-connector').forEach((path) => path.classList.remove('is-related'));
-        });
-      });
-    };
-
-    // Run initially
-    updateGanttDOM();
-
-    // Re-run setup on DOM changes
-    const observer = new MutationObserver(() => {
-      observer.disconnect();
-      updateGanttDOM();
-      if (pageContainerRef.current) {
-        observer.observe(pageContainerRef.current, { childList: true, subtree: true });
-      }
-    });
-
-    if (pageContainerRef.current) {
-      observer.observe(pageContainerRef.current, { childList: true, subtree: true });
+    if (isWorkOrderBar && job.setupHours) {
+      const totalHours = Math.max(0.01, (task.end.getTime() - task.start.getTime()) / 3_600_000);
+      decorated.setupRatio = Math.min(1, job.setupHours / totalHours);
+      decorated.setupLabel = `${lang === 'hr' ? 'Priprema' : 'Setup'}: ${job.setupHours}h`;
     }
 
-    return () => {
-      if (cleanupScroll) cleanupScroll();
-      observer.disconnect();
-    };
-  }, [baseline, buildTasksForMachine, jobs, viewMode, machinesList, lang, showBaseline]);
-
-  useEffect(() => {
-    const root = pageContainerRef.current;
-    if (!root) return;
-    const pointerDown = (event: PointerEvent) => {
-      if ((event.target as Element).closest('.gantt-lib-wrapper')) document.documentElement.dataset.ganttDragging = 'true';
-    };
-    const pointerUp = () => { document.documentElement.dataset.ganttDragging = 'false'; };
-    root.addEventListener('pointerdown', pointerDown);
-    window.addEventListener('pointerup', pointerUp);
-    return () => { root.removeEventListener('pointerdown', pointerDown); window.removeEventListener('pointerup', pointerUp); document.documentElement.dataset.ganttDragging = 'false'; };
-  }, []);
-
-  const scrollToToday = () => {
-    const scrollContainers = pageContainerRef.current?.querySelectorAll(
-      '.gantt-container [class*="scrollWrapper"], .gantt-container ._2k9Ys'
-    );
-    if (!scrollContainers || scrollContainers.length === 0) return;
-
-    let todayRect: SVGRectElement | null = null;
-    const containers = pageContainerRef.current?.querySelectorAll('.gantt-container') || [];
-    for (const container of Array.from(containers)) {
-      const rect = container.querySelector('g.today rect');
-      if (rect && rect.getAttribute('x')) {
-        todayRect = rect as SVGRectElement;
-        break;
-      }
+    if (showBaseline && isWorkOrderBar && baseline[job.id]) {
+      decorated.baseline = { start: new Date(baseline[job.id].start), end: new Date(baseline[job.id].end) };
     }
 
-    if (todayRect) {
-      const xVal = parseFloat(todayRect.getAttribute('x') || '0');
-      const widthVal = parseFloat(todayRect.getAttribute('width') || '0');
-      const firstScroll = scrollContainers[0] as HTMLElement;
-      const targetScrollLeft = xVal - firstScroll.clientWidth / 2 + widthVal / 2;
-
-      firstScroll.scrollTo({
-        left: targetScrollLeft,
-        behavior: 'smooth'
-      });
-    } else {
-      const firstScroll = scrollContainers[0] as HTMLElement;
-      firstScroll.scrollTo({
-        left: (firstScroll.scrollWidth - firstScroll.clientWidth) / 2,
-        behavior: 'smooth'
-      });
+    const hasOperatorConflict = Boolean(job.operator) && jobs.some((other) => other.id !== job.id && other.operator.trim().toLowerCase() === job.operator.trim().toLowerCase() && new Date(job.start) < new Date(other.end) && new Date(other.start) < new Date(job.end));
+    if (isWorkOrderBar && (hasOperatorConflict || (job.materialStatus && job.materialStatus !== 'ready'))) {
+      decorated.warning = hasOperatorConflict
+        ? (lang === 'hr' ? 'Sukob rasporeda operatera' : 'Operator schedule conflict')
+        : (lang === 'hr' ? 'Materijal nije spreman' : 'Material is not ready');
     }
-  };
+
+    if (task.dependencies?.length && job.dependencies?.length) {
+      decorated.dependencyTypes = Object.fromEntries(job.dependencies.map((dependency) => [`wo-${dependency.jobId}`, dependency.type]));
+    }
+    return decorated;
+  }), [baseline, jobs, lang, showBaseline]);
+
+  const ganttLanes = useMemo((): GanttLane[] => machinesList.map((machineName) => ({
+    id: machineName,
+    label: machineName,
+    efficiency: machineEfficiency(machineName),
+    tasks: decorateTasks(buildTasksForMachine(machineName)),
+  })), [buildTasksForMachine, decorateTasks, machinesList, jobs]);
+
+  const ganttRef = useRef<DravaGanttHandle>(null);
+  // Bumped when the database rejects a drag so the renderer discards its optimistic bar position.
+  const [ganttRevertNonce, setGanttRevertNonce] = useState(0);
 
   function saveBaseline() {
     const data: Record<number, { start: string; end: string }> = {};
@@ -769,6 +312,8 @@ export default function GanttChart() {
    */
   const reportWriteResult = useCallback((result: UpdateResult) => {
     if (result.ok || result.reason === 'offline') return;
+    // Discard the renderer's optimistic bar position — the write did not land.
+    setGanttRevertNonce((nonce) => nonce + 1);
     const message = result.reason === 'rejected'
       ? (result.message || (lang === 'hr' ? 'Baza je odbila promjenu (npr. zauzet termin) — vraćeno na prethodno stanje.' : 'The database rejected the change (e.g. a booked slot) — reverted.'))
       : (lang === 'hr' ? 'Nalog je u međuvremenu izmijenjen drugdje — vraćeno na svježe stanje.' : 'The order was changed elsewhere in the meantime — reloaded the fresh state.');
@@ -799,7 +344,7 @@ export default function GanttChart() {
    *   right edge  -> start fixed, duration changes   -> only this op resizes
    *   left edge   -> both change, so the far edge stays put
    */
-  function handleOperationDateChange(task: Task) {
+  function handleOperationDateChange(task: GanttTask) {
     const match = task.id.match(/^op-(\d+)-(\d+)$/);
     if (!match) return;
     const jobId = Number(match[1]);
@@ -822,10 +367,9 @@ export default function GanttChart() {
     pushHistory();
     void updateJob(jobId, { operations, start: startStr, end: endStr }).then(reportWriteResult);
     adjustDependencies(jobId, startStr, endStr, jobs);
-    document.documentElement.dataset.ganttDragging = 'false';
   }
 
-  function handleDateChange(task: Task) {
+  function handleDateChange(task: GanttTask) {
     if (task.id.startsWith('op-')) {
       handleOperationDateChange(task);
       return;
@@ -834,7 +378,7 @@ export default function GanttChart() {
     if (!jobId) return;
     pushHistory();
     const snappedStart = new Date(task.start);
-    if (viewMode !== ViewMode.Hour) {
+    if (viewMode !== 'hour') {
       const hours = snappedStart.getHours();
       const candidates = [settings.workdayStart, settings.workdayStart + 8, settings.workdayEnd];
       snappedStart.setHours(candidates.reduce((best, candidate) => Math.abs(candidate - hours) < Math.abs(best - hours) ? candidate : best), 0, 0, 0);
@@ -855,10 +399,9 @@ export default function GanttChart() {
       if (!selected) return;
       void updateJob(selectedId, { start: toLocalDateTimeString(new Date(new Date(selected.start).getTime() + delta)), end: toLocalDateTimeString(new Date(new Date(selected.end).getTime() + delta)) }).then(reportWriteResult);
     });
-    document.documentElement.dataset.ganttDragging = 'false';
   }
 
-  function handleProgressChange(task: Task) {
+  function handleProgressChange(task: GanttTask) {
     // An operation row renders the parent job's progress; it is not separately tracked.
     if (task.id.startsWith('op-')) return;
     const jobId = jobIdFromTaskId(task.id);
@@ -867,7 +410,7 @@ export default function GanttChart() {
     void updateJob(jobId, { progress: Math.round(task.progress) }).then(reportWriteResult);
   }
 
-  function handleDelete(task: Task): boolean {
+  function handleDelete(task: GanttTask): boolean {
     // Deleting an operation row must not delete the work order it belongs to.
     if (task.id.startsWith('op-')) return false;
     const jobId = jobIdFromTaskId(task.id);
@@ -912,7 +455,7 @@ export default function GanttChart() {
     updateJob(jobId, { dependencies: (job.dependencies ?? []).filter((d) => d.jobId !== predecessorId) });
   }
 
-  function handleSelect(task: Task, selected: boolean) {
+  function handleSelect(task: GanttTask, selected: boolean) {
     const jobId = jobIdFromTaskId(task.id);
     if (!jobId) return;
     setSelectedIds((current) => {
@@ -1251,46 +794,24 @@ export default function GanttChart() {
       {loading ? <div className="gantt-skeleton" aria-label="Loading"><span /><span /><span /><span /></div> : validJobs.length === 0 ? (
         <p className="subtitle-text" style={{ fontSize: 13 }}>{t.machines.noJobs}</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 25, marginTop: 15 }}>
-          {machinesList.map((mach, machineIndex) => {
-            const machineTasks = buildTasksForMachine(mach);
-            const efficiency = machineEfficiency(mach);
-            return (
-              <div
-                key={mach}
-                className={`step-box gantt-container${machineIndex === 0 ? ' gantt-primary-lane' : ' gantt-secondary-lane'}`}
-                data-machine={mach}
-                style={{ background: 'var(--bg-card)', padding: 20, borderRadius: 'var(--radius-card)', border: '1px solid var(--border-color)', margin: 0 }}
-              >
-                <div className="machine-lane-header"><div><strong>{mach}</strong><span>{machineTasks.filter((task) => task.type === 'task').length} {lang === 'hr' ? 'zadataka' : 'tasks'}</span></div><div className="efficiency-meter"><span style={{ width: `${efficiency}%` }} /><b>{efficiency}%</b></div></div>
-                {machineTasks.length === 0 ? <div className="empty-machine-lane">{lang === 'hr' ? 'Nema dodijeljenih naloga' : 'No assigned work orders'}</div> : <div className="gantt-lib-wrapper">
-                  <Gantt
-                    tasks={machineTasks}
-                    viewMode={viewMode}
-                    onDateChange={handleDateChange}
-                    onProgressChange={handleProgressChange}
-                    onDelete={handleDelete}
-                    onDoubleClick={(task) => setEditingJobId(jobIdFromTaskId(task.id))}
-                    onSelect={handleSelect}
-                    TooltipContent={GanttTooltip}
-                    rowHeight={settings.ganttRowHeight}
-                    barFill={settings.ganttBarFill}
-                    locale={lang === 'hr' ? 'hr' : 'en'}
-                    columnWidth={
-                      viewMode === ViewMode.Month
-                        ? 300
-                        : viewMode === ViewMode.Week
-                        ? 250
-                        : viewMode === ViewMode.HalfDay
-                        ? 100
-                        : 65
-                    }
-                    todayColor="rgba(220, 38, 38, 0.15)"
-                  />
-                </div>}
-              </div>
-            );
-          })}
+        <div className="step-box gantt-container" style={{ background: 'var(--bg-card)', padding: 20, borderRadius: 'var(--radius-card)', border: '1px solid var(--border-color)', margin: '15px 0 0' }}>
+          <DravaGantt
+            ref={ganttRef}
+            lanes={ganttLanes}
+            viewMode={viewMode}
+            locale={lang === 'hr' ? 'hr-HR' : 'en-US'}
+            rowHeight={settings.ganttRowHeight}
+            barFillPercent={settings.ganttBarFill}
+            emptyLaneLabel={lang === 'hr' ? 'Nema dodijeljenih naloga' : 'No assigned work orders'}
+            taskCountLabel={(count) => `${count} ${lang === 'hr' ? 'zadataka' : 'tasks'}`}
+            onDateChange={handleDateChange}
+            onProgressChange={handleProgressChange}
+            onDelete={handleDelete}
+            onDoubleClick={(task) => setEditingJobId(jobIdFromTaskId(task.id))}
+            onSelect={handleSelect}
+            renderTooltip={renderGanttTooltip}
+            revertNonce={ganttRevertNonce}
+          />
         </div>
       )}
 
@@ -1300,7 +821,7 @@ export default function GanttChart() {
 
       {/* Floating Scroll-to-Today Button */}
       <button
-        onClick={scrollToToday}
+        onClick={() => ganttRef.current?.scrollToNow()}
         style={{
           position: 'fixed',
           bottom: '24px',
