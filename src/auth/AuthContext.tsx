@@ -78,6 +78,13 @@ interface AuthContextValue {
   username: string | null;
   users: StoredUser[];
   loading: boolean;
+  /**
+   * True while the signed-in user's profile (and therefore their real role) has not yet been
+   * resolved: the session exists but the authenticated `profiles` fetch is still in flight. Route
+   * guards must treat the role as unknown — not the default 'workers' — during this window, or an
+   * admin gets bounced off /admin on a direct load/refresh before their profile arrives.
+   */
+  roleResolving: boolean;
   secureMode: boolean;
   login: (identifier: string, password: string) => Promise<boolean>;
   loginWithRfid: (badge: string) => Promise<boolean>;
@@ -109,6 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const users = supabase ? (profilesQuery.data ?? []) : fallbackUsers;
   const loading = isSupabaseConfigured ? sessionLoading || profilesQuery.isLoading : false;
+  // The signed-in user's role is unknown until their own profile row is present in `users`. Use
+  // isFetching (not isLoading) because the pre-login anon fetch errors out — after login isLoading is
+  // already false while the authenticated refetch is still running, so isLoading would clear too early.
+  const currentUserResolved = users.some((user) => user.username.toLowerCase() === (username ?? '').toLowerCase());
+  const roleResolving = Boolean(supabase) && Boolean(username) && !currentUserResolved && (sessionLoading || profilesQuery.isFetching);
 
   useEffect(() => {
     if (!supabase) return;
@@ -216,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }
 
-  const value: AuthContextValue = { isAuthenticated: Boolean(username), username, users, loading, secureMode: isSupabaseConfigured, login, loginWithRfid, loginWithSso, logout, addUser, updateUser, deleteUser };
+  const value: AuthContextValue = { isAuthenticated: Boolean(username), username, users, loading, roleResolving, secureMode: isSupabaseConfigured, login, loginWithRfid, loginWithSso, logout, addUser, updateUser, deleteUser };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

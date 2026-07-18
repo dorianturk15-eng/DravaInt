@@ -52,7 +52,7 @@ function canAccess(role: string, tab: AppTab) {
 
 function App() {
   const { t, lang, setLang } = useLanguage();
-  const { isAuthenticated, username, users, logout } = useAuth();
+  const { isAuthenticated, username, users, roleResolving, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { settings } = useSettings();
   const { workers, displayName } = useWorkers();
@@ -61,7 +61,7 @@ function App() {
   const { online, pendingChanges } = useConnectivity();
   const location = useLocation();
   const routerNavigate = useNavigate();
-  const currentUser = users.find((user) => user.username === username);
+  const currentUser = users.find((user) => user.username.toLowerCase() === (username ?? '').toLowerCase());
   // Role comes only from the authenticated profile. No username-based admin fallback: a hardcoded
   // "this username is admin" default is a backdoor pattern (harmless server-side since RLS still
   // applies, but it hands out the full admin UI locally and would confuse a security audit).
@@ -96,11 +96,15 @@ function App() {
       routerNavigate(`/${canAccess(role, settings.defaultView) ? settings.defaultView : 'dashboard'}`, { replace: true });
       return;
     }
+    // Don't enforce role-based access while the signed-in user's role is still resolving: `role`
+    // defaults to 'workers' until the authenticated profile loads, which would bounce an admin off
+    // /admin on a direct load/refresh before their real role arrives.
+    if (roleResolving) return;
     if (!canAccess(role, routeValue)) {
       setForbidden(true);
       routerNavigate('/dashboard', { replace: true });
     }
-  }, [role, routeValue, routerNavigate, settings.defaultView]);
+  }, [roleResolving, role, routeValue, routerNavigate, settings.defaultView]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -229,13 +233,15 @@ function App() {
     </nav>
 
     <main className="page-content" id="main-content"><AppErrorBoundary language={lang} resetKey={tab} onReset={() => navigate('dashboard')}><Suspense fallback={<div className="page-loading"><span /><span /><span /></div>}>
-      {tab === 'dashboard' && <Dashboard />}
-      {tab === 'shifts' && canAccess(role, tab) && <ShiftSchedule />}
-      {tab === 'machines' && <MachineSchedule />}
-      {tab === 'workOrders' && canAccess(role, tab) && <WorkOrderCreator />}
-      {tab === 'progress' && <ProgressMonitoring />}
-      {tab === 'gantt' && <GanttChart />}
-      {tab === 'admin' && isAdmin && <Admin />}
+      {roleResolving ? <div className="page-loading"><span /><span /><span /></div> : <>
+        {tab === 'dashboard' && <Dashboard />}
+        {tab === 'shifts' && canAccess(role, tab) && <ShiftSchedule />}
+        {tab === 'machines' && <MachineSchedule />}
+        {tab === 'workOrders' && canAccess(role, tab) && <WorkOrderCreator />}
+        {tab === 'progress' && <ProgressMonitoring />}
+        {tab === 'gantt' && <GanttChart />}
+        {tab === 'admin' && isAdmin && <Admin />}
+      </>}
     </Suspense></AppErrorBoundary></main>
 
     <SettingsModal open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} isAdmin={isAdmin} />
