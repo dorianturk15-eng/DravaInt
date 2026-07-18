@@ -58,6 +58,21 @@ export function isStrongPassword(value: string) {
   return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
 }
 
+/**
+ * Resolves the Supabase sign-in email for a typed login identifier. An identifier containing '@' is
+ * already an email and used as-is; a plain username is mapped to its real email by the server-side
+ * `login_email_for_username` RPC (passed here as `resolvedEmail`). The deterministic
+ * `<username>@dravaint.local` convention is only a last resort — used when the RPC returns no match
+ * (unknown username) or is unreachable — so accounts whose email doesn't follow that convention
+ * still log in by username.
+ */
+export function loginEmailFor(identifier: string, resolvedEmail: string | null | undefined): string {
+  const normalized = identifier.trim().toLowerCase();
+  if (normalized.includes('@')) return normalized;
+  const resolved = resolvedEmail?.trim();
+  return resolved || `${normalized}@dravaint.local`;
+}
+
 interface AuthContextValue {
   isAuthenticated: boolean;
   username: string | null;
@@ -116,16 +131,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const normalized = identifier.trim().toLowerCase();
     if (!normalized || !password) return false;
     if (supabase) {
-      const profile = users.find((user) => user.username.toLowerCase() === normalized);
-      let email = normalized.includes('@') ? normalized : profile?.email || '';
-      if (!email) {
-        // Pre-login the profiles query is empty (RLS: authenticated-only), so resolve the
-        // username server-side; the legacy @dravaint.local guess remains the last resort.
-        const { data: resolved } = await supabase.rpc('login_email_for_username', { candidate: normalized });
-        email = (typeof resolved === 'string' && resolved) || `${normalized}@dravaint.local`;
+      // A plain username must be resolved to its real email before any session exists. profiles is
+      // authenticated-only, so its client cache is empty pre-login — resolve server-side via the
+      // anon-callable login_email_for_username RPC (migration 0004) instead. loginEmailFor uses the
+      // <username>@dravaint.local convention only when the RPC has no answer or is unreachable.
+      let resolved: string | null = null;
+      if (!normalized.includes('@')) {
+        const { data } = await supabase.rpc('login_email_for_username', { candidate: normalized });
+        resolved = typeof data === 'string' ? data : null;
       }
+      const email = loginEmailFor(normalized, resolved);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (!error) recordLogin(profile?.username ?? normalized);
+      if (!error) recordLogin(normalized);
       return !error;
     }
     const found = users.find((user) => (user.username.toLowerCase() === normalized || user.email.toLowerCase() === normalized) && user.password === password);

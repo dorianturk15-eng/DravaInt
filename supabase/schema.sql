@@ -347,8 +347,25 @@ create or replace function public.current_app_role() returns text stable securit
 -- Pre-login username→email resolution. profiles is only readable by `authenticated`,
 -- so the login form cannot look up the email for a typed username (chicken-and-egg).
 -- SECURITY DEFINER lets anon resolve exactly one email for an exact, active username —
--- a deliberate, narrow disclosure that keeps username login working; no other columns leak.
-create or replace function public.login_email_for_username(candidate text) returns text stable security definer set search_path = public language sql as $$ select email from public.profiles where lower(username)=lower(trim(candidate)) and is_active limit 1 $$;
+-- a deliberate, narrow disclosure that keeps username login working; no other columns
+-- leak and it cannot list or enumerate users. See migration 0004.
+create or replace function public.login_email_for_username(candidate text)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select email
+  from public.profiles
+  where trim(candidate) <> ''
+    and lower(username) = lower(trim(candidate))
+    and is_active
+  limit 1
+$$;
+comment on function public.login_email_for_username(text) is
+  'Pre-login (anon-callable) resolver: maps one exact, active username to its sign-in email only. Exposes no other profile data and cannot list/enumerate users.';
+create index if not exists profiles_username_lower_idx on public.profiles (lower(username));
 revoke all on function public.login_email_for_username(text) from public;
 grant execute on function public.login_email_for_username(text) to anon, authenticated;
 
