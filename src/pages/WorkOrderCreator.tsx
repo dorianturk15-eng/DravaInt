@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus, IconTrash, IconPrint } from '../components/Icons';
 import { useScheduling, type OperationStep, type JobPriority } from '../scheduling/SchedulingContext';
@@ -6,6 +6,7 @@ import { hasChildren } from '../scheduling/hierarchy';
 import { useLogo } from '../logo/LogoContext';
 import { useWorkers } from '../workers/WorkersContext';
 import { priorityLabel, priorityMeta } from '../scheduling/priority';
+import { suggestOrderNumber } from '../scheduling/orderNumber';
 
 let nextOpId = 1;
 
@@ -54,6 +55,12 @@ export default function WorkOrderCreator() {
   }, [jobs]);
 
   const [orderNumber, setOrderNumber] = useState('');
+  // Auto-generated next id in the shop's RN-YYYY-NNN convention, derived from the live job
+  // list. It pre-fills the field but stays editable — planners can still assign a custom id.
+  const suggestedOrder = useMemo(() => suggestOrderNumber(jobs.map((job) => job.order)), [jobs]);
+  useEffect(() => {
+    setOrderNumber((current) => current.trim() ? current : suggestedOrder);
+  }, [suggestedOrder]);
   const [product, setProduct] = useState('');
   const [operatorId, setOperatorId] = useState('');
   const [priority, setPriority] = useState<JobPriority>('normal');
@@ -163,7 +170,9 @@ export default function WorkOrderCreator() {
     setMessage(result.ok
       ? t.workOrders.created
       : (lang === 'hr' ? 'Izvan mreže — nalog je spremljen u red čekanja i sinkronizirat će se po povratku veze.' : 'Offline — the order was queued and will sync when the connection returns.'));
-    setOrderNumber('');
+    // Refill with the next id right away, counting the order just created — the jobs list
+    // refresh may lag (or never come, for a queued offline write).
+    setOrderNumber(suggestOrderNumber([...jobs.map((job) => job.order), draft.order]));
     setProduct('');
     setOperatorId('');
     setPriority('normal');
