@@ -26,7 +26,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const ShiftSchedule = lazy(() => import('./pages/ShiftSchedule'));
 const MachineSchedule = lazy(() => import('./pages/MachineSchedule'));
 const ProgressMonitoring = lazy(() => import('./pages/ProgressMonitoring'));
-const GanttChart = lazy(() => import('./pages/GanttChart'));
+const GanttChart = lazy(() => import('./pages/GanttChartResponsive'));
 const WorkOrderCreator = lazy(() => import('./pages/WorkOrderCreator'));
 const Admin = lazy(() => import('./pages/Admin'));
 
