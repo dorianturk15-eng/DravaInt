@@ -80,17 +80,9 @@ export default function Dashboard() {
   }));
   const averageWorkerHours = workerLoads.length ? workerLoads.reduce((sum, item) => sum + item.hours, 0) / workerLoads.length : 0;
 
-  // Routing Node Map: lets the user step through the routing of any work order that has operations
-  const jobsWithOps = jobs.filter((j) => j.operations && j.operations.length > 0);
-  const [routingOrderId, setRoutingOrderId] = useState<number | null>(null);
-  const routingJob = jobsWithOps.find((j) => j.id === routingOrderId) ?? jobsWithOps[0];
-  const routingIndex = routingJob ? jobsWithOps.findIndex((j) => j.id === routingJob.id) : -1;
-  const routingOps = routingJob?.operations ?? [];
-  const stepRoutingOrder = (delta: number) => {
-    if (jobsWithOps.length === 0) return;
-    const nextIndex = (routingIndex + delta + jobsWithOps.length) % jobsWithOps.length;
-    setRoutingOrderId(jobsWithOps[nextIndex].id);
-  };
+  // Routing Node Map: shows the routing of as many work orders (with operations) as comfortably
+  // fit, stacked as compact rows, most recent first — scrolling covers the rest instead of paging.
+  const jobsWithOps = [...jobs].filter((j) => j.operations && j.operations.length > 0).sort((a, b) => b.id - a.id);
 
   // Icons
   const IconCheck = () => (
@@ -213,71 +205,69 @@ export default function Dashboard() {
           <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)' }}>
             ⛓️ {lang === 'hr' ? 'Dijagram Toga Procesa' : 'Routing Process Map'}
           </div>
-          {routingJob && (
-            <div className="routing-order-switcher">
-              <button type="button" className="routing-order-nav" onClick={() => stepRoutingOrder(-1)} disabled={jobsWithOps.length < 2} aria-label={lang === 'hr' ? 'Prethodni nalog' : 'Previous order'}>‹</button>
-              <select value={routingJob.id} onChange={(event) => setRoutingOrderId(Number(event.target.value))} aria-label={lang === 'hr' ? 'Odaberi nalog' : 'Select order'}>
-                {jobsWithOps.map((job) => <option key={job.id} value={job.id}>{job.order}</option>)}
-              </select>
-              <button type="button" className="routing-order-nav" onClick={() => stepRoutingOrder(1)} disabled={jobsWithOps.length < 2} aria-label={lang === 'hr' ? 'Sljedeći nalog' : 'Next order'}>›</button>
-              <small>{routingIndex + 1} / {jobsWithOps.length}</small>
-            </div>
-          )}
-          {!routingJob && (
+          {jobsWithOps.length === 0 && (
             <div style={{ padding: '10px 0' }}>
               <small style={{ color: 'var(--text-secondary)' }}>
                 {lang === 'hr' ? 'Još nema naloga s definiranom rutom — kreirajte radni nalog s operacijama.' : 'No work orders with a routing yet — create a work order with operations.'}
               </small>
             </div>
           )}
-          {routingJob && <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
-            <svg width="100%" height="90" viewBox="0 0 450 90" style={{ maxWidth: 450 }}>
-              {routingOps.map((op, i) => {
-                const x = 50 + i * 110;
-                const y = 40;
-                const isLast = i === routingOps.length - 1;
-                const statusColor = routingJob?.status === 'done' ? 'var(--success-color)' : i === 1 ? '#3b82f6' : '#cbd5e1';
-
+          {jobsWithOps.length > 0 && (
+            <div className="routing-order-list">
+              {jobsWithOps.map((job) => {
+                const ops = job.operations ?? [];
+                const viewBoxWidth = Math.max(220, 40 + ops.length * 100);
                 return (
-                  <g key={op.id}>
-                    {/* Connection line */}
-                    {!isLast && (
-                      <line
-                        x1={x + 15}
-                        y1={y}
-                        x2={x + 95}
-                        y2={y}
-                        stroke={statusColor}
-                        strokeWidth="3"
-                        strokeDasharray={i === 1 ? '4,4' : 'none'}
-                        style={i === 1 ? { animation: 'dash 1s linear infinite' } : {}}
-                      />
-                    )}
-                    {/* Node circle */}
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r="14"
-                      fill="var(--bg-card)"
-                      stroke={statusColor}
-                      strokeWidth="3"
-                      style={i === 1 && routingJob?.status !== 'done' ? { animation: 'pulse-glow 1.5s infinite' } : {}}
-                    />
-                    <text x={x} y={y + 4} fontSize="9" fontWeight="bold" textAnchor="middle" fill="var(--text-primary)">
-                      {i + 1}
-                    </text>
-                    {/* Label */}
-                    <text x={x} y={y + 30} fontSize="9" fontWeight="700" textAnchor="middle" fill="var(--text-primary)">
-                      {op.name}
-                    </text>
-                    <text x={x} y={y + 42} fontSize="8" textAnchor="middle" fill="var(--text-secondary)">
-                      {op.machine}
-                    </text>
-                  </g>
+                  <div className="routing-order-row" key={job.id}>
+                    <div className="routing-order-row-label">{job.order}</div>
+                    <svg width="100%" height="64" viewBox={`0 0 ${viewBoxWidth} 64`} preserveAspectRatio="xMinYMid meet">
+                      {ops.map((op, i) => {
+                        const x = 40 + i * 100;
+                        const y = 26;
+                        const isLast = i === ops.length - 1;
+                        const statusColor = job.status === 'done' ? 'var(--success-color)' : i === 1 ? '#3b82f6' : '#cbd5e1';
+
+                        return (
+                          <g key={op.id}>
+                            {/* Connection line */}
+                            {!isLast && (
+                              <line
+                                x1={x + 13}
+                                y1={y}
+                                x2={x + 87}
+                                y2={y}
+                                stroke={statusColor}
+                                strokeWidth="3"
+                                strokeDasharray={i === 1 ? '4,4' : 'none'}
+                                style={i === 1 ? { animation: 'dash 1s linear infinite' } : {}}
+                              />
+                            )}
+                            {/* Node circle */}
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="12"
+                              fill="var(--bg-card)"
+                              stroke={statusColor}
+                              strokeWidth="3"
+                              style={i === 1 && job.status !== 'done' ? { animation: 'pulse-glow 1.5s infinite' } : {}}
+                            />
+                            <text x={x} y={y + 4} fontSize="8" fontWeight="bold" textAnchor="middle" fill="var(--text-primary)">
+                              {i + 1}
+                            </text>
+                            {/* Label */}
+                            <text x={x} y={y + 26} fontSize="8" fontWeight="700" textAnchor="middle" fill="var(--text-primary)">
+                              {op.name}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
                 );
               })}
-            </svg>
-          </div>}
+            </div>
+          )}
         </div>
 
       </div>
