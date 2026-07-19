@@ -1,6 +1,8 @@
-import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { JobConflicts } from '../../scheduling/cpm';
 import type { OperationSlot } from '../../scheduling/operationSlots';
+import type { BoardConflict } from '../../scheduling/boardConflicts';
+import type { Machine } from '../../machines/MachinesContext';
 import type { CardEdge } from '../../scheduling/boardGeometry';
 import type { CardLayout } from './useMachineBoardController';
 import { IconAlert } from '../Icons';
@@ -9,12 +11,26 @@ interface TaskCardProps {
   slot: OperationSlot;
   layout: CardLayout;
   color: string;
-  conflicts: JobConflicts;
+  /** Machine-overlap conflicts this specific slot participates in (per-operation, not job-level). */
+  slotConflicts: BoardConflict[];
+  /** Job-level checks (operator overlap, qualification, shift, hours, rest) — shown on the first slot only. */
+  jobConflicts: JobConflicts;
+  locale: string;
   selected: boolean;
   isDragging: boolean;
   isConnectSource: boolean;
+  isPulsing: boolean;
+  dimmed: boolean;
+  horizontalLocked: boolean;
+  lockHint: string;
+  liveOffset?: { x: number; y: number } | null;
   conflictsOpen: boolean;
   onToggleConflicts: () => void;
+  getMoveOptions: (slotKey: string) => Machine[];
+  onShiftLater: (conflict: BoardConflict) => void;
+  onMoveTo: (slotKey: string, machineName: string) => void;
+  onViewInGantt?: (jobId: number) => void;
+  labels: { shiftLater: string; moveTo: string; viewInGantt: string; overlaps: string; noFreeMachine: string };
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>, edge: 'start' | 'end') => void;
   onConnectPointerDown: (event: ReactPointerEvent<HTMLDivElement>, edge: CardEdge) => void;
@@ -25,22 +41,43 @@ interface TaskCardProps {
   onRemove: () => void;
 }
 
-function hasAnyConflict(conflicts: JobConflicts): boolean {
-  return Boolean(
-    conflicts.machineOverlap || conflicts.operatorOverlap || conflicts.unqualified || conflicts.shiftOutside || conflicts.hoursExceeded || conflicts.restViolation,
-  );
+function jobLevelMessages(conflicts: JobConflicts): string[] {
+  return [
+    conflicts.operatorOverlap && `Operator overlap: ${conflicts.operatorOverlap.otherOrder}`,
+    conflicts.unqualified?.message,
+    conflicts.shiftOutside?.message,
+    conflicts.hoursExceeded?.message,
+    conflicts.restViolation?.message,
+    conflicts.absent?.message,
+  ].filter(Boolean) as string[];
+}
+
+function timeShort(ms: number, locale: string): string {
+  return new Date(ms).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 export function TaskCard({
   slot,
   layout,
   color,
-  conflicts,
+  slotConflicts,
+  jobConflicts,
+  locale,
   selected,
   isDragging,
   isConnectSource,
+  isPulsing,
+  dimmed,
+  horizontalLocked,
+  lockHint,
+  liveOffset,
   conflictsOpen,
   onToggleConflicts,
+  getMoveOptions,
+  onShiftLater,
+  onMoveTo,
+  onViewInGantt,
+  labels,
   onPointerDown,
   onResizePointerDown,
   onConnectPointerDown,
@@ -50,13 +87,13 @@ export function TaskCard({
   onToggleSelect,
   onRemove,
 }: TaskCardProps) {
-  const flagged = hasAnyConflict(conflicts);
   const job = slot.job;
-  // A route's operation cards are chained left→right; only the ends carry a connector handle
-  // (dependencies are job-level), and a subtle chain glyph marks a card that has a sibling op.
   const isRoutePart = slot.slotCount > 1;
   const title = job.order || slot.machine;
   const subtitle = slot.isOperation ? slot.name || slot.machine : slot.operator || job.operator || '—';
+  const jobMessages = slot.isFirstSlot ? jobLevelMessages(jobConflicts) : [];
+  const flagged = slotConflicts.length > 0 || jobMessages.length > 0;
+  const [moveOpen, setMoveOpen] = useState(false);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -68,19 +105,20 @@ export function TaskCard({
     }
   }
 
-  const conflictMessages = [
-    conflicts.machineOverlap && `Machine overlap: ${conflicts.machineOverlap.otherOrder}`,
-    conflicts.operatorOverlap && `Operator overlap: ${conflicts.operatorOverlap.otherOrder}`,
-    conflicts.unqualified?.message,
-    conflicts.shiftOutside?.message,
-    conflicts.hoursExceeded?.message,
-    conflicts.restViolation?.message,
-  ].filter(Boolean) as string[];
+  const moveOptions = moveOpen ? getMoveOptions(slot.key) : [];
 
   return (
     <div
-      className={`board-task-card${slot.isOperation ? ' is-operation' : ''}${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${isConnectSource ? ' is-connect-source' : ''}${flagged ? ' has-conflict' : ''}`}
-      style={{ left: layout.x, top: layout.y, width: layout.width, height: layout.height, borderLeftColor: color, touchAction: 'none' }}
+      className={`board-task-card${slot.isOperation ? ' is-operation' : ''}${slot.isChainSegment ? ' is-chain-segment' : ''}${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${isConnectSource ? ' is-connect-source' : ''}${flagged ? ' has-conflict' : ''}${isPulsing ? ' is-pulsing' : ''}${dimmed ? ' is-dimmed' : ''}${horizontalLocked ? ' is-locked' : ''}`}
+      style={{
+        left: layout.x,
+        top: layout.y,
+        width: layout.width,
+        height: layout.height,
+        borderLeftColor: color,
+        touchAction: 'none',
+        transform: liveOffset ? `translate(${liveOffset.x}px, ${liveOffset.y}px)` : undefined,
+      }}
       data-job-id={job.id}
       data-slot-key={slot.key}
       onPointerDown={onPointerDown}
@@ -94,6 +132,7 @@ export function TaskCard({
       aria-pressed={selected}
     >
       {!slot.isFirstSlot && <span className="board-task-card-chain" aria-hidden="true">‹</span>}
+      {horizontalLocked && <span className="board-task-card-lock" title={lockHint} aria-hidden="true">🔒</span>}
       <div className="board-task-card-resize left" onPointerDown={(event) => onResizePointerDown(event, 'start')} />
       {slot.isFirstSlot && <div className="board-task-card-connect left" onPointerDown={(event) => onConnectPointerDown(event, 'start')} title="Drag to link" />}
       <div className="board-task-card-body">
@@ -116,7 +155,37 @@ export function TaskCard({
       )}
       {flagged && conflictsOpen && (
         <div className="board-task-conflict-popover" onPointerDown={(event) => event.stopPropagation()}>
-          {conflictMessages.map((message) => <span key={message}>{message}</span>)}
+          {slotConflicts.map((conflict) => {
+            const self = conflict.a.slotKey === slot.key ? conflict.a : conflict.b;
+            const other = conflict.a.slotKey === slot.key ? conflict.b : conflict.a;
+            return (
+              <div key={conflict.key} className="board-conflict-detail">
+                <span className="board-conflict-detail-line">
+                  <strong>{other.order}</strong>{other.opName ? ` · ${other.opName}` : ''} · {conflict.machineName}
+                </span>
+                <span className="board-conflict-detail-times">
+                  {timeShort(self.startMs, locale)}–{timeShort(self.endMs, locale)} {labels.overlaps} {timeShort(other.startMs, locale)}–{timeShort(other.endMs, locale)}
+                </span>
+                <div className="board-conflict-detail-actions">
+                  <button type="button" className="board-toolbar-btn" onClick={(e) => { e.stopPropagation(); onShiftLater(conflict); }}>{labels.shiftLater}</button>
+                  <button type="button" className="board-toolbar-btn" onClick={(e) => { e.stopPropagation(); setMoveOpen((v) => !v); }}>{labels.moveTo}</button>
+                  {onViewInGantt && <button type="button" className="board-toolbar-btn" onClick={(e) => { e.stopPropagation(); onViewInGantt(job.id); }}>{labels.viewInGantt}</button>}
+                </div>
+                {moveOpen && (
+                  <div className="board-conflict-move-options">
+                    {moveOptions.length === 0
+                      ? <span className="board-conflict-detail-times">{labels.noFreeMachine}</span>
+                      : moveOptions.map((machine) => (
+                        <button key={machine.id} type="button" className="board-toolbar-btn" onClick={(e) => { e.stopPropagation(); setMoveOpen(false); onMoveTo(slot.key, machine.name); }}>
+                          {machine.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {jobMessages.map((message) => <span key={message} className="board-conflict-detail-line">{message}</span>)}
         </div>
       )}
       {slot.isLastSlot && <div className="board-task-card-connect right" onPointerDown={(event) => onConnectPointerDown(event, 'end')} title="Drag to link" />}

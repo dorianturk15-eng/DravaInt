@@ -98,6 +98,38 @@ export interface TranslationShape {
     viewNamePlaceholder: string;
     saveView: string;
     deleteView: string;
+    search: string;
+    searchPlaceholder: string;
+    conflictsTitle: string;
+    noConflicts: string;
+    shiftLater: string;
+    moveTo: string;
+    viewInGantt: string;
+    overlaps: string;
+    noFreeMachine: string;
+    orderGone: string;
+    hideEmpty: string;
+    collapseLane: string;
+    more: string;
+    legend: string;
+    legendOperation: string;
+    legendChain: string;
+    legendConflict: string;
+    legendNow: string;
+    showOnBoard: string;
+    quickCreateTitle: string;
+    quickCreateDuration: string;
+    quickCreateCreate: string;
+    quickCreateMore: string;
+    addManually: string;
+    emptyBoard: string;
+    emptyBoardLink: string;
+    noMachinesTitle: string;
+    noMachinesLink: string;
+    coachMove: string;
+    coachLane: string;
+    coachResize: string;
+    coachDismiss: string;
   };
   progress: {
     title: string;
@@ -320,6 +352,38 @@ export const translations: Record<Lang, TranslationShape> = {
       viewNamePlaceholder: 'Naziv pogleda…',
       saveView: 'Spremi pogled',
       deleteView: 'Obriši pogled',
+      search: 'Traži',
+      searchPlaceholder: 'Nalog ili operacija…',
+      conflictsTitle: 'Konflikti',
+      noConflicts: 'Nema konflikata',
+      shiftLater: 'Pomakni kasnije',
+      moveTo: 'Premjesti na…',
+      viewInGantt: 'Prikaži u Ganttu',
+      overlaps: 'preklapa',
+      noFreeMachine: 'Nema slobodnog stroja iste vrste',
+      orderGone: 'Nalog više nije na ploči.',
+      hideEmpty: 'Sakrij prazne',
+      collapseLane: 'Sažmi/proširi liniju',
+      more: 'Više',
+      legend: 'Legenda',
+      legendOperation: 'Operacija rute',
+      legendChain: 'Naslijeđeni lanac',
+      legendConflict: 'Preklapanje strojeva',
+      legendNow: 'Sada',
+      showOnBoard: 'Prikaži na rasporedu strojeva',
+      quickCreateTitle: 'Brzo dodaj',
+      quickCreateDuration: 'Trajanje (h)',
+      quickCreateCreate: 'Kreiraj',
+      quickCreateMore: 'Više opcija → Kreator radnih naloga',
+      addManually: 'Ručni unos',
+      emptyBoard: 'Dvaput kliknite na liniju stroja za planiranje rada ili kreirajte nalog s rutom u Kreatoru radnih naloga.',
+      emptyBoardLink: 'Otvori Kreator radnih naloga →',
+      noMachinesTitle: 'Nema registriranih strojeva.',
+      noMachinesLink: 'Dodajte ih u Administraciji → Strojevi',
+      coachMove: 'Povucite prvu operaciju za pomak cijelog naloga.',
+      coachLane: 'Povucite operaciju okomito za promjenu stroja.',
+      coachResize: 'Povucite rub kartice za promjenu sati.',
+      coachDismiss: 'Razumijem',
     },
     progress: {
       title: 'Praćenje napretka',
@@ -540,6 +604,38 @@ export const translations: Record<Lang, TranslationShape> = {
       viewNamePlaceholder: 'View name…',
       saveView: 'Save view',
       deleteView: 'Delete view',
+      search: 'Search',
+      searchPlaceholder: 'Order or operation…',
+      conflictsTitle: 'Conflicts',
+      noConflicts: 'No conflicts',
+      shiftLater: 'Shift later',
+      moveTo: 'Move to…',
+      viewInGantt: 'View in Gantt',
+      overlaps: 'overlaps',
+      noFreeMachine: 'No free machine of the same type',
+      orderGone: 'Order no longer on the board.',
+      hideEmpty: 'Hide empty',
+      collapseLane: 'Collapse/expand lane',
+      more: 'More',
+      legend: 'Legend',
+      legendOperation: 'Route operation',
+      legendChain: 'Legacy chain',
+      legendConflict: 'Machine overlap',
+      legendNow: 'Now',
+      showOnBoard: 'Show on machine board',
+      quickCreateTitle: 'Quick add',
+      quickCreateDuration: 'Duration (h)',
+      quickCreateCreate: 'Create',
+      quickCreateMore: 'More options → Work Order Creator',
+      addManually: 'Add manually',
+      emptyBoard: 'Double-click any lane to schedule work here, or create a routed order in the Work Order Creator.',
+      emptyBoardLink: 'Open Work Order Creator →',
+      noMachinesTitle: 'No machines registered.',
+      noMachinesLink: 'Add them in Admin → Machines',
+      coachMove: 'Drag the first operation to move the whole order.',
+      coachLane: 'Drag any operation vertically to change its machine.',
+      coachResize: 'Drag a card edge to resize its hours.',
+      coachDismiss: 'Got it',
     },
     progress: {
       title: 'Progress Monitoring',

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppTab } from '../settings/SettingsContext';
+import { requestFocus } from '../navigation/focusTarget';
 
 export interface OperationalAlert {
   id: string;
@@ -7,6 +8,9 @@ export interface OperationalAlert {
   detail: string;
   severity: 'critical' | 'warning' | 'info' | 'success';
   action?: AppTab;
+  /** When set, clicking the alert focuses this job on the target page (via the focus bus), not just
+   *  navigating to the tab — e.g. the machine-overlap alert lands on the actual clashing card. */
+  focusJobId?: number;
 }
 
 interface NotificationCenterProps {
@@ -49,7 +53,8 @@ export function NotificationCenter({ alerts, online, pendingChanges, language, a
 
   function openAlert(alert: OperationalAlert) {
     persistRead(new Set(readIds).add(alert.id));
-    if (alert.action) onNavigate(alert.action);
+    if (alert.focusJobId != null && alert.action) requestFocus({ tab: alert.action, jobId: alert.focusJobId });
+    else if (alert.action) onNavigate(alert.action);
     setOpen(false);
   }
 

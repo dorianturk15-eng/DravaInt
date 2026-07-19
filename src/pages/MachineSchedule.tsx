@@ -1,36 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
 import { useScheduling } from '../scheduling/SchedulingContext';
 import { useMachines } from '../machines/MachinesContext';
 import { useWorkers } from '../workers/WorkersContext';
-import { MachineBoard, QUICK_CREATE_EVENT, type QuickCreateDetail } from '../components/machine-board/MachineBoard';
+import { buildMachineLookup, resolveMachineId } from '../scheduling/machineIdentity';
+import { MachineBoard } from '../components/machine-board/MachineBoard';
 
 export default function MachineSchedule() {
   const { t, lang } = useLanguage();
   const { addJob } = useScheduling();
   const { machines } = useMachines();
   const { activeWorkers, displayName } = useWorkers();
-  const formRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState({ machine: '', order: '', operator: '', operatorId: null as number | null, start: '', end: '' });
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    const onQuickCreate = (event: Event) => {
-      const detail = (event as CustomEvent<QuickCreateDetail>).detail;
-      setForm((current) => ({ ...current, machine: detail.machine, start: detail.start, end: detail.end }));
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-    window.addEventListener(QUICK_CREATE_EVENT, onQuickCreate);
-    return () => window.removeEventListener(QUICK_CREATE_EVENT, onQuickCreate);
-  }, []);
-
   async function handleAdd() {
     if (!form.machine || !form.order) return;
     setFeedback(null);
+    // Write the modern single-operation shape (carries machineId) rather than a legacy route-less job,
+    // so the board's own manual-add path produces the same data Phases C/D expect. Hours come from the
+    // start/end span; a missing end defaults to an 8 h block.
+    const startMs = form.start ? new Date(form.start).getTime() : Date.now();
+    const endMs = form.end ? new Date(form.end).getTime() : startMs + 8 * 3_600_000;
+    const hours = Math.max(0.25, (endMs - startMs) / 3_600_000);
+    const machineId = resolveMachineId(form.machine, null, buildMachineLookup(machines));
     // Honour the write result: a rejected/version-conflict write must not silently look successful.
-    const result = await addJob(form);
+    const result = await addJob({
+      ...form,
+      operations: [{ id: 1, name: form.order, machine: form.machine, machineId, hours, operator: form.operator, operatorId: form.operatorId }],
+    });
     if (!result.ok && (result.reason === 'rejected' || result.reason === 'version-conflict')) {
       setFeedback({ tone: 'error', text: result.reason === 'rejected'
         ? (result.message || (lang === 'hr' ? 'Baza je odbila nalog (npr. zauzet termin). Nalog nije spremljen.' : 'The database rejected the job (e.g. a booked slot). Nothing was saved.'))
@@ -48,11 +48,11 @@ export default function MachineSchedule() {
       <h2 style={{ marginBottom: 5 }}>{t.machines.title}</h2>
       <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.machines.subtitle}</p>
 
-      <div className="step-box" ref={formRef}>
-        <div className="step-title">
+      <details className="step-box board-add-manually">
+        <summary className="step-title">
           <span className="step-number">1</span>
-          {t.machines.addJob}
-        </div>
+          {t.machines.addJob} · {t.machineBoard.addManually}
+        </summary>
         <div className="grid-inputs workers-ruster">
           <div>
             <label>{t.machines.machine}</label>
@@ -105,16 +105,16 @@ export default function MachineSchedule() {
             />
           </div>
         </div>
-      </div>
 
-      {feedback && <p role={feedback.tone === 'error' ? 'alert' : 'status'} style={{ color: feedback.tone === 'error' ? 'var(--danger-color)' : 'var(--success-color)', fontSize: 13, marginTop: 12 }}>{feedback.text}</p>}
+        {feedback && <p role={feedback.tone === 'error' ? 'alert' : 'status'} style={{ color: feedback.tone === 'error' ? 'var(--danger-color)' : 'var(--success-color)', fontSize: 13, marginTop: 12 }}>{feedback.text}</p>}
 
-      <div className="action-bar">
-        <button className="btn btn-green" onClick={handleAdd}>
-          <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
-          {t.common.add}
-        </button>
-      </div>
+        <div className="action-bar">
+          <button className="btn btn-green" onClick={handleAdd}>
+            <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
+            {t.common.add}
+          </button>
+        </div>
+      </details>
 
       <p className="subtitle-text" style={{ fontSize: 12, marginTop: 20 }}>
         {t.machines.sharedNote}

@@ -8,6 +8,7 @@ import { findDependencyCycle, jobsToScheduleInput, cascadeDependents, toLocalDat
 import { buildBoardLanes, classifyLinkCandidate, type BoardModel, type BoardLane, type LinkClassification } from '../../scheduling/boardData';
 import type { OperationSlot } from '../../scheduling/operationSlots';
 import { hasChildren } from '../../scheduling/hierarchy';
+import { buildMachineLookup, resolveMachineId } from '../../scheduling/machineIdentity';
 import {
   ZOOM_PRESETS,
   ZOOM_ORDER,
@@ -20,9 +21,15 @@ import {
   timeToX,
   snapToShiftBoundary,
   inferDependencyType,
+  buildTimeBands,
+  clippedHours,
+  type TimeBand,
   type ZoomPreset,
   type CardEdge,
 } from '../../scheduling/boardGeometry';
+import { detectBoardConflicts, conflictingSlotKeys, conflictsBySlot, type BoardConflict } from '../../scheduling/boardConflicts';
+import { getWeeklyCapacityHours, weekWindow } from '../../scheduling/capacity';
+import { consumeFocus, peekFocus } from '../../navigation/focusTarget';
 
 export type SortBy = 'name' | 'load';
 export type { LinkClassification } from '../../scheduling/boardData';
@@ -71,6 +78,9 @@ interface MoveInteraction {
   liveDeltaYPx: number;
   targetMachine: string;
   moved: boolean;
+  /** True for a non-first operation / chain segment: horizontal (time) drag is refused *during* the
+   *  gesture (the card tracks only vertically for a lane change), not punished with a post-drop toast. */
+  horizontalLocked: boolean;
 }
 
 interface ResizeInteraction {
@@ -115,6 +125,7 @@ export interface LaneLayout {
   machine: string;
   top: number;
   height: number;
+  collapsed: boolean;
 }
 
 export interface Toast {
@@ -134,8 +145,8 @@ export interface MachineBoardControllerOptions {
   locale: string;
   rejectedMessage: string;
   versionConflictMessage: string;
-  sequentialRouteMessage: string;
   chainSegmentMessage: string;
+  orderGoneMessage: string;
 }
 
 const CLICK_THRESHOLD_PX = 4;
@@ -148,6 +159,11 @@ export interface BoardView {
   zoom: ZoomPreset;
   sortBy: SortBy;
   statusFilter: Job['status'] | 'all';
+  /** v2 (additive): lanes the view had collapsed and the active search query. Old views omit these
+   *  and parse fine — the board treats them as "nothing collapsed / no query". */
+  collapsedMachines?: string[];
+  query?: string;
+  hideEmpty?: boolean;
 }
 
 function loadBoardViews(): BoardView[] {
@@ -179,7 +195,7 @@ function patchOperationHours(job: Job, opIndex: number, newHours: number): Parti
 }
 
 export function useMachineBoardController(options: MachineBoardControllerOptions) {
-  const { jobs, machines, updateJob, removeJob, restoreBackup, getJobConflicts, settings, locale, rejectedMessage, versionConflictMessage, sequentialRouteMessage, chainSegmentMessage } = options;
+  const { jobs, machines, updateJob, removeJob, restoreBackup, getJobConflicts, settings, locale, rejectedMessage, versionConflictMessage, chainSegmentMessage, orderGoneMessage } = options;
 
   const [zoom, setZoom] = useState<ZoomPreset>('day');
   const [sortBy, setSortBy] = useState<SortBy>('name');
@@ -193,6 +209,12 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
   const [selectedConnection, setSelectedConnection] = useState<{ successorId: number; predecessorId: number } | null>(null);
   const [editingConnection, setEditingConnection] = useState<{ successorId: number; predecessorId: number; type: DependencyType; lagHours: number } | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [query, setQuery] = useState('');
+  const [conflictPanelOpen, setConflictPanelOpen] = useState(false);
+  const [pulsedKeys, setPulsedKeys] = useState<Set<string>>(new Set());
+  const [collapsedMachines, setCollapsedMachines] = useState<Set<string>>(new Set());
+  const [hideEmpty, setHideEmpty] = useState(false);
+  const pulseTimerRef = useRef<number | null>(null);
 
   const contentRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -217,6 +239,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
   const spanHours = ZOOM_SPAN_DAYS[zoom] * 24;
   const contentWidth = spanHours * pixelsPerHour;
 
+  const machineLookup = useMemo(() => buildMachineLookup(machines), [machines]);
   const schedulingOptions = useMemo(() => schedulingOptionsFrom(settings), [settings]);
   const filteredJobs = useMemo(
     () => (statusFilter === 'all' ? jobs : jobs.filter((job) => job.status === statusFilter || hasChildren(jobs, job.id))),
@@ -225,23 +248,27 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
   const board: BoardModel = useMemo(() => buildBoardLanes(filteredJobs, machines, schedulingOptions), [filteredJobs, machines, schedulingOptions]);
 
   const laneOrder = useMemo(() => {
-    const lanes = [...board.lanes];
+    let lanes = [...board.lanes];
+    if (hideEmpty) lanes = lanes.filter((lane) => lane.slots.length > 0);
     if (sortBy === 'name') lanes.sort((a, b) => a.machine.localeCompare(b.machine));
     else lanes.sort((a, b) => {
       const loadOf = (lane: BoardLane) => lane.slots.reduce((sum, item) => sum + (item.slot.endMs - item.slot.startMs), 0);
       return loadOf(b) - loadOf(a);
     });
     return lanes;
-  }, [board.lanes, sortBy]);
+  }, [board.lanes, sortBy, hideEmpty]);
 
   const { laneLayouts, cardLayouts, totalHeight } = useMemo(() => {
     const lanes: LaneLayout[] = [];
     const cards = new Map<string, CardLayout>();
     let cursorY = 0;
     laneOrder.forEach((lane) => {
-      const laneHeight = LANE_HEADER_HEIGHT + lane.rowCount * CARD_ROW_HEIGHT + LANE_GAP;
-      lanes.push({ machine: lane.machine, top: cursorY, height: laneHeight });
-      lane.slots.forEach((boardSlot) => {
+      const collapsed = collapsedMachines.has(lane.machine);
+      const laneHeight = collapsed ? LANE_HEADER_HEIGHT + LANE_GAP : LANE_HEADER_HEIGHT + lane.rowCount * CARD_ROW_HEIGHT + LANE_GAP;
+      lanes.push({ machine: lane.machine, top: cursorY, height: laneHeight, collapsed });
+      // A collapsed lane renders as a slim header bar only — its cards are skipped (no layout entry),
+      // so they neither render nor participate in hit-testing while collapsed.
+      if (!collapsed) lane.slots.forEach((boardSlot) => {
         const { slot } = boardSlot;
         const x = timeToX(slot.startMs, originMs, pixelsPerHour);
         const width = Math.max(MIN_CARD_WIDTH, timeToX(slot.endMs, originMs, pixelsPerHour) - x);
@@ -251,7 +278,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
       cursorY += laneHeight;
     });
     return { laneLayouts: lanes, cardLayouts: cards, totalHeight: cursorY };
-  }, [laneOrder, originMs, pixelsPerHour]);
+  }, [laneOrder, originMs, pixelsPerHour, collapsedMachines]);
 
   // First/last slot layout per job — dependency connectors anchor to the route's ends (edges are
   // job-level; op-to-op links inside a strictly sequential route would be meaningless).
@@ -271,6 +298,43 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     });
     return anchors;
   }, [board.lanes, cardLayouts]);
+
+  // --- Conflict lifecycle (Phase D made visible). Derived from the rendered slots, so the chip
+  //     count, the badged cards, and the panel rows are always the same set. ---
+  const conflicts = useMemo(() => detectBoardConflicts(board.slots), [board.slots]);
+  const conflictKeys = useMemo(() => conflictingSlotKeys(conflicts), [conflicts]);
+  const conflictBySlot = useMemo(() => conflictsBySlot(conflicts), [conflicts]);
+
+  // --- Window-aware lane load. Sum each lane's slot hours clipped to the current week window and
+  //     divide by weekly capacity, matching the Dashboard capacity view's week scoping instead of the
+  //     old "sum every slot ever ÷ weekly capacity" that read 300% for three weeks of queued work. ---
+  const loadWindow = useMemo(() => weekWindow(), []);
+  const laneLoadPercent = useMemo(() => {
+    const capacity = getWeeklyCapacityHours();
+    const map = new Map<string, number>();
+    board.lanes.forEach((lane) => {
+      const hours = clippedHours(lane.slots.map((item) => item.slot), loadWindow.start, loadWindow.end);
+      map.set(lane.machine, capacity > 0 ? (hours / capacity) * 100 : 0);
+    });
+    return map;
+  }, [board.lanes, loadWindow]);
+
+  // --- Board time furniture: weekend/holiday/off-shift shading + now-line X. ---
+  const timeBands: TimeBand[] = useMemo(
+    () => buildTimeBands(originMs, spanHours, pixelsPerHour, settings.workdayStart, settings.workdayEnd, settings.holidays),
+    [originMs, spanHours, pixelsPerHour, settings.workdayStart, settings.workdayEnd, settings.holidays],
+  );
+  const nowX = useMemo(() => timeToX(Date.now(), originMs, pixelsPerHour), [originMs, pixelsPerHour]);
+
+  // --- Search: dim non-matching cards (never unmount — layout stability). Matches order number or
+  //     operation name, case-insensitive. ---
+  const normalizedQuery = query.trim().toLowerCase();
+  const matchesQuery = useCallback((slot: OperationSlot): boolean => {
+    if (!normalizedQuery) return true;
+    return (slot.job.order || '').toLowerCase().includes(normalizedQuery)
+      || (slot.name || '').toLowerCase().includes(normalizedQuery)
+      || (slot.machine || '').toLowerCase().includes(normalizedQuery);
+  }, [normalizedQuery]);
 
   useEffect(() => {
     document.documentElement.dataset.ganttDragging = interaction ? 'true' : 'false';
@@ -377,6 +441,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
       liveDeltaYPx: 0,
       targetMachine: slot.machine,
       moved: false,
+      horizontalLocked: (slot.isOperation && !slot.isFirstSlot) || slot.isChainSegment,
     });
   }, [jobs, setInteractionBoth]);
 
@@ -431,7 +496,10 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     if (machineChanged) {
       if (ref.isOperation && ref.opIndex !== null) {
         pushHistory();
-        const targetMachineId = machines.find((m) => m.name === state.targetMachine)?.id ?? null;
+        // Resolve the target lane's machine id via the shared lookup (trim/case-insensitive), not an
+        // exact-name find — a lane name that came from a trimmed slot string could otherwise miss and
+        // write machineId: null (audit item 12).
+        const targetMachineId = resolveMachineId(state.targetMachine, null, machineLookup);
         void updateJob(ref.jobId, patchOperationMachine(job, ref.opIndex, state.targetMachine, targetMachineId)).then(showResult);
         return;
       }
@@ -452,9 +520,10 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     }
 
     // --- Horizontal (time) move. Only a route/chain's first slot — or a plain synthetic card —
-    //     may move the job's start; a middle operation is strictly sequential, so it can't. ---
+    //     may move the job's start; a middle operation is strictly sequential, so it can't. The card
+    //     was already refused horizontal tracking during the gesture (horizontalLocked), so a drop
+    //     here is a silent no-op rather than a post-drop "sequential route" toast. ---
     if (!ref.isFirstSlot) {
-      warn(sequentialRouteMessage);
       return;
     }
     const deltaMs = (state.liveDeltaXPx / pixelsPerHour) * 3_600_000;
@@ -483,7 +552,7 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
         void updateJob(layout.jobId, { start: toLocalDateTimeString(new Date(otherStart)), end: toLocalDateTimeString(new Date(otherEnd)) }).then(showResult);
       });
     }
-  }, [cardLayouts, chainSegmentMessage, jobs, pixelsPerHour, pushHistory, runCascade, selectedKeys, sequentialRouteMessage, settings.workdayEnd, settings.workdayStart, showResult, updateJob, warn]);
+  }, [cardLayouts, chainSegmentMessage, jobs, machineLookup, pixelsPerHour, pushHistory, runCascade, selectedKeys, settings.workdayEnd, settings.workdayStart, showResult, updateJob, warn]);
 
   const commitResize = useCallback((state: ResizeInteraction) => {
     const { ref } = state;
@@ -495,7 +564,8 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     //     op stays anchored at its start; dragging the end grows it, dragging the start shrinks it. ---
     if (ref.isOperation && ref.opIndex !== null) {
       const deltaHours = (state.kind === 'resize-end' ? deltaMs : -deltaMs) / 3_600_000;
-      const newHours = Math.max(MIN_OP_HOURS, state.originHours + deltaHours);
+      // Snap to 0.25 h steps so the persisted hours and the live pill readout agree.
+      const newHours = Math.max(MIN_OP_HOURS, Math.round((state.originHours + deltaHours) / MIN_OP_HOURS) * MIN_OP_HOURS);
       pushHistory();
       const patch = patchOperationHours(job, ref.opIndex, newHours);
       void updateJob(ref.jobId, patch).then(showResult);
@@ -537,11 +607,13 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
 
     switch (current.kind) {
       case 'move': {
-        const deltaX = event.clientX - current.startClientX;
+        const rawDeltaX = event.clientX - current.startClientX;
         const deltaY = event.clientY - current.startClientY;
+        // A locked (non-first / chain) card ignores horizontal movement live — it can only change lane.
+        const deltaX = current.horizontalLocked ? 0 : rawDeltaX;
         const point = toContentCoords(event.clientX, event.clientY);
         const lane = findLaneAt(point.y);
-        const moved = current.moved || Math.abs(deltaX) > CLICK_THRESHOLD_PX || Math.abs(deltaY) > CLICK_THRESHOLD_PX;
+        const moved = current.moved || Math.abs(rawDeltaX) > CLICK_THRESHOLD_PX || Math.abs(deltaY) > CLICK_THRESHOLD_PX;
         setInteractionBoth({ ...current, liveDeltaXPx: deltaX, liveDeltaYPx: deltaY, targetMachine: lane?.machine ?? current.targetMachine, moved });
         return;
       }
@@ -647,6 +719,138 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     if (!container) return;
     container.scrollTo({ left: Math.max(0, timeToX(Date.now(), originMs, pixelsPerHour) - 160), behavior: 'smooth' });
   }, [originMs, pixelsPerHour]);
+
+  /** Briefly pulse the given card(s) — the visual echo of a focus/jump so the eye can catch it. */
+  const pulseSlots = useCallback((keys: string[]) => {
+    if (keys.length === 0) return;
+    setPulsedKeys(new Set(keys));
+    if (pulseTimerRef.current !== null) window.clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = window.setTimeout(() => { setPulsedKeys(new Set()); pulseTimerRef.current = null; }, 1600);
+  }, []);
+
+  /** Scroll the given slot keys into view (using the first that has a layout) and pulse all of them. */
+  const scrollSlotsIntoView = useCallback((keys: string[]) => {
+    const container = scrollRef.current;
+    const first = keys.map((key) => cardLayouts.get(key)).find(Boolean);
+    if (container && first) {
+      container.scrollTo({ left: Math.max(0, first.x - 200), top: Math.max(0, first.y - 120), behavior: 'smooth' });
+    }
+    pulseSlots(keys);
+  }, [cardLayouts, pulseSlots]);
+
+  /** Panel-row click: scroll both clashing cards into view and pulse them (targeted, unlike the old
+   *  blind jumpToConflict cycle). Only the two slots on the shared machine pulse. */
+  const focusConflict = useCallback((conflict: BoardConflict) => {
+    scrollSlotsIntoView([conflict.a.slotKey, conflict.b.slotKey]);
+  }, [scrollSlotsIntoView]);
+
+  /**
+   * "Shift later": push the later-starting job of a conflict forward so its clashing window begins at
+   * the earlier one's end (shift-snapped), moving only `job.start` and reflowing the route. This is
+   * the manual fix applied to RN-2026-065/066, automated; it runs through updateJob → history (undo)
+   * and the same rejected/version-conflict toasts, and the cascade so dependents follow.
+   */
+  const shiftLater = useCallback((conflict: BoardConflict) => {
+    const [earlier, later] = conflict.a.startMs <= conflict.b.startMs ? [conflict.a, conflict.b] : [conflict.b, conflict.a];
+    const laterJob = jobs.find((job) => job.id === later.jobId);
+    if (!laterJob || !laterJob.start) return;
+    const laterJobStart = new Date(laterJob.start).getTime();
+    const laterJobEnd = laterJob.end ? new Date(laterJob.end).getTime() : laterJobStart;
+    const push = earlier.endMs - later.startMs; // amount to move the later job forward
+    if (push <= 0) return;
+    const newStart = snapToShiftBoundary(laterJobStart + push, settings.workdayStart, settings.workdayEnd);
+    const duration = laterJobEnd - laterJobStart;
+    const startStr = toLocalDateTimeString(new Date(newStart));
+    const endStr = toLocalDateTimeString(new Date(newStart + duration));
+    pushHistory();
+    void updateJob(later.jobId, { start: startStr, end: endStr }).then(showResult);
+    runCascade(later.jobId, startStr, endStr);
+  }, [jobs, pushHistory, runCascade, settings.workdayEnd, settings.workdayStart, showResult, updateJob]);
+
+  /** Machines of the same type as the slot's current machine with no slot overlapping the given
+   *  window — the safe "Move to…" targets for a conflicting operation. */
+  const machineMoveOptions = useCallback((slotKey: string): Machine[] => {
+    const layout = cardLayouts.get(slotKey);
+    if (!layout) return [];
+    const slot = layout.slot;
+    const currentType = machines.find((m) => resolveMachineId(m.name, m.id, machineLookup) === slot.machineId || m.name === slot.machine)?.type;
+    return machines.filter((machine) => {
+      if (machine.name === slot.machine) return false;
+      if (currentType && machine.type !== currentType) return false;
+      const busy = board.slots.some((other) =>
+        other.jobId !== slot.jobId
+        && (other.machineId != null ? `id:${other.machineId}` : `name:${other.machine.trim().toLowerCase()}`) === (machine.id != null ? `id:${machine.id}` : `name:${machine.name.trim().toLowerCase()}`)
+        && other.startMs < slot.endMs && slot.startMs < other.endMs);
+      return !busy;
+    });
+  }, [board.slots, cardLayouts, machineLookup, machines]);
+
+  /** Reassign a slot's operation (or a plain job's machine) to `machineName`, through updateJob/undo. */
+  const moveSlotToMachine = useCallback((slotKey: string, machineName: string) => {
+    const layout = cardLayouts.get(slotKey);
+    if (!layout) return;
+    const slot = layout.slot;
+    const job = jobs.find((item) => item.id === slot.jobId);
+    if (!job) return;
+    const machineId = resolveMachineId(machineName, null, machineLookup);
+    pushHistory();
+    if (slot.isOperation && slot.opIndex !== null) {
+      void updateJob(job.id, patchOperationMachine(job, slot.opIndex, machineName, machineId)).then(showResult);
+    } else {
+      void updateJob(job.id, { machine: machineName }).then(showResult);
+    }
+  }, [cardLayouts, jobs, machineLookup, pushHistory, showResult, updateJob]);
+
+  const toggleCollapse = useCallback((machine: string) => {
+    setCollapsedMachines((current) => {
+      const next = new Set(current);
+      if (next.has(machine)) next.delete(machine);
+      else next.add(machine);
+      return next;
+    });
+  }, []);
+
+  /** Enter in the search box: jump to the first matching slot. */
+  const jumpToFirstMatch = useCallback(() => {
+    if (!normalizedQuery) return;
+    const match = board.lanes.flatMap((lane) => lane.slots).map(({ slot }) => slot).find(matchesQuery);
+    if (match) scrollSlotsIntoView([match.key]);
+  }, [board.lanes, matchesQuery, normalizedQuery, scrollSlotsIntoView]);
+
+  // --- Focus bus consumer: a cross-page "show this on the board" request. Waits until jobs are
+  //     loaded (the board may mount a tick before data arrives), then scrolls to + pulses the target
+  //     card, expanding its lane if collapsed, or falls back gracefully (job gone → toast; machine
+  //     only → scroll to that lane). Consumes the target so it fires exactly once. ---
+  useEffect(() => {
+    if (peekFocus('machines') === null) return;
+    if (jobs.length === 0) return; // data not ready yet; this effect re-runs when jobs load
+    const target = consumeFocus('machines');
+    if (!target) return;
+
+    if (target.jobId != null) {
+      const jobSlots = board.slots.filter((slot) => slot.jobId === target.jobId);
+      if (jobSlots.length === 0) {
+        setToast({ id: Date.now(), tone: 'warning', message: orderGoneMessage });
+        return;
+      }
+      const chosen = (target.opId != null && jobSlots.find((slot) => slot.opId === target.opId)) || jobSlots[0];
+      setCollapsedMachines((current) => {
+        if (!current.has(chosen.machine)) return current;
+        const next = new Set(current);
+        next.delete(chosen.machine);
+        return next;
+      });
+      setStatusFilter('all');
+      // Defer so a just-expanded lane / cleared filter has produced its layout before we scroll.
+      window.setTimeout(() => scrollSlotsIntoView([chosen.key]), 60);
+      return;
+    }
+    if (target.machineName) {
+      const lane = laneLayouts.find((item) => item.machine === target.machineName);
+      const container = scrollRef.current;
+      if (lane && container) container.scrollTo({ top: Math.max(0, lane.top - 40), behavior: 'smooth' });
+    }
+  }, [jobs, board.slots, laneLayouts, orderGoneMessage, scrollSlotsIntoView]);
 
   /** Packs every leaf job onto its machine back-to-back, respecting dependency starts (same
    *  greedy scheduler the Gantt page offers, so both pages resolve overlaps identically). Routed
@@ -771,17 +975,20 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     const trimmed = name.trim();
     if (!trimmed) return;
     setViews((current) => {
-      const next = [...current.filter((view) => view.name !== trimmed), { id: `${Date.now()}`, name: trimmed, zoom, sortBy, statusFilter }];
+      const next = [...current.filter((view) => view.name !== trimmed), { id: `${Date.now()}`, name: trimmed, zoom, sortBy, statusFilter, collapsedMachines: [...collapsedMachines], query, hideEmpty }];
       localStorage.setItem(BOARD_VIEWS_KEY, JSON.stringify(next));
       return next;
     });
-  }, [sortBy, statusFilter, zoom]);
+  }, [collapsedMachines, hideEmpty, query, sortBy, statusFilter, zoom]);
   const applyView = useCallback((id: string) => {
     const view = loadBoardViews().find((item) => item.id === id);
     if (!view) return;
     setZoom(view.zoom);
     setSortBy(view.sortBy);
     setStatusFilter(view.statusFilter);
+    setCollapsedMachines(new Set(view.collapsedMachines ?? []));
+    setQuery(view.query ?? '');
+    setHideEmpty(Boolean(view.hideEmpty));
   }, []);
   const deleteView = useCallback((id: string) => {
     setViews((current) => {
@@ -888,5 +1095,30 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     removeJob,
     removeSlot,
     toContentCoords,
+    // --- Conflict lifecycle ---
+    conflicts,
+    conflictKeys,
+    conflictBySlot,
+    conflictPanelOpen,
+    setConflictPanelOpen,
+    focusConflict,
+    shiftLater,
+    machineMoveOptions,
+    moveSlotToMachine,
+    pulsedKeys,
+    // --- Load / furniture ---
+    laneLoadPercent,
+    timeBands,
+    nowX,
+    // --- Search ---
+    query,
+    setQuery,
+    matchesQuery,
+    jumpToFirstMatch,
+    // --- Collapse / hide-empty ---
+    collapsedMachines,
+    toggleCollapse,
+    hideEmpty,
+    setHideEmpty,
   };
 }

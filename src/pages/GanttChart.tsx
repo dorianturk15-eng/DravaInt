@@ -12,6 +12,7 @@ import { useMachines } from '../machines/MachinesContext';
 import { buildMachineLookup, resolveOpMachineName, resolveMachineName } from '../scheduling/machineIdentity';
 import type { Job } from '../scheduling/SchedulingContext';
 import { useAuth } from '../auth/AuthContext';
+import { requestFocus, consumeFocus } from '../navigation/focusTarget';
 
 const DEPENDENCY_TYPES: DependencyType[] = ['FS', 'SS', 'FF', 'SF'];
 
@@ -667,6 +668,13 @@ export default function GanttChart() {
     SF: t.gantt.typeSF,
   };
   const editingJob = jobs.find((job) => job.id === editingJobId) ?? null;
+
+  // Inbound focus bus: a "View in Gantt" from the machine board opens that order's details here.
+  useEffect(() => {
+    if (jobs.length === 0) return;
+    const target = consumeFocus('gantt');
+    if (target?.jobId != null && jobs.some((job) => job.id === target.jobId)) setEditingJobId(target.jobId);
+  }, [jobs]);
   const editingConflicts = editingJob ? getJobConflicts(editingJob) : null;
 
   function moveOperation(job: Job, operationId: number, direction: -1 | 1) {
@@ -923,7 +931,7 @@ export default function GanttChart() {
 
       {editingJob && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingJobId(null); }}><div className="modal-content gantt-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="gantt-edit-title"><div className="modal-header"><div><span className="eyebrow">{editingJob.order}</span><h3 id="gantt-edit-title">{lang === 'hr' ? 'Detalji radnog naloga' : 'Work order details'}</h3></div><button className="drawer-close-btn" onClick={() => setEditingJobId(null)}>×</button></div><div className="modal-body"><div className="gantt-edit-grid"><label>{lang === 'hr' ? 'Proizvod' : 'Product'}<input defaultValue={editingJob.product} onBlur={(event) => updateJob(editingJob.id, { product: event.target.value })} /></label><label>{lang === 'hr' ? 'Operater' : 'Operator'}<input defaultValue={editingJob.operator} onBlur={(event) => updateJob(editingJob.id, { operator: event.target.value })} /></label><label>{t.common.start}<input type="datetime-local" defaultValue={editingJob.start} onBlur={(event) => updateJob(editingJob.id, { start: event.target.value })} /></label><label>{t.common.end}<input type="datetime-local" defaultValue={editingJob.end} onBlur={(event) => updateJob(editingJob.id, { end: event.target.value })} /></label><label>{lang === 'hr' ? 'Priprema (h)' : 'Setup (h)'}<input type="number" min={0} step="0.25" defaultValue={editingJob.setupHours ?? 0} onBlur={(event) => updateJob(editingJob.id, { setupHours: Number(event.target.value) })} /></label><label>{lang === 'hr' ? 'Materijal' : 'Material'}<select value={editingJob.materialStatus ?? 'ready'} onChange={(event) => updateJob(editingJob.id, { materialStatus: event.target.value as Job['materialStatus'] })}><option value="ready">Ready</option><option value="waiting">Waiting</option><option value="delayed">Delayed</option></select></label><label className="full-field">{lang === 'hr' ? 'Napomene' : 'Comments'}<textarea defaultValue={editingJob.comments} onBlur={(event) => updateJob(editingJob.id, { comments: event.target.value })} /></label></div>
       {editingJob.operations?.length ? <div className="operation-reorder-list"><strong>{lang === 'hr' ? 'Redoslijed operacija' : 'Operation route'}</strong>{editingJob.operations.map((operation, index) => <div key={operation.id} draggable onDragStart={() => setDraggedOperation({ jobId: editingJob.id, operationId: operation.id })} onDragOver={(event) => event.preventDefault()} onDrop={() => dropOperation(editingJob, operation.id)}><span className="operation-drag-handle">{index + 1}</span><b>{operation.name}</b><small>{operation.machine} · {operation.hours}h</small><button onClick={() => moveOperation(editingJob, operation.id, -1)} disabled={index === 0}>↑</button><button onClick={() => moveOperation(editingJob, operation.id, 1)} disabled={index === editingJob.operations!.length - 1}>↓</button></div>)}</div> : null}
-      {editingConflicts && Object.values(editingConflicts).length > 0 && <div className="conflict-summary">{Object.entries(editingConflicts).map(([key, value]) => <span key={key}><b>{key}</b>{'message' in value ? value.message : value.otherOrder}</span>)}</div>}</div><div className="modal-footer"><button className="btn btn-blue" onClick={() => setEditingJobId(null)}>{lang === 'hr' ? 'Gotovo' : 'Done'}</button></div></div></div>}
+      {editingConflicts && Object.values(editingConflicts).length > 0 && <div className="conflict-summary">{Object.entries(editingConflicts).map(([key, value]) => <span key={key}><b>{key}</b>{'message' in value ? value.message : value.otherOrder}</span>)}</div>}</div><div className="modal-footer"><button className="btn btn-ghost" onClick={() => { const id = editingJob.id; setEditingJobId(null); requestFocus({ tab: 'machines', jobId: id }); }}>{t.machineBoard.showOnBoard}</button><button className="btn btn-blue" onClick={() => setEditingJobId(null)}>{lang === 'hr' ? 'Gotovo' : 'Done'}</button></div></div></div>}
 
       {undoToast && (
         <div className="gantt-undo-toast" role="status">

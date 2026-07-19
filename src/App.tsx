@@ -23,6 +23,7 @@ import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersect
 import { computeEffectiveSchedule, jobsToScheduleInput, getJobConflicts } from './scheduling/cpm';
 import { supabase } from './supabase/client';
 import { canAccessTab as canAccess } from './auth/access';
+import { FOCUS_REQUEST_EVENT, type FocusTarget } from './navigation/focusTarget';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const ShiftSchedule = lazy(() => import('./pages/ShiftSchedule'));
@@ -103,6 +104,17 @@ function App() {
     }
   }, [roleResolving, role, routeValue, routerNavigate, settings.defaultView]);
 
+  // Cross-page focus bus: a requestFocus() from anywhere (alert, Gantt bar, Progress/Dashboard row)
+  // navigates to the target tab; the destination page consumes the stored target on mount.
+  useEffect(() => {
+    const onFocusRequest = (event: Event) => {
+      const target = (event as CustomEvent<FocusTarget>).detail;
+      if (target?.tab && canAccess(role, target.tab)) routerNavigate(`/${target.tab}`);
+    };
+    window.addEventListener(FOCUS_REQUEST_EVENT, onFocusRequest);
+    return () => window.removeEventListener(FOCUS_REQUEST_EVENT, onFocusRequest);
+  }, [role, routerNavigate]);
+
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { setIsSidebarOpen(false); setIsCommandOpen(false); }
@@ -175,7 +187,8 @@ function App() {
   // Use the same conflict engine the Gantt and board use (cpm.getJobConflicts), so the bell can't
   // report "operations are stable" while the board shows red. The old naive `job.machine === candidate.machine`
   // string compare missed routed orders ("Tokarilica-1 → CNC-2") and per-operation windows entirely.
-  const machineConflicts = settings.scheduleConflictAlertsEnabled && leafJobs.some((job) => Boolean(getJobConflicts(job, jobs).machineOverlap));
+  const overlapJob = settings.scheduleConflictAlertsEnabled ? leafJobs.find((job) => Boolean(getJobConflicts(job, jobs).machineOverlap)) : undefined;
+  const machineConflicts = Boolean(overlapJob);
   // Capacity alert is scoped to the current week so it reflects this week's load, not an all-time sum.
   const capacityWindow = weekWindow();
   const weekLeafJobs = leafJobs.filter((job) => jobIntersectsWeek(job, capacityWindow));
@@ -187,7 +200,7 @@ function App() {
   if (pendingChanges > 0) alerts.push({ id: `queue-${pendingChanges}`, severity: 'info', title: lang === 'hr' ? 'Promjene čekaju sinkronizaciju' : 'Changes waiting to sync', detail: lang === 'hr' ? `${pendingChanges} lokalnih promjena nalazi se u sigurnom redu čekanja.` : `${pendingChanges} local changes are safely queued.` });
   if (delayedJobs.length) alerts.push({ id: `delayed-${delayedJobs.map((job) => job.id).join('-')}`, severity: 'critical', title: lang === 'hr' ? `${delayedJobs.length} naloga zahtijeva pažnju` : `${delayedJobs.length} work orders need attention`, detail: lang === 'hr' ? 'Rok je probijen ili je nalog označen kao kašnjenje.' : 'The due time has passed or the order is marked delayed.', action: 'progress' });
   if (materialRisks.length) alerts.push({ id: `materials-${materialRisks.map((job) => job.id).join('-')}`, severity: 'warning', title: lang === 'hr' ? 'Rizik dostupnosti materijala' : 'Material availability risk', detail: lang === 'hr' ? `${materialRisks.length} naloga čeka ili kasni s materijalom.` : `${materialRisks.length} work orders have waiting or delayed material.`, action: 'gantt' });
-  if (machineConflicts) alerts.push({ id: 'machine-overlap', severity: 'warning', title: lang === 'hr' ? 'Preklapanje na stroju' : 'Machine schedule overlap', detail: lang === 'hr' ? 'Najmanje dva naloga koriste isti stroj u preklapajućem terminu.' : 'At least two orders use the same machine during overlapping time.', action: 'machines' });
+  if (machineConflicts) alerts.push({ id: 'machine-overlap', severity: 'warning', title: lang === 'hr' ? 'Preklapanje na stroju' : 'Machine schedule overlap', detail: lang === 'hr' ? 'Najmanje dva naloga koriste isti stroj u preklapajućem terminu.' : 'At least two orders use the same machine during overlapping time.', action: 'machines', focusJobId: overlapJob?.id });
   if (overloadedMachines.length) alerts.push({ id: `capacity-${settings.capacityAlertPercent}-${overloadedMachines.map(([machine]) => machine).join('-')}`, severity: 'warning', title: lang === 'hr' ? 'Prag kapaciteta je dosegnut' : 'Capacity threshold reached', detail: lang === 'hr' ? `${overloadedMachines.length} ${overloadedMachines.length === 1 ? 'stroj prelazi' : 'stroja prelaze'} ${settings.capacityAlertPercent}% tjednog kapaciteta.` : `${overloadedMachines.length} ${overloadedMachines.length === 1 ? 'machine exceeds' : 'machines exceed'} ${settings.capacityAlertPercent}% weekly capacity.`, action: 'machines' });
   if (settings.absenceAlertsEnabled && absentWorkerIds.size) alerts.push({ id: `absence-${[...absentWorkerIds].join('-')}`, severity: 'info', title: lang === 'hr' ? 'Današnja odsutnost' : 'Today’s absence', detail: lang === 'hr' ? `${absentWorkerIds.size} operatera nije dostupno za raspored.` : `${absentWorkerIds.size} operators are unavailable for scheduling.`, action: 'shifts' });
   if (!alerts.length) alerts.push({ id: `healthy-${today}`, severity: 'success', title: lang === 'hr' ? 'Operacije su stabilne' : 'Operations are stable', detail: lang === 'hr' ? 'Nema aktivnih kašnjenja, konflikata ili problema sa sinkronizacijom.' : 'No active delays, conflicts, or synchronization issues.' });

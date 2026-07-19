@@ -6,6 +6,9 @@ import { useAuth, getLastLogins } from '../auth/AuthContext';
 import { useMachines, MACHINE_TYPES, type MachineType, type MillAxis } from '../machines/MachinesContext';
 import { useScheduling } from '../scheduling/SchedulingContext';
 import { buildMachineLookup, findUnmappedOperationMachines, findMachineNameDependents } from '../scheduling/machineIdentity';
+import { detectOperationOverlaps } from '../scheduling/jobOperations';
+import { OverlapEnforcementCard } from '../components/OverlapEnforcementCard';
+import { requestFocus } from '../navigation/focusTarget';
 import { useRoles } from '../roles/RolesContext';
 import { IconUpload, IconTrash, IconEdit, IconPlus } from '../components/Icons';
 import { useWorkers, type Worker } from '../workers/WorkersContext';
@@ -470,16 +473,26 @@ export default function Admin() {
                         <th>{t.admin.machineName}</th>
                         <th>{lang === 'hr' ? 'Operacije' : 'Operations'}</th>
                         <th>{lang === 'hr' ? 'Nalozi' : 'Orders'}</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map(([name, info]) => (
+                      {rows.map(([name, info]) => {
+                        const firstOrder = [...info.orders][0];
+                        const focusJob = jobs.find((job) => job.order === firstOrder);
+                        return (
                         <tr key={name}>
                           <td style={{ fontWeight: 600 }}>{name}</td>
                           <td>{info.count}</td>
                           <td style={{ fontSize: 12 }}>{[...info.orders].slice(0, 10).join(', ')}{info.orders.size > 10 ? '…' : ''}</td>
+                          <td>
+                            <button type="button" className="btn btn-blue btn-sm" onClick={() => requestFocus({ tab: 'machines', jobId: focusJob?.id, machineName: name })}>
+                              {t.machineBoard.showOnBoard}
+                            </button>
+                          </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -747,6 +760,7 @@ export default function Admin() {
       {adminTab === 'system' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <SyncDiagnostics language={lang} />
+          <OverlapEnforcementCard language={lang} conflictCount={detectOperationOverlaps(jobs, machines).length} />
           {/* Key-Value Config Editor */}
           <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
             <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
