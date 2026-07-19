@@ -9,6 +9,7 @@ import { LockScreen } from './components/LockScreen';
 import { useSettings, type AppTab } from './settings/SettingsContext';
 import { useInactivityLock } from './hooks/useInactivityLock';
 import { useWorkers } from './workers/WorkersContext';
+import { useMachines } from './machines/MachinesContext';
 import Login from './pages/Login';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useScheduling } from './scheduling/SchedulingContext';
@@ -51,6 +52,7 @@ function App() {
   const { theme, toggleTheme } = useTheme();
   const { settings } = useSettings();
   const { workers, displayName } = useWorkers();
+  const { machines } = useMachines();
   const { jobs } = useScheduling();
   const { absences } = useShifts();
   const { online, pendingChanges } = useConnectivity();
@@ -178,7 +180,7 @@ function App() {
   const capacityWindow = weekWindow();
   const weekLeafJobs = leafJobs.filter((job) => jobIntersectsWeek(job, capacityWindow));
   const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(weekLeafJobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
-  const machineLoads = calculateMachineLoads(weekLeafJobs, effectiveSchedule);
+  const machineLoads = calculateMachineLoads(weekLeafJobs, effectiveSchedule, machines);
   const overloadedMachines = settings.capacityAlertsEnabled ? [...machineLoads].filter(([, hours]) => hours / getWeeklyCapacityHours() * 100 >= settings.capacityAlertPercent) : [];
   const alerts: OperationalAlert[] = [];
   if (!online) alerts.push({ id: 'connection-offline', severity: 'critical', title: lang === 'hr' ? 'Radna stanica je izvan mreže' : 'Workstation is offline', detail: lang === 'hr' ? 'Promjene se čuvaju lokalno i sinkronizirat će se nakon povratka veze.' : 'Changes are stored locally and will sync when the connection returns.' });

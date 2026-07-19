@@ -1,6 +1,8 @@
 import type { Job } from './SchedulingContext';
+import type { Machine } from '../machines/MachinesContext';
 import { splitMachineChain, type EffectiveSchedule } from './cpm';
 import { hasChildren } from './hierarchy';
+import { buildMachineLookup, resolveMachineId, resolveMachineName, type MachineLookup } from './machineIdentity';
 
 /**
  * One (machine, time-window) a job actually occupies — the single source of truth for "what runs on
@@ -32,7 +34,10 @@ export interface OperationSlot {
   slotCount: number;
   /** Operation step name (routed) — the card's subtitle; undefined for synthetic/chain slots. */
   name?: string;
+  /** Resolved *current* machine display name (via {@link resolveMachineName}) — the lane key. */
   machine: string;
+  /** Stable machine identity, resolved from the op's own id or a name-match; null when unmapped. */
+  machineId: number | null;
   startMs: number;
   endMs: number;
   hours: number;
@@ -63,9 +68,18 @@ function jobEffectiveEnd(job: Job, startMs: number, effective: Map<number, Effec
  *
  * @param effective CPM-resolved schedule keyed by job id, so a routed order's operations lay out
  *   from its dependency-cascaded start — keeping the board in step with the Gantt and conflict views.
+ * @param machines Current machine list (Phase C). When supplied, each slot's display `machine` is
+ *   resolved through {@link resolveMachineName} — an op carrying a live `machineId` follows an Admin
+ *   rename, while a legacy op with only a name still lands on its name's lane. Omitting it keeps the
+ *   pre-Phase-C name-only behaviour (used by tests/callers without a machine list).
  */
-export function expandToOperationSlots(jobs: Job[], effective: Map<number, EffectiveSchedule>): OperationSlot[] {
+export function expandToOperationSlots(
+  jobs: Job[],
+  effective: Map<number, EffectiveSchedule>,
+  machines: Machine[] = [],
+): OperationSlot[] {
   const slots: OperationSlot[] = [];
+  const lookup: MachineLookup = buildMachineLookup(machines);
 
   for (const job of jobs) {
     if (hasChildren(jobs, job.id)) continue;
@@ -80,8 +94,10 @@ export function expandToOperationSlots(jobs: Job[], effective: Map<number, Effec
         const start = cursor;
         const end = cursor + hours * 3_600_000;
         cursor = end;
-        const machine = (op.machine || '').trim();
-        if (!machine) return;
+        const rawMachine = (op.machine || '').trim();
+        if (!rawMachine) return;
+        const machineId = resolveMachineId(op.machine, op.machineId, lookup);
+        const machine = resolveMachineName(op.machine, op.machineId, lookup);
         slots.push({
           key: `${job.id}:op${op.id}`,
           jobId: job.id,
@@ -94,6 +110,7 @@ export function expandToOperationSlots(jobs: Job[], effective: Map<number, Effec
           slotCount: job.operations!.length,
           name: op.name,
           machine,
+          machineId,
           startMs: start,
           endMs: end,
           hours,
@@ -113,9 +130,11 @@ export function expandToOperationSlots(jobs: Job[], effective: Map<number, Effec
     if (machines.length > 1) {
       const span = Math.max(0, effEnd - effStart);
       const per = span / machines.length;
-      machines.forEach((machine, index) => {
+      machines.forEach((segMachine, index) => {
         const start = effStart + index * per;
         const end = effStart + (index + 1) * per;
+        const machineId = resolveMachineId(segMachine, null, lookup);
+        const machine = resolveMachineName(segMachine, null, lookup) || segMachine;
         slots.push({
           key: `${job.id}:seg${index}`,
           jobId: job.id,
@@ -127,6 +146,7 @@ export function expandToOperationSlots(jobs: Job[], effective: Map<number, Effec
           isLastSlot: index === machines.length - 1,
           slotCount: machines.length,
           machine,
+          machineId,
           startMs: start,
           endMs: end,
           hours: per / 3_600_000,
@@ -138,8 +158,10 @@ export function expandToOperationSlots(jobs: Job[], effective: Map<number, Effec
       continue;
     }
 
-    const machine = machines[0] ?? job.machine.trim();
-    if (!machine) continue;
+    const rawMachine = machines[0] ?? job.machine.trim();
+    if (!rawMachine) continue;
+    const machineId = resolveMachineId(rawMachine, null, lookup);
+    const machine = resolveMachineName(rawMachine, null, lookup) || rawMachine;
     slots.push({
       key: `${job.id}:self`,
       jobId: job.id,
@@ -151,6 +173,7 @@ export function expandToOperationSlots(jobs: Job[], effective: Map<number, Effec
       isLastSlot: true,
       slotCount: 1,
       machine,
+      machineId,
       startMs: effStart,
       endMs: effEnd,
       hours: Math.max(0, effEnd - effStart) / 3_600_000,

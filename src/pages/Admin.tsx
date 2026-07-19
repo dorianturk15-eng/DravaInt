@@ -4,6 +4,8 @@ import { useLogo } from '../logo/LogoContext';
 import { SyncDiagnostics } from '../components/SyncDiagnostics';
 import { useAuth, getLastLogins } from '../auth/AuthContext';
 import { useMachines, MACHINE_TYPES, type MachineType, type MillAxis } from '../machines/MachinesContext';
+import { useScheduling } from '../scheduling/SchedulingContext';
+import { buildMachineLookup, findUnmappedOperationMachines, findMachineNameDependents } from '../scheduling/machineIdentity';
 import { useRoles } from '../roles/RolesContext';
 import { IconUpload, IconTrash, IconEdit, IconPlus } from '../components/Icons';
 import { useWorkers, type Worker } from '../workers/WorkersContext';
@@ -16,6 +18,7 @@ export default function Admin() {
   const { users, username: currentUsername, addUser, updateUser, deleteUser } = useAuth();
   const lastLogins = getLastLogins();
   const { machines, addMachine, updateMachine, removeMachine } = useMachines();
+  const { jobs } = useScheduling();
   const { roles, addRole, removeRole, setRoleActive } = useRoles();
   const { workers: workersList, addWorker, updateWorker, archiveWorker, removeWorker, displayName } = useWorkers();
 
@@ -120,6 +123,24 @@ export default function Admin() {
 
   async function submitMachine() {
     setMachineError('');
+    // Phase C rename guard: if this edit renames a machine, any operations that reference it by NAME
+    // ONLY (no matching machineId — i.e. legacy rows the backfill hasn't reached) would be silently
+    // orphaned, since their name no longer matches any lane. Warn before proceeding. Backfilled ops
+    // carry the id and follow the rename automatically, so they don't count.
+    if (editingMachineId) {
+      const existing = machines.find((m) => m.id === editingMachineId);
+      const renamed = existing && existing.name.trim().toLowerCase() !== machineName.trim().toLowerCase();
+      if (existing && renamed) {
+        const orphans = findMachineNameDependents(jobs, existing);
+        if (orphans.length > 0) {
+          const orders = [...new Set(orphans.map((o) => o.order))];
+          const proceed = window.confirm(lang === 'hr'
+            ? `Preimenovanje stroja "${existing.name}" u "${machineName.trim()}" ostavit će ${orphans.length} operacij(a) bez veze na stroj (nalozi: ${orders.slice(0, 8).join(', ')}${orders.length > 8 ? '…' : ''}), jer se te operacije još povezuju samo po imenu. Pokrenite migraciju povezivanja (machineId) prije preimenovanja. Svejedno nastaviti?`
+            : `Renaming machine "${existing.name}" to "${machineName.trim()}" will orphan ${orphans.length} operation(s) (orders: ${orders.slice(0, 8).join(', ')}${orders.length > 8 ? '…' : ''}) that still match by name only. Run the machineId backfill before renaming. Rename anyway?`);
+          if (!proceed) return;
+        }
+      }
+    }
     const result = editingMachineId
       ? await updateMachine(editingMachineId, { name: machineName, type: machineType, axis: machineAxis })
       : await addMachine({ name: machineName, type: machineType, axis: machineAxis });
@@ -417,6 +438,54 @@ export default function Admin() {
               </table>
             )}
           </div>
+
+          {(() => {
+            // Phase C — "unmapped machines" report: operation/plain-job machine names that resolve to
+            // no current machine (neither a live machineId nor a name match). These are the rows a
+            // rename would orphan, or that reference a machine never registered / since deleted.
+            const unmapped = findUnmappedOperationMachines(jobs, buildMachineLookup(machines));
+            if (unmapped.length === 0) return null;
+            const byName = new Map<string, { count: number; orders: Set<string> }>();
+            for (const u of unmapped) {
+              const entry = byName.get(u.machineName) ?? { count: 0, orders: new Set<string>() };
+              entry.count += 1;
+              entry.orders.add(u.order);
+              byName.set(u.machineName, entry);
+            }
+            const rows = [...byName.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+            return (
+              <div style={{ marginTop: 24, border: '1px solid var(--danger-color)', borderRadius: 'var(--radius-card)', padding: 16 }}>
+                <div style={{ fontWeight: 700, color: 'var(--danger-color)', marginBottom: 6 }}>
+                  ⚠ {lang === 'hr' ? 'Nepovezani strojevi' : 'Unmapped machines'}
+                </div>
+                <p className="subtitle-text" style={{ fontSize: 12, marginBottom: 12 }}>
+                  {lang === 'hr'
+                    ? `${unmapped.length} referenc(a) na stroj ne odgovara nijednom registriranom stroju. Registrirajte stroj ili ispravite operaciju; pokrenite migraciju povezivanja (machineId) da se preostale operacije povežu po id-u.`
+                    : `${unmapped.length} machine reference(s) match no registered machine. Register the machine or fix the operation; run the machineId backfill so remaining operations match by id.`}
+                </p>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>{t.admin.machineName}</th>
+                        <th>{lang === 'hr' ? 'Operacije' : 'Operations'}</th>
+                        <th>{lang === 'hr' ? 'Nalozi' : 'Orders'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(([name, info]) => (
+                        <tr key={name}>
+                          <td style={{ fontWeight: 600 }}>{name}</td>
+                          <td>{info.count}</td>
+                          <td style={{ fontSize: 12 }}>{[...info.orders].slice(0, 10).join(', ')}{info.orders.size > 10 ? '…' : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

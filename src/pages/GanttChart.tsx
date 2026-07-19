@@ -9,6 +9,7 @@ import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, com
 import { snapToShiftBoundary } from '../scheduling/boardGeometry';
 import { useSettings } from '../settings/SettingsContext';
 import { useMachines } from '../machines/MachinesContext';
+import { buildMachineLookup, resolveOpMachineName, resolveMachineName } from '../scheduling/machineIdentity';
 import type { Job } from '../scheduling/SchedulingContext';
 import { useAuth } from '../auth/AuthContext';
 
@@ -136,25 +137,30 @@ export default function GanttChart() {
   const dependencyCount = validJobs.reduce((sum, job) => sum + (job.dependencies?.length ?? 0), 0);
   const schedulableJobs = useMemo(() => validJobs.filter((j) => !hasChildren(jobs, j.id)), [jobs, validJobs]);
 
+  // Phase C: resolve every op/chain machine reference through its stable id first, so a renamed
+  // machine's lane follows the rename instead of splitting into a stale-name phantom lane.
+  const machineLookup = useMemo(() => buildMachineLookup(machines), [machines]);
+
   // Machine names extraction helper
   const machinesList = useMemo(() => {
     const list = new Set<string>();
     machines.forEach((machine) => list.add(machine.name));
     jobs.forEach((j) => {
       if (j.machine) {
-        splitMachineChain(j.machine).forEach((m) => list.add(m));
+        splitMachineChain(j.machine).forEach((m) => list.add(resolveMachineName(m, null, machineLookup) || m));
       }
       if (j.operations) {
         j.operations.forEach((op) => {
-          if (op.machine.trim()) list.add(op.machine.trim());
+          const resolved = resolveOpMachineName(op, machineLookup);
+          if (resolved) list.add(resolved);
         });
       }
     });
     if (list.size === 0) list.add('General / Unassigned');
     const values = Array.from(list);
-    const workload = (machine: string) => jobs.filter((job) => splitMachineChain(job.machine).includes(machine) || job.operations?.some((operation) => operation.machine === machine)).reduce((hours, job) => hours + Math.max(0, (new Date(job.end).getTime() - new Date(job.start).getTime()) / 3_600_000), 0);
+    const workload = (machine: string) => jobs.filter((job) => splitMachineChain(job.machine).some((m) => (resolveMachineName(m, null, machineLookup) || m) === machine) || job.operations?.some((operation) => resolveOpMachineName(operation, machineLookup) === machine)).reduce((hours, job) => hours + Math.max(0, (new Date(job.end).getTime() - new Date(job.start).getTime()) / 3_600_000), 0);
     return values.sort((a, b) => machineSort === 'name' ? a.localeCompare(b) : machineSort === 'jobs' ? jobs.filter((job) => job.machine.includes(b)).length - jobs.filter((job) => job.machine.includes(a)).length : workload(b) - workload(a));
-  }, [jobs, machineSort, machines]);
+  }, [jobs, machineSort, machines, machineLookup]);
 
   const cycle = useMemo(() => findDependencyCycle(jobsToScheduleInput(validJobs)), [validJobs]);
   const cycleLabel = cycle?.map((id) => jobs.find((job) => job.id === id)?.order || `#${id}`).join(' → ');
@@ -274,10 +280,10 @@ export default function GanttChart() {
     const normalizedSearch = search.trim().toLowerCase();
     const matchingJobs = jobs.filter((j) => {
       if (normalizedSearch && !`${j.order} ${j.operator} ${j.product ?? ''} ${j.machine}`.toLowerCase().includes(normalizedSearch)) return false;
-      if (j.machine && splitMachineChain(j.machine).includes(machineName)) {
+      if (j.machine && splitMachineChain(j.machine).some((m) => (resolveMachineName(m, null, machineLookup) || m) === machineName)) {
         return true;
       }
-      if (j.operations?.some((op) => op.machine.trim() === machineName)) {
+      if (j.operations?.some((op) => resolveOpMachineName(op, machineLookup) === machineName)) {
         return true;
       }
       return false;
@@ -304,7 +310,7 @@ export default function GanttChart() {
       collapsedIds,
       scheduling: { holidays: settings.holidays, workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, skipWeekends: true },
     });
-  }, [collapsedIds, highlightCritical, jobs, search, settings.criticalToleranceMs, settings.holidays, settings.workdayEnd, settings.workdayStart]);
+  }, [collapsedIds, highlightCritical, jobs, search, settings.criticalToleranceMs, settings.holidays, settings.workdayEnd, settings.workdayStart, machineLookup]);
 
   /**
    * Attaches the visual decorations (in-progress texture, setup stripe, baseline ghost, warning
@@ -646,7 +652,7 @@ export default function GanttChart() {
   }
 
   function machineEfficiency(machine: string) {
-    const laneJobs = jobs.filter((job) => splitMachineChain(job.machine).includes(machine) || job.operations?.some((operation) => operation.machine === machine));
+    const laneJobs = jobs.filter((job) => splitMachineChain(job.machine).some((m) => (resolveMachineName(m, null, machineLookup) || m) === machine) || job.operations?.some((operation) => resolveOpMachineName(operation, machineLookup) === machine));
     if (!laneJobs.length) return 0;
     const start = Math.min(...laneJobs.map((job) => new Date(job.start).getTime()));
     const end = Math.max(...laneJobs.map((job) => new Date(job.end).getTime()));

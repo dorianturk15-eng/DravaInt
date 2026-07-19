@@ -1,5 +1,7 @@
 import type { Job } from './SchedulingContext';
+import type { Machine } from '../machines/MachinesContext';
 import { splitMachineChain, type EffectiveSchedule } from './cpm';
+import { buildMachineLookup, resolveMachineName, type MachineLookup } from './machineIdentity';
 
 export const WEEKLY_CAPACITY_HOURS = 40;
 
@@ -48,15 +50,23 @@ function add(loads: Map<string, number>, machine: string, hours: number) {
  *   When provided, a job's duration reflects any dependency cascade even before that cascade has
  *   been persisted back to job.start/end — otherwise the capacity view lags a drag/connect by one
  *   write.
+ * @param machines Current machine list (Phase C). When supplied, each operation's machine is keyed
+ *   by its *current* name resolved through {@link resolveMachineName} (id-first), so a rename doesn't
+ *   split one machine's load across two names. Omitting it keeps the pre-Phase-C name-only keying.
  */
-export function calculateMachineLoads(jobs: Job[], effective?: Map<number, EffectiveSchedule>): Map<string, number> {
+export function calculateMachineLoads(
+  jobs: Job[],
+  effective?: Map<number, EffectiveSchedule>,
+  machines: Machine[] = [],
+): Map<string, number> {
   const loads = new Map<string, number>();
+  const lookup: MachineLookup = buildMachineLookup(machines);
   jobs.forEach((job) => {
     if (job.operations?.length) {
-      job.operations.forEach((operation) => add(loads, operation.machine, operation.hours));
+      job.operations.forEach((operation) => add(loads, resolveMachineName(operation.machine, operation.machineId, lookup) || operation.machine, operation.hours));
       return;
     }
-    const machines = splitMachineChain(job.machine);
+    const machines = splitMachineChain(job.machine).map((name) => resolveMachineName(name, null, lookup) || name);
     if (!machines.length) return;
     const eff = effective?.get(job.id);
     const scheduledHours = eff

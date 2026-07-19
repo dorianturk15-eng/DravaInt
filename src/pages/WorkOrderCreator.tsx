@@ -6,6 +6,8 @@ import { useScheduling, type Job, type OperationStep, type JobPriority } from '.
 import { hasChildren, collectDescendants } from '../scheduling/hierarchy';
 import { useLogo } from '../logo/LogoContext';
 import { useWorkers } from '../workers/WorkersContext';
+import { useMachines } from '../machines/MachinesContext';
+import { buildMachineLookup, resolveMachineId } from '../scheduling/machineIdentity';
 import { priorityLabel, priorityMeta } from '../scheduling/priority';
 import { suggestOrderNumber } from '../scheduling/orderNumber';
 
@@ -28,6 +30,7 @@ export default function WorkOrderCreator() {
   const { jobs, loading, addJob, updateJob, restoreBackup, getJobConflicts } = useScheduling();
   const { logo } = useLogo();
   const { activeWorkers, displayName } = useWorkers();
+  const { machines } = useMachines();
   const [printOrderId, setPrintOrderId] = useState<number | null>(null);
 
   const [creatorTab, setCreatorTab] = useState<'create' | 'timemachine'>('create');
@@ -135,9 +138,14 @@ export default function WorkOrderCreator() {
     const hours = parseFloat(opForm.hours);
     if (!opForm.name || !opForm.machine || !hours || hours <= 0) return;
     const opWorker = activeWorkers.find((worker) => worker.id === Number(opForm.operatorId));
+    // Phase C: record the machine's stable id (source of truth) alongside its display name, so a
+    // later rename in Admin can't orphan this step. Unregistered free-text names resolve to null and
+    // surface in the Admin "unmapped machines" report.
+    const machineId = resolveMachineId(opForm.machine, null, buildMachineLookup(machines));
     const step = {
       name: opForm.name,
       machine: opForm.machine,
+      machineId,
       hours,
       operator: opWorker ? displayName(opWorker) : undefined,
       operatorId: opWorker?.id ?? null,
@@ -508,9 +516,13 @@ export default function WorkOrderCreator() {
             <label>{t.workOrders.operationMachine}</label>
             <input
               type="text"
+              list="wo-machine-options"
               value={opForm.machine}
               onChange={(e) => setOpForm({ ...opForm, machine: e.target.value })}
             />
+            <datalist id="wo-machine-options">
+              {machines.map((machine) => <option key={machine.id} value={machine.name} />)}
+            </datalist>
           </div>
           <div>
             <label>{t.workOrders.operationHours}</label>
