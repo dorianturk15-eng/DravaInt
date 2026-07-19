@@ -9,6 +9,8 @@ import {
   edgesForDependencyType,
   pointInRect,
   cardEdgeAnchor,
+  buildTimeBands,
+  clippedHours,
 } from './boardGeometry';
 
 const ALL_DEPENDENCY_TYPES: DependencyType[] = ['FS', 'SS', 'FF', 'SF'];
@@ -28,6 +30,33 @@ describe('board time-axis geometry', () => {
     // candidates are 6, 14, 22 — 16 is closest to 14
     expect(snapped.getHours()).toBe(14);
     expect(snapped.getDate()).toBe(13);
+  });
+});
+
+describe('time bands + clipped load', () => {
+  it('emits two off-shift bands per working day and one full band per weekend day', () => {
+    // Monday 00:00 origin, one working day (Mon) + shading; workday 06:00–22:00.
+    const origin = new Date('2026-07-13T00:00:00').getTime(); // 2026-07-13 is a Monday
+    const bands = buildTimeBands(origin, 24, 24, 6, 22, []);
+    const offshift = bands.filter((b) => b.kind === 'offshift');
+    expect(offshift).toHaveLength(2); // pre-06:00 and post-22:00
+  });
+
+  it('shades a whole weekend day and honours holidays', () => {
+    const saturday = new Date('2026-07-18T00:00:00').getTime(); // Saturday
+    const bands = buildTimeBands(saturday, 24, 24, 6, 22, []);
+    expect(bands.some((b) => b.kind === 'weekend')).toBe(true);
+    const workday = new Date('2026-07-13T00:00:00').getTime();
+    const withHoliday = buildTimeBands(workday, 24, 24, 6, 22, ['2026-07-13']);
+    expect(withHoliday.some((b) => b.kind === 'holiday')).toBe(true);
+  });
+
+  it('clips hours to a window (the window-aware load basis)', () => {
+    const H = 3_600_000;
+    const win = { start: 0, end: 10 * H };
+    // one slot fully inside (4h), one straddling the end (only 2h count).
+    const hours = clippedHours([{ startMs: 0, endMs: 4 * H }, { startMs: 8 * H, endMs: 14 * H }], win.start, win.end);
+    expect(hours).toBe(6);
   });
 });
 

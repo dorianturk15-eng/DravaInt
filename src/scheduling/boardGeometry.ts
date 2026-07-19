@@ -108,6 +108,83 @@ export function pointInRect(x: number, y: number, rect: CardRect, tolerance = 0)
   );
 }
 
+export type TimeBandKind = 'weekend' | 'offshift' | 'holiday';
+
+export interface TimeBand {
+  key: string;
+  x: number;
+  width: number;
+  kind: TimeBandKind;
+}
+
+function isHoliday(date: Date, holidays: string[]): boolean {
+  if (holidays.length === 0) return false;
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return holidays.includes(iso);
+}
+
+/**
+ * Absolutely-positioned background bands that orient the eye inside the lanes, mirroring DravaGantt:
+ * whole-day weekend/holiday shading, and the off-shift hours (before workdayStart / after workdayEnd)
+ * on working days. These are the "why did my drop snap there" explanation made visible. Computed once
+ * per (origin, span, zoom, shift) and rendered behind the lanes.
+ */
+export function buildTimeBands(
+  originMs: number,
+  spanHours: number,
+  pixelsPerHour: number,
+  workdayStart: number,
+  workdayEnd: number,
+  holidays: string[] = [],
+): TimeBand[] {
+  const bands: TimeBand[] = [];
+  const dayStart = new Date(originMs);
+  dayStart.setHours(0, 0, 0, 0);
+  const spanMs = spanHours * 3_600_000;
+  const endMs = originMs + spanMs;
+  const HOUR = 3_600_000;
+  const DAY = 24 * HOUR;
+
+  for (let ms = dayStart.getTime(); ms < endMs; ms += DAY) {
+    const date = new Date(ms);
+    const dow = date.getDay();
+    const weekend = dow === 0 || dow === 6;
+    const holiday = isHoliday(date, holidays);
+    if (weekend || holiday) {
+      bands.push({
+        key: `full-${ms}`,
+        x: timeToX(ms, originMs, pixelsPerHour),
+        width: (DAY / HOUR) * pixelsPerHour,
+        kind: holiday ? 'holiday' : 'weekend',
+      });
+      continue;
+    }
+    // Working day: shade the two off-shift stretches [00:00 … workdayStart] and [workdayEnd … 24:00].
+    const beforeStartMs = ms;
+    const shiftStartMs = ms + workdayStart * HOUR;
+    if (shiftStartMs > beforeStartMs) {
+      bands.push({ key: `pre-${ms}`, x: timeToX(beforeStartMs, originMs, pixelsPerHour), width: workdayStart * pixelsPerHour, kind: 'offshift' });
+    }
+    const shiftEndMs = ms + workdayEnd * HOUR;
+    const nextDayMs = ms + DAY;
+    if (nextDayMs > shiftEndMs) {
+      bands.push({ key: `post-${ms}`, x: timeToX(shiftEndMs, originMs, pixelsPerHour), width: (24 - workdayEnd) * pixelsPerHour, kind: 'offshift' });
+    }
+  }
+  return bands;
+}
+
+/** Hours of the given windows that fall inside [winStart, winEnd] — the basis for window-aware load. */
+export function clippedHours(windows: Array<{ startMs: number; endMs: number }>, winStart: number, winEnd: number): number {
+  let hours = 0;
+  for (const w of windows) {
+    const start = Math.max(w.startMs, winStart);
+    const end = Math.min(w.endMs, winEnd);
+    if (end > start) hours += (end - start) / 3_600_000;
+  }
+  return hours;
+}
+
 export interface TimeTick {
   ms: number;
   x: number;

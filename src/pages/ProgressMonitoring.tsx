@@ -8,6 +8,7 @@ import { priorityLabel, priorityMeta, priorityRank } from '../scheduling/priorit
 import { isJobOverdue } from '../scheduling/status';
 import { useAuth } from '../auth/AuthContext';
 import { canAccessTab } from '../auth/access';
+import { requestFocus } from '../navigation/focusTarget';
 
 const STATUSES: JobStatus[] = ['planned', 'inProgress', 'done', 'delayed'];
 
@@ -215,6 +216,14 @@ export default function ProgressMonitoring() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                        title={t.machineBoard.showOnBoard}
+                        onClick={() => requestFocus({ tab: 'machines', jobId: job.id })}
+                      >
+                        <IconBoard style={{ width: 12, height: 12 }} />
+                      </button>
                       {canEditOrders && (
                         <button
                           className="btn btn-ghost"

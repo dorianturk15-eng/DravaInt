@@ -4,6 +4,7 @@ import { LanguageProvider } from '../../i18n/LanguageContext';
 import { SchedulingProvider } from '../../scheduling/SchedulingContext';
 import { MachinesProvider } from '../../machines/MachinesContext';
 import { SettingsProvider } from '../../settings/SettingsContext';
+import { WorkersProvider } from '../../workers/WorkersContext';
 import { MachineBoard } from './MachineBoard';
 
 function renderBoard() {
@@ -11,9 +12,11 @@ function renderBoard() {
     <LanguageProvider>
       <SettingsProvider>
         <MachinesProvider>
-          <SchedulingProvider>
-            <MachineBoard />
-          </SchedulingProvider>
+          <WorkersProvider>
+            <SchedulingProvider>
+              <MachineBoard />
+            </SchedulingProvider>
+          </WorkersProvider>
         </MachinesProvider>
       </SettingsProvider>
     </LanguageProvider>,

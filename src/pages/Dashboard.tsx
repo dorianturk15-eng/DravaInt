@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../settings/SettingsContext';
 import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from '../scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput, getJobConflicts } from '../scheduling/cpm';
+import { requestFocus } from '../navigation/focusTarget';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   planned: 'var(--primary-color)',
@@ -180,7 +181,7 @@ export default function Dashboard() {
               return (
                 <div key={m}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}>
-                    <span style={{ fontWeight: 600 }}>{m}</span>
+                    <button type="button" className="dashboard-machine-link" style={{ fontWeight: 600 }} onClick={() => requestFocus({ tab: 'machines', machineName: m })} title={lang === 'hr' ? 'Prikaži na rasporedu strojeva' : 'Show on machine board'}>{m}</button>
                     <span style={{ color: 'var(--text-secondary)' }}>{hours}h / {weeklyCapacityHours}h ({loadPercent}%)</span>
                   </div>
                   <div className="progress-bar-track" style={{ height: 10 }}>
