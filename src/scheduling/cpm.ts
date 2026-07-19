@@ -343,6 +343,8 @@ export function joinMachineChain(machines: string[]): string {
 
 interface MachineInterval {
   machine: string;
+  /** Stable identity (Phase C); null for plain-job chain segments and un-backfilled ops. */
+  machineId: number | null;
   start: number;
   end: number;
 }
@@ -350,6 +352,7 @@ interface MachineInterval {
 interface WorkInterval {
   operator: string;
   machine: string;
+  machineId: number | null;
   start: number;
   end: number;
 }
@@ -371,6 +374,7 @@ function operationIntervals(job: Job): WorkInterval[] {
     cursor = end;
     intervals.push({
       machine: (op.machine || '').trim(),
+      machineId: op.machineId ?? null,
       operator: (op.operator || '').trim(),
       start,
       end,
@@ -386,14 +390,14 @@ function operationIntervals(job: Job): WorkInterval[] {
  */
 function machineIntervals(job: Job): MachineInterval[] {
   if (job.operations?.length) {
-    return operationIntervals(job).filter((i) => i.machine).map(({ machine, start, end }) => ({ machine, start, end }));
+    return operationIntervals(job).filter((i) => i.machine).map(({ machine, machineId, start, end }) => ({ machine, machineId, start, end }));
   }
   const machines = splitMachineChain(job.machine);
   if (!machines.length || !job.start || !job.end) return [];
   const start = new Date(job.start).getTime();
   const end = new Date(job.end).getTime();
   if (isNaN(start) || isNaN(end) || start >= end) return [];
-  return machines.map((machine) => ({ machine, start, end }));
+  return machines.map((machine) => ({ machine, machineId: null, start, end }));
 }
 
 /**
@@ -410,7 +414,7 @@ function workerIntervals(job: Job): WorkInterval[] {
   const start = new Date(job.start).getTime();
   const end = new Date(job.end).getTime();
   if (isNaN(start) || isNaN(end) || start >= end) return [];
-  return [{ operator, machine: (job.machine || '').trim(), start, end }];
+  return [{ operator, machine: (job.machine || '').trim(), machineId: null, start, end }];
 }
 
 export function getMonday(d: Date): string {
@@ -507,7 +511,10 @@ export function getJobConflicts(job: Job, allJobs: Job[]): JobConflicts {
   for (const other of others) {
     if (conflicts.machineOverlap) break;
     const otherMachines = machineIntervals(other);
-    const clash = myMachines.some((a) => otherMachines.some((b) => a.machine === b.machine && intervalsOverlap(a, b)));
+    // Phase C: same machine = same id when both sides carry one (rename-safe), else same name string.
+    const clash = myMachines.some((a) =>
+      otherMachines.some((b) => (a.machineId != null && b.machineId != null ? a.machineId === b.machineId : a.machine === b.machine) && intervalsOverlap(a, b)),
+    );
     if (clash) conflicts.machineOverlap = { otherOrder: other.order };
   }
 

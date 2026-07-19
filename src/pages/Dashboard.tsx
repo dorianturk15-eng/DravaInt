@@ -55,7 +55,7 @@ export default function Dashboard() {
   const weekJobs = jobs.filter((job) => jobIntersectsWeek(job, capacityWindow));
 
   const effectiveSchedule = computeEffectiveSchedule(jobsToScheduleInput(weekJobs), { workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, holidays: settings.holidays, skipWeekends: true });
-  const machineLoads = calculateMachineLoads(weekJobs, effectiveSchedule);
+  const machineLoads = calculateMachineLoads(weekJobs, effectiveSchedule, machines);
   const weeklyCapacityHours = getWeeklyCapacityHours();
   const capacityWeekLabel = new Intl.DateTimeFormat(lang === 'hr' ? 'hr-HR' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(capacityWindow.start));
   const overloadedMachineCount = [...machineLoads.values()].filter((hours) => hours / weeklyCapacityHours * 100 >= settings.capacityAlertPercent).length;

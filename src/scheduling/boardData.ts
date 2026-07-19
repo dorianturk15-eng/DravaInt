@@ -74,7 +74,7 @@ export interface BoardModel {
 export function buildBoardLanes(jobs: Job[], machines: Machine[], schedulingOptions: SchedulingOptions = {}): BoardModel {
   const leaves = jobs.filter((job) => !hasChildren(jobs, job.id));
   const effective = computeEffectiveSchedule(jobsToScheduleInput(leaves), schedulingOptions);
-  const slots = expandToOperationSlots(jobs, effective);
+  const slots = expandToOperationSlots(jobs, effective, machines);
 
   const names = new Set<string>();
   machines.forEach((machine) => names.add(machine.name));

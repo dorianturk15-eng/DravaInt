@@ -17,6 +17,10 @@ export interface OperationStep {
   id: number;
   name: string;
   machine: string;
+  /** Stable machine identity (Phase C). The `machine` string above is denormalized display; matching
+   * prefers this id so an Admin rename doesn't orphan the operation. Null/undefined on legacy rows
+   * created before the identity backfill — those still match by name. */
+  machineId?: number | null;
   hours: number;
   /** Worker assigned to this specific operation. Multi-op routing orders are worked by different
    * people per step (a lathe operator, then a mill operator, then QC), so the assignment lives on

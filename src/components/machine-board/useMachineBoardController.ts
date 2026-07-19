@@ -163,9 +163,10 @@ function schedulingOptionsFrom(settings: AppSettings) {
   return { holidays: settings.holidays, workdayStart: settings.workdayStart, workdayEnd: settings.workdayEnd, skipWeekends: true };
 }
 
-/** Rewrites one operation's machine and regenerates the job's legacy display chain to match. */
-function patchOperationMachine(job: Job, opIndex: number, newMachine: string): Partial<Job> {
-  const operations = (job.operations ?? []).map((op, index) => (index === opIndex ? { ...op, machine: newMachine } : op));
+/** Rewrites one operation's machine (name + Phase C stable id) and regenerates the job's legacy
+ *  display chain to match. `newMachineId` is null when the target lane isn't a registered machine. */
+function patchOperationMachine(job: Job, opIndex: number, newMachine: string, newMachineId: number | null): Partial<Job> {
+  const operations = (job.operations ?? []).map((op, index) => (index === opIndex ? { ...op, machine: newMachine, machineId: newMachineId } : op));
   return { operations, machine: joinMachineChain(operations.map((op) => op.machine)) };
 }
 
@@ -430,7 +431,8 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     if (machineChanged) {
       if (ref.isOperation && ref.opIndex !== null) {
         pushHistory();
-        void updateJob(ref.jobId, patchOperationMachine(job, ref.opIndex, state.targetMachine)).then(showResult);
+        const targetMachineId = machines.find((m) => m.name === state.targetMachine)?.id ?? null;
+        void updateJob(ref.jobId, patchOperationMachine(job, ref.opIndex, state.targetMachine, targetMachineId)).then(showResult);
         return;
       }
       if (ref.isChainSegment) {

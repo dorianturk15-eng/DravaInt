@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../i18n/LanguageContext';
 import { SchedulingProvider, type Job } from '../scheduling/SchedulingContext';
 import { WorkersProvider } from '../workers/WorkersContext';
+import { MachinesProvider } from '../machines/MachinesContext';
 import { LogoProvider } from '../logo/LogoContext';
 import WorkOrderCreator from './WorkOrderCreator';
 
@@ -19,11 +20,13 @@ function renderCreator(initialEntry = '/workOrders') {
     <MemoryRouter initialEntries={[initialEntry]}>
       <LanguageProvider>
         <WorkersProvider>
-          <LogoProvider>
-            <SchedulingProvider>
-              <WorkOrderCreator />
-            </SchedulingProvider>
-          </LogoProvider>
+          <MachinesProvider>
+            <LogoProvider>
+              <SchedulingProvider>
+                <WorkOrderCreator />
+              </SchedulingProvider>
+            </LogoProvider>
+          </MachinesProvider>
         </WorkersProvider>
       </LanguageProvider>
     </MemoryRouter>,
