@@ -154,7 +154,7 @@ export default function Dashboard() {
       </div>
 
       {/* Split visual columns: Capacity Heatmap & Routing Node Map */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))', gap: 20, marginBottom: 25 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))', alignItems: 'start', gap: 20, marginBottom: 25 }}>
 
         {/* Capacity Heatmap */}
         <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0 }}>
@@ -201,8 +201,8 @@ export default function Dashboard() {
         </div>
 
         {/* Live Routing Node Map */}
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0 }}>
-          <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)' }}>
+        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0, display: 'flex', flexDirection: 'column' }}>
+          <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)', flex: '0 0 auto' }}>
             ⛓️ {lang === 'hr' ? 'Dijagram Toga Procesa' : 'Routing Process Map'}
           </div>
           {jobsWithOps.length === 0 && (

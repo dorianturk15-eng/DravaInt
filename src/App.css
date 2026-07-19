@@ -1299,13 +1299,13 @@ select {
 .routing-order-nav:hover:not(:disabled) { color: var(--text-primary); border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color)); transform: translateY(-1px); }
 .routing-order-nav:disabled { opacity: .4; cursor: default; }
 
-.routing-order-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.routing-order-list { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-height: 0; max-height: 70vh; overflow-y: auto; padding-right: 4px; }
 .routing-order-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-color); }
 .routing-order-row:last-child { border-bottom: none; }
 .routing-order-row-label { flex: 0 0 auto; min-width: 56px; max-width: 90px; font-size: 11px; font-weight: 700; color: var(--primary-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .routing-order-row svg { flex: 1 1 auto; min-width: 0; display: block; }
 @media (max-width: 640px) {
-  .routing-order-list { max-height: 220px; }
+  .routing-order-list { max-height: 65vh; }
   .routing-order-row-label { min-width: 44px; max-width: 64px; font-size: 10px; }
 }
 
