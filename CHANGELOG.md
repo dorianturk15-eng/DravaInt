@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-19 — Machine scheduling Phase D: operations as rows + DB overlap enforcement
+
+- New `public.job_operations` table (one row per routed operation), a **derived mirror** of the
+  `jobs.operations` JSONB kept in sync by a `SECURITY DEFINER` trigger — the JSONB stays the client
+  write format, so every existing write path dual-writes both copies atomically with no client change.
+- `validate_job_assignment` extended to expand routed jobs into sequential per-machine windows and
+  detect operation-level double-booking (the gap where routed work was invisible to the DB). Rolls out
+  **warn-first** (`app_settings.job_operations_overlap_enforcement` = `"warn"`, logs to `audit_logs`)
+  and flips to `"enforce"` (rejects with errcode `DR001`) when ready.
+- Migration `supabase/migrations/0008_*`, TS mirror `src/scheduling/jobOperations.ts` (+ tests),
+  and read-only checksum/overlap preview `scripts/verify-job-operations.mjs`. Not yet applied to
+  production — see `MACHINE_OPERATIONS_ROLLOUT.md`.
+
 ## 2026-07-14 — Batch 2: board power features + alert controls
 
 - Machine board: saved views (zoom/sort/filter presets), PNG export for shift handovers,
