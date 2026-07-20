@@ -72,6 +72,31 @@
   --z-lock: 70;
 }
 
+/* Compact mode — the shop-floor density setting (App.tsx toggles .compact-layout
+ * on <html>). It used to be a single rule adjusting four selectors, so almost
+ * nothing on screen actually responded to it.
+ *
+ * Now that spacing is tokenized it compresses the SCALE itself, so every rule
+ * built on --space-* tightens at once. Roughly 75% at the larger steps, with the
+ * smallest left alone — below 4px, gaps stop reading as separation at all.
+ *
+ * Deliberately does NOT shrink --text-*: this runs on workshop terminals read at
+ * arm's length, and smaller type there costs legibility rather than buying
+ * density. Compact means tighter, not smaller.
+ *
+ * `:root.compact-layout` (0,2,0) outranks the `:root` (0,1,0) defaults above
+ * regardless of stylesheet import order.
+ */
+:root.compact-layout {
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 14px;
+  --space-6: 18px;
+  --space-7: 24px;
+  --space-8: 28px;
+}
+
 :root[data-theme='dark'] {
   color-scheme: dark;
   --bg-page: #0b0f19;

@@ -40,7 +40,13 @@
 .kiosk-layout .board-task-card-resize { flex-basis: 16px; }
 .kiosk-layout .board-toolbar { gap: 12px; }
 
-.compact-layout .page-content { padding: 14px; }.compact-layout .wizard-container { padding: 14px; }.compact-layout .step-box { padding: 15px; }.compact-layout .data-table th,.compact-layout .data-table td { padding-block: 7px; }
+/* Compact mode is driven by the --space-* scale in index.css. These few rules
+   cover surfaces whose padding is still a literal rather than a token. */
+.compact-layout .page-content { padding: var(--space-4); }
+.compact-layout .wizard-container { padding: var(--space-4); }
+.compact-layout .step-box { padding: var(--space-4); }
+.compact-layout .data-table th,
+.compact-layout .data-table td { padding-block: 7px; }
 
 @keyframes unlock-screen { to { opacity: 0; } }
 
