@@ -187,23 +187,41 @@ export function MachineBoard() {
     }
   }
 
+  // Live resize geometry: the edge under the pointer must visibly follow it (and land where the
+  // snapped commit will put it), instead of the card only jumping after the drop.
+  let liveResize: { key: string; dx: number; dw: number } | null = null;
   if (interaction?.kind === 'resize-start' || interaction?.kind === 'resize-end') {
     const layout = controller.cardLayouts.get(interaction.ref.key);
+    const isEnd = interaction.kind === 'resize-end';
     if (layout && interaction.ref.isOperation) {
-      const deltaHours = ((interaction.kind === 'resize-end' ? interaction.liveDeltaXPx : -interaction.liveDeltaXPx) / pixelsPerHour);
-      const newHours = Math.max(MIN_OP_HOURS, Math.round((interaction.originHours + deltaHours) / MIN_OP_HOURS) * MIN_OP_HOURS);
-      resizePill = { x: layout.x + layout.width, y: layout.y - 26, text: `${interaction.originHours} h → ${newHours} h` };
-      // Ghost the downstream operations of the same job at their reflowed (shifted) positions.
-      const shiftMs = (newHours - interaction.originHours) * 3_600_000;
-      const shiftPx = (shiftMs / 3_600_000) * pixelsPerHour;
-      if (interaction.ref.opIndex !== null) {
-        controller.board.slots.forEach((other) => {
-          if (other.jobId !== interaction.ref.jobId) return;
-          if (other.opIndex === null || other.opIndex <= interaction.ref.opIndex!) return;
-          const otherLayout = controller.cardLayouts.get(other.key);
-          if (otherLayout) reflowGhosts.push({ key: other.key, x: otherLayout.x + shiftPx, y: otherLayout.y, width: otherLayout.width, height: otherLayout.height });
-        });
+      // A non-first operation has no movable start (no left handle is rendered), so only the right
+      // edge previews there.
+      const resizable = isEnd || interaction.ref.opIndex === 0;
+      if (resizable) {
+        const deltaHours = (isEnd ? interaction.liveDeltaXPx : -interaction.liveDeltaXPx) / pixelsPerHour;
+        const newHours = Math.max(MIN_OP_HOURS, Math.round((interaction.originHours + deltaHours) / MIN_OP_HOURS) * MIN_OP_HOURS);
+        const deltaPx = (newHours - interaction.originHours) * pixelsPerHour;
+        // Right edge grows the width; left edge moves the left edge and grows the width to match, so
+        // the operation's end (and every downstream op) stays put.
+        liveResize = isEnd ? { key: interaction.ref.key, dx: 0, dw: deltaPx } : { key: interaction.ref.key, dx: -deltaPx, dw: deltaPx };
+        resizePill = { x: layout.x + (isEnd ? layout.width + deltaPx : -deltaPx), y: layout.y - 26, text: `${interaction.originHours} h → ${newHours} h` };
+        // Ghost the downstream operations at their reflowed positions — only the right edge reflows
+        // them; a left-edge resize deliberately leaves them where they are.
+        if (isEnd && interaction.ref.opIndex !== null) {
+          controller.board.slots.forEach((other) => {
+            if (other.jobId !== interaction.ref.jobId) return;
+            if (other.opIndex === null || other.opIndex <= interaction.ref.opIndex!) return;
+            const otherLayout = controller.cardLayouts.get(other.key);
+            if (otherLayout) reflowGhosts.push({ key: other.key, x: otherLayout.x + deltaPx, y: otherLayout.y, width: otherLayout.width, height: otherLayout.height });
+          });
+        }
       }
+    } else if (layout && !interaction.ref.isChainSegment) {
+      // Plain single-machine card: the resized edge moves the job's own window.
+      const deltaPx = interaction.liveDeltaXPx;
+      liveResize = isEnd ? { key: interaction.ref.key, dx: 0, dw: deltaPx } : { key: interaction.ref.key, dx: deltaPx, dw: -deltaPx };
+      const newHours = Math.max(0.25, (layout.width + (isEnd ? deltaPx : -deltaPx)) / pixelsPerHour);
+      resizePill = { x: layout.x + (isEnd ? layout.width + deltaPx : deltaPx), y: layout.y - 26, text: `${Math.round(newHours * 4) / 4} h` };
     }
   }
 
@@ -212,6 +230,10 @@ export function MachineBoard() {
       return { x: interaction.liveDeltaXPx, y: interaction.liveDeltaYPx };
     }
     return null;
+  }
+
+  function liveResizeFor(slotKey: string): { dx: number; dw: number } | null {
+    return liveResize && liveResize.key === slotKey ? { dx: liveResize.dx, dw: liveResize.dw } : null;
   }
 
   const showEmptyBoard = !isMobile && controller.board.slots.length === 0 && machines.length > 0;
@@ -404,6 +426,7 @@ export function MachineBoard() {
                 horizontalLocked={(slot.isOperation && !slot.isFirstSlot) || slot.isChainSegment}
                 lockHint={slot.isChainSegment ? t.machineBoard.chainSegmentHint : t.machineBoard.sequentialRouteHint}
                 liveOffset={liveOffsetFor(slot.key)}
+                liveResize={liveResizeFor(slot.key)}
                 conflictsOpen={openConflictKey === slot.key}
                 onToggleConflicts={() => setOpenConflictKey((current) => (current === slot.key ? null : slot.key))}
                 getMoveOptions={controller.machineMoveOptions}

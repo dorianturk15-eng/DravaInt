@@ -560,16 +560,36 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
     if (!job) return;
     const deltaMs = (state.liveDeltaXPx / pixelsPerHour) * 3_600_000;
 
-    // --- Operation card: resize edits the operation's hours (reflowing the rest of the route). The
-    //     op stays anchored at its start; dragging the end grows it, dragging the start shrinks it. ---
+    // Snap to 0.25 h steps so the persisted hours and the live pill/preview agree.
+    const snapHours = (value: number) => Math.max(MIN_OP_HOURS, Math.round(value / MIN_OP_HOURS) * MIN_OP_HOURS);
+
     if (ref.isOperation && ref.opIndex !== null) {
-      const deltaHours = (state.kind === 'resize-end' ? deltaMs : -deltaMs) / 3_600_000;
-      // Snap to 0.25 h steps so the persisted hours and the live pill readout agree.
-      const newHours = Math.max(MIN_OP_HOURS, Math.round((state.originHours + deltaHours) / MIN_OP_HOURS) * MIN_OP_HOURS);
-      pushHistory();
-      const patch = patchOperationHours(job, ref.opIndex, newHours);
-      void updateJob(ref.jobId, patch).then(showResult);
-      if (patch.end) runCascade(ref.jobId, job.start, patch.end);
+      // --- Right edge: grow/shrink this operation, anchored at its start. Later ops reflow. ---
+      if (state.kind === 'resize-end') {
+        const newHours = snapHours(state.originHours + deltaMs / 3_600_000);
+        pushHistory();
+        const patch = patchOperationHours(job, ref.opIndex, newHours);
+        void updateJob(ref.jobId, patch).then(showResult);
+        if (patch.end) runCascade(ref.jobId, job.start, patch.end);
+        return;
+      }
+
+      // --- Left edge: the edge under the pointer must actually move. Only the FIRST operation has a
+      //     movable start (a later op's start is pinned by the ops before it, so no left handle is
+      //     rendered there). Move job.start and change this op's hours by the same amount, so the
+      //     op's END — and therefore every downstream operation — stays exactly where it was. ---
+      if (ref.opIndex === 0) {
+        const newHours = snapHours(state.originHours - deltaMs / 3_600_000);
+        const appliedShiftMs = (state.originHours - newHours) * 3_600_000;
+        const newStart = state.jobStartMs + appliedShiftMs;
+        const operations = (job.operations ?? []).map((op, index) => (index === ref.opIndex ? { ...op, hours: newHours } : op));
+        const totalHours = operations.reduce((sum, op) => sum + (op.hours || 0), 0);
+        const startStr = toLocalDateTimeString(new Date(newStart));
+        const endStr = toLocalDateTimeString(new Date(newStart + totalHours * 3_600_000));
+        pushHistory();
+        void updateJob(ref.jobId, { operations, start: startStr, end: endStr }).then(showResult);
+        runCascade(ref.jobId, startStr, endStr);
+      }
       return;
     }
     if (ref.isChainSegment) {

@@ -24,6 +24,8 @@ interface TaskCardProps {
   horizontalLocked: boolean;
   lockHint: string;
   liveOffset?: { x: number; y: number } | null;
+  /** Live edge-resize preview: dx moves the left edge, dw changes the width. */
+  liveResize?: { dx: number; dw: number } | null;
   conflictsOpen: boolean;
   onToggleConflicts: () => void;
   getMoveOptions: (slotKey: string) => Machine[];
@@ -71,6 +73,7 @@ export function TaskCard({
   horizontalLocked,
   lockHint,
   liveOffset,
+  liveResize,
   conflictsOpen,
   onToggleConflicts,
   getMoveOptions,
@@ -111,9 +114,9 @@ export function TaskCard({
     <div
       className={`board-task-card${slot.isOperation ? ' is-operation' : ''}${slot.isChainSegment ? ' is-chain-segment' : ''}${selected ? ' is-selected' : ''}${isDragging ? ' is-dragging' : ''}${isConnectSource ? ' is-connect-source' : ''}${flagged ? ' has-conflict' : ''}${isPulsing ? ' is-pulsing' : ''}${dimmed ? ' is-dimmed' : ''}${horizontalLocked ? ' is-locked' : ''}`}
       style={{
-        left: layout.x,
+        left: layout.x + (liveResize?.dx ?? 0),
         top: layout.y,
-        width: layout.width,
+        width: Math.max(8, layout.width + (liveResize?.dw ?? 0)),
         height: layout.height,
         borderLeftColor: color,
         touchAction: 'none',
@@ -133,7 +136,9 @@ export function TaskCard({
     >
       {!slot.isFirstSlot && <span className="board-task-card-chain" aria-hidden="true">‹</span>}
       {horizontalLocked && <span className="board-task-card-lock" title={lockHint} aria-hidden="true">🔒</span>}
-      <div className="board-task-card-resize left" onPointerDown={(event) => onResizePointerDown(event, 'start')} />
+      {/* Left handle only where the start can actually move: a plain card, or a route's FIRST
+          operation. A later op's start is pinned by the ops before it, so no handle is offered. */}
+      {slot.isFirstSlot && <div className="board-task-card-resize left" onPointerDown={(event) => onResizePointerDown(event, 'start')} title="Resize" />}
       {slot.isFirstSlot && <div className="board-task-card-connect left" onPointerDown={(event) => onConnectPointerDown(event, 'start')} title="Drag to link" />}
       <div className="board-task-card-body">
         <strong>{title}</strong>
@@ -189,7 +194,7 @@ export function TaskCard({
         </div>
       )}
       {slot.isLastSlot && <div className="board-task-card-connect right" onPointerDown={(event) => onConnectPointerDown(event, 'end')} title="Drag to link" />}
-      <div className="board-task-card-resize right" onPointerDown={(event) => onResizePointerDown(event, 'end')} />
+      <div className="board-task-card-resize right" onPointerDown={(event) => onResizePointerDown(event, 'end')} title="Resize" />
       {isRoutePart && !slot.isLastSlot && <span className="board-task-card-chain-end" aria-hidden="true">›</span>}
     </div>
   );

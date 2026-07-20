@@ -43,7 +43,11 @@
 .board-task-card-body strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .board-task-card-body small { overflow: hidden; color: var(--text-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .board-task-card-body .progress-bar-track { height: 4px; margin-top: 2px; }
-.board-task-card-resize { flex: 0 0 10px; cursor: ew-resize; touch-action: none; }
+.board-task-card-resize { flex: 0 0 12px; cursor: ew-resize; touch-action: none; position: relative; }
+/* Visible grip on hover so the resize edges are discoverable and easy to hit; the card body itself
+   stays the move/drag target. */
+.board-task-card:hover .board-task-card-resize::after { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 14px; margin: -7px 0 0 -1px; border-radius: 1px; background: color-mix(in srgb, var(--text-secondary) 55%, transparent); }
+.board-task-card-resize:hover::after { background: var(--primary-color); }
 .board-task-card-connect { position: absolute; top: 50%; z-index: 6; width: 16px; height: 28px; margin-top: -14px; cursor: crosshair; touch-action: none; }
 .board-task-card-connect.left { left: -16px; }
 .board-task-card-connect.right { right: -16px; }
