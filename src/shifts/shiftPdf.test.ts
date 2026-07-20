@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildShiftSchedulePdf, titleBlockRows, type ShiftPdfInput } from './shiftPdf';
+import {
+  buildShiftSchedulePdf, titleBlockRows, dayMonth, dayMonthYear, dayMonthRange,
+  type ShiftPdfInput,
+} from './shiftPdf';
 import type { ShiftDefinition, ShiftScheduleRecord } from './ShiftsContext';
 
 const definitions: ShiftDefinition[] = [
@@ -153,5 +156,36 @@ describe('buildShiftSchedulePdf', () => {
       workerName: (id) => `Radnik ${id}`,
     }));
     expect(doc.getNumberOfPages()).toBeGreaterThan(1);
+  });
+});
+
+describe('document dates follow the document language', () => {
+  it('writes day+month in each language convention', () => {
+    expect(dayMonth('2026-07-13', 'hr')).toBe('13.07.');
+    // English gets a month NAME, never 13/07 — a numeric day-first date is read
+    // as month-first by much of the English-speaking world, and on a roster that
+    // silently means a different week.
+    expect(dayMonth('2026-07-13', 'en')).toBe('13 Jul');
+  });
+
+  it('writes full dates in each language convention', () => {
+    expect(dayMonthYear('2026-08-16', 'hr')).toBe('16.08.2026.');
+    expect(dayMonthYear('2026-08-16', 'en')).toBe('16 Aug 2026');
+  });
+
+  it('collapses a range that stays inside one month', () => {
+    expect(dayMonthRange('2026-07-13', '2026-07-17', 'hr')).toBe('13.–17.07.');
+    expect(dayMonthRange('2026-07-13', '2026-07-17', 'en')).toBe('13–17 Jul');
+  });
+
+  it('keeps both months when the range crosses a boundary', () => {
+    expect(dayMonthRange('2026-07-27', '2026-08-02', 'hr')).toBe('27.07.–02.08.');
+    expect(dayMonthRange('2026-07-27', '2026-08-02', 'en')).toBe('27 Jul–02 Aug');
+  });
+
+  it('handles every month abbreviation', () => {
+    const months = Array.from({ length: 12 }, (_, m) =>
+      dayMonth(`2026-${String(m + 1).padStart(2, '0')}-01`, 'en').slice(3));
+    expect(months).toEqual(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
   });
 });

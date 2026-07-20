@@ -64,12 +64,56 @@ function rasterFormat(dataUrl: string): 'PNG' | 'JPEG' | 'WEBP' | null {
   return null;
 }
 
-function docStamp() {
+/**
+ * Dates in the reading convention of the document's own language.
+ *
+ * Croatian writes 20.07.2026. — day-first with a trailing full stop on the
+ * ordinal. English gets an abbreviated MONTH NAME rather than 20/07/2026,
+ * because a purely numeric day-first date is read as month-first by a large
+ * part of the English-speaking world, and this document is printed, signed and
+ * passed around: "07/08" silently meaning two different weeks is a real hazard
+ * on a shift roster. The month name removes the ambiguity entirely.
+ *
+ * A static table rather than toLocaleDateString: the document only ever renders
+ * in these two languages, and a fixed table cannot shift under a different ICU
+ * build or locale-data set.
+ */
+const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Day and month only, e.g. "13.07." (hr) / "13 Jul" (en). */
+export function dayMonth(iso: string, lang: 'hr' | 'en'): string {
+  const day = iso.slice(8, 10);
+  const month = Number(iso.slice(5, 7));
+  return lang === 'hr' ? `${day}.${pad2(month)}.` : `${day} ${EN_MONTHS[month - 1]}`;
+}
+
+/** Day, month and year, e.g. "16.08.2026." (hr) / "16 Aug 2026" (en). */
+export function dayMonthYear(iso: string, lang: 'hr' | 'en'): string {
+  const year = iso.slice(0, 4);
+  return lang === 'hr' ? `${dayMonth(iso, 'hr')}${year}.` : `${dayMonth(iso, 'en')} ${year}`;
+}
+
+/**
+ * A day range within the week header, collapsing the month when both ends share
+ * it: "13.–17.07." / "13–17 Jul", but "27.07.–02.08." / "27 Jul–02 Aug" across a
+ * month boundary. The week column is narrow, so the repetition is worth losing.
+ */
+export function dayMonthRange(startIso: string, endIso: string, lang: 'hr' | 'en'): string {
+  const sameMonth = startIso.slice(0, 7) === endIso.slice(0, 7);
+  if (!sameMonth) return `${dayMonth(startIso, lang)}–${dayMonth(endIso, lang)}`;
+  const startDay = startIso.slice(8, 10);
+  return lang === 'hr'
+    ? `${startDay}.–${dayMonth(endIso, 'hr')}`
+    : `${startDay}–${dayMonth(endIso, 'en')}`;
+}
+
+function docStamp(lang: 'hr' | 'en'): string {
   const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const date = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()}.`;
-  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  return `${date} ${time}`;
+  const iso = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  return `${dayMonthYear(iso, lang)} ${time}`;
 }
 
 export interface ShiftPdfInput {
@@ -246,7 +290,7 @@ export function titleBlockRows(
     // Facility first: what plant → what document → when → who → status.
     [t.plantLabel, `${t.plant} - ${department}`],
     [t.docLabel, t.docName],
-    [t.createdLabel, docStamp()],
+    [t.createdLabel, docStamp(lang)],
     [t.byLabel, preparedBy?.trim() || '—'],
     [t.status, statusText],
   ];
@@ -304,8 +348,6 @@ function drawTitleBlock(
   return height;
 }
 
-const DM = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`;
-
 /** Aggregate approval status across the weeks shown on the sheet. */
 function statusFor(weeks: ShiftScheduleRecord[], lang: 'hr' | 'en'): string {
   const t = L[lang];
@@ -320,8 +362,13 @@ function rangeFor(weeks: ShiftScheduleRecord[], lang: 'hr' | 'en'): string {
   const t = L[lang];
   const first = weeks[0];
   const last = weeks[weeks.length - 1];
-  const dates = `${DM(first.startDate)} — ${DM(last.endDate)}${last.year}.`;
-  if (weeks.length === 1) return `${first.weekNumber}. ${t.week}   ·   ${dates}`;
+  const dates = `${dayMonth(first.startDate, lang)} — ${dayMonthYear(last.endDate, lang)}`;
+  // "29. tjedan" is correct Croatian ordinal phrasing; the English equivalent
+  // is "Week 29", not "29. week".
+  if (weeks.length === 1) {
+    const single = lang === 'hr' ? `${first.weekNumber}. ${t.week}` : `${t.week} ${first.weekNumber}`;
+    return `${single}   ·   ${dates}`;
+  }
   return `${t.weeksLabel} ${first.weekNumber}–${last.weekNumber}   ·   ${dates}`;
 }
 
@@ -576,7 +623,7 @@ function drawGridHeader(doc: jsPDF, input: ShiftPdfInput, blocks: WeekBlock[], y
     doc.setFont(FONT, 'normal');
     doc.setFontSize(6.8);
     setInk(doc, MUTED);
-    const range = `${DM(block.dates[0])}–${DM(block.dates[lastDay])}`;
+    const range = dayMonthRange(block.dates[0], block.dates[lastDay], input.lang);
     doc.text(range, cx - doc.getTextWidth(range) / 2, y + WEEK_TIER_H + 3.9);
 
     // Hours sub-column header ("h" is understood in both languages).
