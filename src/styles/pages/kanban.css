@@ -1,0 +1,85 @@
+/* Kanban board (Progress Monitoring).
+   Split from App.css (UI_MODERNIZATION_PLAN Tier 2.1). Rules are in their
+   original order and imported in the original order, so the cascade is
+   byte-identical to the monolith. */
+
+/* Kanban board */
+.board-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 700px) {
+  .board-columns { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 1100px) {
+  .board-columns { grid-template-columns: repeat(4, 1fr); }
+}
+
+.board-column {
+  background: var(--bg-step);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-inner);
+  padding: 10px;
+  min-height: 100px;
+}
+
+.board-column-title {
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.board-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-card);
+}
+
+.board-card .board-card-title {
+  font-weight: bold;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.board-card .board-card-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 2px 0 8px 0;
+}
+
+.view-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--border-color-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 15px;
+}
+
+.view-toggle button {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: none;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.view-toggle button.active {
+  background: #1a365d;
+  color: white;
+}
+

@@ -1,0 +1,257 @@
+/* Drawer, modal dialogs, lock-screen countdown, PIN keypad.
+   Split from App.css (UI_MODERNIZATION_PLAN Tier 2.1). Rules are in their
+   original order and imported in the original order, so the cascade is
+   byte-identical to the monolith. */
+
+/* Drawer & Modal Settings Styles */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(9px);
+  z-index: calc(var(--z-overlay) - 1);
+}
+
+.side-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-color);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 24px;
+}
+
+.side-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.drawer-brand {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text-heading);
+}
+
+.drawer-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.drawer-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.drawer-menu-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all var(--transition-base);
+}
+
+.drawer-menu-btn:hover {
+  background: var(--bg-step);
+  color: var(--text-primary);
+}
+
+.drawer-menu-btn.active {
+  background: var(--primary-light);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: var(--primary-color);
+}
+
+.drawer-footer {
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(9px);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modal-appear 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modal-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: var(--bg-step);
+}
+
+.settings-tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.settings-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  transition: all var(--transition-base);
+}
+
+.settings-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.settings-tab-btn.active {
+  border-bottom-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* Lock Screen Countdown Warning Banner */
+.lock-countdown-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--danger-color);
+  color: white;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  z-index: var(--z-toast);
+}
+
+/* Virtual PIN Entry Keypad */
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+}
+
+.pin-keypad-btn {
+  background: var(--bg-step);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.pin-keypad-btn:hover {
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.pin-keypad-btn:active {
+  transform: scale(0.96);
+}
+
+.routing-order-switcher { display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
+.routing-order-switcher select { width: auto; margin-top: 0; padding: 5px 8px; font-size: 11px; font-weight: 700; color: var(--primary-color); background: var(--bg-step); border-radius: 4px; }
+.routing-order-switcher small { color: var(--text-secondary); font-size: 10px; }
+.routing-order-nav { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; font-size: 14px; line-height: 1; color: var(--text-secondary); background: var(--bg-step); border: 1px solid var(--border-color); border-radius: 50%; cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+.routing-order-nav:hover:not(:disabled) { color: var(--text-primary); border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color)); transform: translateY(-1px); }
+.routing-order-nav:disabled { opacity: .4; cursor: default; }
+
+.routing-order-list { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-height: 0; max-height: 70vh; overflow-y: auto; padding-right: 4px; }
+.routing-order-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-color); }
+.routing-order-row:last-child { border-bottom: none; }
+.routing-order-row-label { flex: 0 0 auto; min-width: 56px; max-width: 90px; font-size: 11px; font-weight: 700; color: var(--primary-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.routing-order-row svg { flex: 1 1 auto; min-width: 0; display: block; }
+@media (max-width: 640px) {
+  .routing-order-list { max-height: 65vh; }
+  .routing-order-row-label { min-width: 44px; max-width: 64px; font-size: 10px; }
+}
+

@@ -1,0 +1,89 @@
+/* Gantt chart: bars, grid, print rules.
+   Split from App.css (UI_MODERNIZATION_PLAN Tier 2.1). Rules are in their
+   original order and imported in the original order, so the cascade is
+   byte-identical to the monolith. */
+
+/* Gantt */
+.gantt-wrapper {
+  overflow-x: auto;
+}
+
+.gantt-grid {
+  display: grid;
+  min-width: 700px;
+}
+
+.gantt-row-label {
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+}
+
+.gantt-row-track {
+  position: relative;
+  border-bottom: 1px solid var(--border-color);
+  height: 34px;
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 5px;
+  height: 24px;
+  border-radius: 4px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.gantt-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  border-radius: 3px 0 0 3px;
+}
+
+.gantt-bar-label {
+  position: relative;
+  z-index: 1;
+  padding: 0 6px;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-header-cell {
+  font-size: 11px;
+  text-align: center;
+  color: #64748b;
+  border-bottom: 2px solid #cbd5e1;
+  padding: 4px 0;
+}
+
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #dc2626;
+}
+
+@media print {
+  .top-nav { display: none !important; }
+  .no-print { display: none !important; }
+  body { margin: 0; background: white; }
+  .print-preview-scroll { overflow-x: visible; }
+  .print-document { border: none; padding: 0; width: 100%; min-width: 100%; }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

@@ -1,0 +1,15 @@
+/* Small shared component classes.
+   Split from App.css (UI_MODERNIZATION_PLAN Tier 2.1). Rules are in their
+   original order and imported in the original order, so the cascade is
+   byte-identical to the monolith. */
+
+/* Panel/section heading icon — replaces the emoji that used to head these
+   titles (UI_MODERNIZATION_PLAN F3: Icons.tsx is the only icon source). */
+.panel-title-icon {
+  width: 17px;
+  height: 17px;
+  vertical-align: -3px;
+  margin-right: 2px;
+  color: var(--text-secondary);
+}
+

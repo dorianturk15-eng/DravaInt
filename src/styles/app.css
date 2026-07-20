@@ -1,0 +1,28 @@
+/* App stylesheet index.
+ *
+ * App.css was a 1,731-line monolith where new rules got appended wherever
+ * (UI_MODERNIZATION_PLAN F4). It is split into the modules below.
+ *
+ * IMPORTANT: these are imported in the SAME order the rules appeared in the
+ * monolith, and each module holds a contiguous, unreordered slice of it. The
+ * split was verified by asserting that concatenating the modules reproduces
+ * the original file byte for byte, so the cascade — including every
+ * specificity tie broken by source order — is unchanged. Keep it that way:
+ * add new rules to the module they belong to, not to the end of the last one.
+ */
+
+@import './shell.css';
+@import './layout.css';
+@import './tables.css';
+@import './pages/dashboard.css';
+@import './pages/kanban.css';
+@import './pages/work-orders.css';
+@import './pages/gantt.css';
+@import './settings-lock.css';
+@import './pages/shifts.css';
+@import './modals.css';
+@import './pages/gantt-workspace.css';
+@import './command-layer.css';
+@import './pages/machine-board.css';
+@import './components.css';
+@import './rotation-board.css';
