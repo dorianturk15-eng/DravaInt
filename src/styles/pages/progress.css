@@ -1,0 +1,90 @@
+/* Progress Monitoring (list + kanban board).
+   Extracted from ProgressMonitoring.tsx inline styles (Tier 1.1). The six
+   remaining inline styles on that page are pure data channels
+   (--chip-color / --bar-color / --status-color / bar width). */
+
+.pm-toolbar {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+  align-items: center;
+}
+
+.pm-heading { margin-bottom: var(--space-1); font-family: var(--font-title); font-weight: 800; }
+.pm-lead { margin: 0 0 var(--space-2); }
+.pm-lead.is-lg { margin-bottom: var(--space-4); }
+.pm-empty { font-size: 13px; text-align: center; padding: var(--space-8) 0; }
+
+.pm-group-head {
+  padding: var(--space-1) 0 var(--space-2);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--space-3);
+}
+
+.pm-group-title {
+  font-weight: 700;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pm-row-between {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pm-search-input {
+  width: 100%;
+  padding: var(--space-2) 14px;
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--border-color-strong);
+}
+
+.pm-count-pill {
+  background: var(--border-color-strong);
+  color: var(--text-primary);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+}
+
+.pm-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: 13px;
+}
+
+/* The audit named this one specifically: a fully inline-styled span (F1). */
+.overdue-badge {
+  margin-left: var(--space-2);
+  background: var(--danger-color);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Priority colour is data; the chip shape is design. */
+.priority-chip {
+  background: var(--chip-color, var(--primary-color));
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.priority-chip.is-xs { font-size: 9px; }
+
+/* Board accents driven by --status-color, set per column/card from statusColor(). */
+.board-column { border-top: 4px solid var(--status-color, var(--primary-color)); }
+.board-card { border-left: 3px solid var(--status-color, var(--primary-color)); cursor: pointer; }
+
+.is-clickable-cell { cursor: pointer; }

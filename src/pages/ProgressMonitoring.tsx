@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconTrash, IconList, IconBoard } from '../components/Icons';
+import { InlineNotice } from '../components/Page';
 import { useScheduling, type JobStatus } from '../scheduling/SchedulingContext';
 import { hasChildren } from '../scheduling/hierarchy';
 import { priorityLabel, priorityMeta, priorityRank } from '../scheduling/priority';
@@ -11,6 +12,13 @@ import { canAccessTab } from '../auth/access';
 import { requestFocus } from '../navigation/focusTarget';
 
 const STATUSES: JobStatus[] = ['planned', 'inProgress', 'done', 'delayed'];
+
+/** The board's per-status accent. Was an inline nested ternary repeated four times. */
+function statusColor(status: string) {
+  if (status === 'done') return 'var(--success-color)';
+  if (status === 'delayed') return 'var(--danger-color)';
+  return 'var(--primary-color)';
+}
 
 export default function ProgressMonitoring() {
   const { t, lang } = useLanguage();
@@ -53,7 +61,7 @@ export default function ProgressMonitoring() {
 
   // Auto-flag shown when a job's dates say it is overdue but its manual status hasn't been updated.
   const overdueBadge = (
-    <span style={{ marginLeft: 8, background: 'var(--danger-color)', color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+    <span className="overdue-badge">
       {lang === 'hr' ? 'KAŠNJENJE (auto)' : 'LATE (auto)'}
     </span>
   );
@@ -120,40 +128,40 @@ export default function ProgressMonitoring() {
 
   return (
     <div className="wizard-container">
-      <h2 style={{ marginBottom: 5, fontFamily: 'var(--font-title)', fontWeight: 800 }}>{t.progress.title}</h2>
-      <p className="subtitle-text" style={{ margin: '0 0 8px 0', fontSize: 13 }}>{t.progress.subtitle}</p>
-      <p className="subtitle-text" style={{ margin: '0 0 15px 0', fontSize: 12 }}>{t.progress.sharedNote}</p>
-      {updateError && <p role="alert" style={{ color: 'var(--danger-color)', fontSize: 13, margin: '0 0 12px 0' }}>{updateError}</p>}
+      <h2 className="pm-heading">{t.progress.title}</h2>
+      <p className="subtitle-text text-md pm-lead">{t.progress.subtitle}</p>
+      <p className="subtitle-text text-sm pm-lead is-lg">{t.progress.sharedNote}</p>
+      {updateError && <InlineNotice tone="error">{updateError}</InlineNotice>}
 
-      <div style={{ display: 'flex', gap: 15, flexWrap: 'wrap', marginBottom: 20, alignItems: 'center' }}>
-        <div className="view-toggle" style={{ marginBottom: 0 }}>
+      <div className="pm-toolbar">
+        <div className="view-toggle mb-0">
           <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>
-            <IconList style={{ marginRight: 6, verticalAlign: -3 }} />
+            <IconList className="inline-icon" />
             {t.progress.viewList}
           </button>
           <button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>
-            <IconBoard style={{ marginRight: 6, verticalAlign: -3 }} />
+            <IconBoard className="inline-icon" />
             {t.progress.viewBoard}
           </button>
         </div>
 
-        <div style={{ flex: 1, minWidth: 240 }}>
+        <div className="flex-1-wide">
           <input
             type="text"
             placeholder={lang === 'hr' ? 'Pretraži po nalogu, stroju, operateru...' : 'Search by order, machine, operator...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color-strong)' }}
+            className="pm-search-input"
           />
         </div>
       </div>
 
       {filteredJobs.length === 0 ? (
-        <p className="subtitle-text" style={{ fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
+        <p className="subtitle-text pm-empty">
           {lang === 'hr' ? 'Nema rezultata pretrage.' : 'No search results found.'}
         </p>
       ) : view === 'list' ? (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -166,19 +174,19 @@ export default function ProgressMonitoring() {
             <tbody>
               {filteredJobs.map((job) => (
                 <tr key={job.id}>
-                  <td onClick={() => setDetailJobId(job.id)} style={{ cursor: 'pointer' }}>
-                    <div style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{job.order || job.machine}</div>
-                    <div className="subtitle-text" style={{ fontSize: 11 }}>
+                  <td onClick={() => setDetailJobId(job.id)} className="is-clickable-cell">
+                    <div className="text-accent-strong">{job.order || job.machine}</div>
+                    <div className="subtitle-text text-xs">
                       {job.machine}
                       {job.operator ? ` · ${job.operator}` : ''}
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="row-center-sm">
                       <select
                         value={job.status}
                         onChange={(e) => handleStatusChange(job.id, e.target.value as JobStatus)}
-                        style={{ width: 'auto', padding: '4px 8px', fontSize: 12 }}
+                        className="btn-mini is-sm"
                       >
                         {STATUSES.map((s) => (
                           <option key={s} value={s}>
@@ -189,23 +197,23 @@ export default function ProgressMonitoring() {
                       <span className={`status-pill status-${job.status}`}>
                         {t.progress.statusOptions[job.status]}
                       </span>
-                      <span style={{ background: priorityMeta(job.priority).color, color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+                      <span className="priority-chip" style={{ '--chip-color': priorityMeta(job.priority).color } as React.CSSProperties}>
                         {priorityLabel(job.priority, lang)}
                       </span>
                       {job.status !== 'delayed' && isJobOverdue(job) && overdueBadge}
                     </div>
                   </td>
-                  <td style={{ minWidth: 180 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div className="progress-bar-track" style={{ flex: 1 }}>
-                        <div className="progress-bar-fill" style={{ width: `${job.progress}%`, background: job.status === 'done' ? 'var(--success-color)' : 'var(--primary-color)' }} />
+                  <td className="min-w-md">
+                    <div className="row-center-xs">
+                      <div className="progress-bar-track flex-1">
+                        <div className="progress-bar-fill" style={{ width: `${job.progress}%`, '--bar-color': job.status === 'done' ? 'var(--success-color)' : 'var(--primary-color)' } as React.CSSProperties} />
                       </div>
                       <input
                         type="number"
                         min={0}
                         max={100}
                         value={job.progress}
-                        style={{ width: 60, padding: 4 }}
+                        className="input-narrow"
                         onChange={(e) =>
                           void applyUpdate(job.id, {
                             progress: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
@@ -215,19 +223,17 @@ export default function ProgressMonitoring() {
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    <div className="row-gap-xs">
                       <button
-                        className="btn btn-ghost"
-                        style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                        className="btn btn-ghost btn-mini is-md"
                         title={t.machineBoard.showOnBoard}
                         onClick={() => requestFocus({ tab: 'machines', jobId: job.id })}
                       >
-                        <IconBoard style={{ width: 12, height: 12 }} />
+                        <IconBoard className="icon-xs" />
                       </button>
                       {canEditOrders && (
                         <button
-                          className="btn btn-ghost"
-                          style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                          className="btn btn-ghost btn-mini is-md"
                           title={lang === 'hr' ? 'Otvori nalog u kreatoru za uređivanje' : 'Open this order in the creator for editing'}
                           onClick={() => openEditor(job.id)}
                         >
@@ -235,11 +241,10 @@ export default function ProgressMonitoring() {
                         </button>
                       )}
                       <button
-                        className="btn btn-red"
-                        style={{ padding: '6px 12px', fontSize: 11, width: 'auto' }}
+                        className="btn btn-red btn-mini is-md"
                         onClick={() => removeJob(job.id)}
                       >
-                        <IconTrash style={{ width: 12, height: 12 }} />
+                        <IconTrash className="icon-xs" />
                         {t.common.remove}
                       </button>
                     </div>
@@ -254,16 +259,16 @@ export default function ProgressMonitoring() {
           {STATUSES.map((status) => {
             const columnJobs = filteredJobs.filter((j) => j.status === status);
             return (
-              <div className="board-column" key={status} style={{ borderTop: `4px solid ${status === 'done' ? 'var(--success-color)' : status === 'delayed' ? 'var(--danger-color)' : 'var(--primary-color)'}` }}>
-                <div className="board-column-title" style={{ padding: '4px 0 8px 0', borderBottom: '1px solid var(--border-color)', marginBottom: 12 }}>
-                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{t.progress.statusOptions[status]}</span>
-                  <span style={{ background: 'var(--border-color-strong)', color: 'var(--text-primary)', padding: '2px 8px', borderRadius: 999, fontSize: 11 }}>{columnJobs.length}</span>
+              <div className="board-column" key={status} style={{ '--status-color': statusColor(status) } as React.CSSProperties}>
+                <div className="board-column-title pm-group-head">
+                  <span className="text-strong">{t.progress.statusOptions[status]}</span>
+                  <span className="pm-count-pill">{columnJobs.length}</span>
                 </div>
                 {columnJobs.map((job) => (
-                  <div className="board-card" key={job.id} style={{ borderLeft: `3px solid ${status === 'done' ? 'var(--success-color)' : status === 'delayed' ? 'var(--danger-color)' : 'var(--primary-color)'}`, cursor: 'pointer' }} onClick={() => setDetailJobId(job.id)}>
-                    <div className="board-card-title" style={{ fontWeight: 700, color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <div className="board-card" key={job.id} style={{ '--status-color': statusColor(status) } as React.CSSProperties} onClick={() => setDetailJobId(job.id)}>
+                    <div className="board-card-title pm-group-title">
                       {job.order || job.machine}
-                      <span style={{ background: priorityMeta(job.priority).color, color: '#fff', padding: '1px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700 }}>
+                      <span className="priority-chip is-xs" style={{ '--chip-color': priorityMeta(job.priority).color } as React.CSSProperties}>
                         {priorityLabel(job.priority, lang)}
                       </span>
                       {job.status !== 'delayed' && isJobOverdue(job) && overdueBadge}
@@ -272,16 +277,16 @@ export default function ProgressMonitoring() {
                       {job.machine}
                       {job.operator ? ` · ${job.operator}` : ''}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      <div className="progress-bar-track" style={{ flex: 1, height: 6 }}>
-                        <div className="progress-bar-fill" style={{ width: `${job.progress}%`, background: status === 'done' ? 'var(--success-color)' : 'var(--primary-color)' }} />
+                    <div className="row-center-xxs has-gap-b">
+                      <div className="progress-bar-track flex-1 bar-thin">
+                        <div className="progress-bar-fill" style={{ width: `${job.progress}%`, '--bar-color': status === 'done' ? 'var(--success-color)' : 'var(--primary-color)' } as React.CSSProperties} />
                       </div>
-                      <span style={{ fontSize: 10, fontWeight: 700 }}>{job.progress}%</span>
+                      <span className="text-xxs-strong">{job.progress}%</span>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'space-between' }} onClick={(e) => e.stopPropagation()}>
+                    <div className="pm-row-between" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={job.status}
-                        style={{ width: 'auto', fontSize: 11, padding: '2px 6px' }}
+                        className="btn-micro"
                         onChange={(e) => handleStatusChange(job.id, e.target.value as JobStatus)}
                       >
                         {STATUSES.map((s) => (
@@ -290,11 +295,10 @@ export default function ProgressMonitoring() {
                           </option>
                         ))}
                       </select>
-                      <div style={{ display: 'flex', gap: 4 }}>
+                      <div className="row-gap-xxs">
                         {canEditOrders && (
                           <button
-                            className="btn btn-ghost"
-                            style={{ padding: '2px 8px', height: 24, fontSize: 10, width: 'auto', minWidth: 0 }}
+                            className="btn btn-ghost btn-micro is-tall"
                             title={lang === 'hr' ? 'Otvori nalog u kreatoru za uređivanje' : 'Open this order in the creator for editing'}
                             onClick={() => openEditor(job.id)}
                           >
@@ -302,11 +306,10 @@ export default function ProgressMonitoring() {
                           </button>
                         )}
                         <button
-                          className="btn btn-red"
-                          style={{ padding: 4, width: 24, height: 24, minWidth: 24, borderRadius: 4 }}
+                          className="btn btn-red btn-icon-square"
                           onClick={() => removeJob(job.id)}
                         >
-                          <IconTrash style={{ width: 12, height: 12 }} />
+                          <IconTrash className="icon-xs" />
                         </button>
                       </div>
                     </div>
@@ -326,17 +329,17 @@ export default function ProgressMonitoring() {
           <div className="modal-backdrop" onClick={() => setDetailJobId(null)}>
             <div className="modal-content" onClick={(event) => event.stopPropagation()}>
               <div className="modal-header">
-                <h3 style={{ margin: 0 }}>{lang === 'hr' ? 'Detalji radnog naloga' : 'Work order details'}</h3>
-                <button onClick={() => setDetailJobId(null)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-secondary)' }} aria-label={lang === 'hr' ? 'Zatvori' : 'Close'}>✕</button>
+                <h3 className="m-0">{lang === 'hr' ? 'Detalji radnog naloga' : 'Work order details'}</h3>
+                <button onClick={() => setDetailJobId(null)} className="modal-close-button" aria-label={lang === 'hr' ? 'Zatvori' : 'Close'}>✕</button>
               </div>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
-                <div><strong style={{ color: 'var(--text-secondary)' }}>{t.workOrders.orderNumber}:</strong> <span style={{ fontWeight: 700 }}>{job.order}</span></div>
-                <div><strong style={{ color: 'var(--text-secondary)' }}>{t.workOrders.product}:</strong> {job.operator || '-'}</div>
-                <div><strong style={{ color: 'var(--text-secondary)' }}>{t.machines.machine}:</strong> {job.machine}</div>
-                <div><strong style={{ color: 'var(--text-secondary)' }}>{t.common.status}:</strong> <span className={`status-pill status-${job.status}`} style={{ fontSize: 11 }}>{t.progress.statusOptions[job.status]}</span></div>
-                <div><strong style={{ color: 'var(--text-secondary)' }}>{t.common.progressLabel}:</strong> <span style={{ fontWeight: 700 }}>{job.progress}%</span></div>
-                <div><strong style={{ color: 'var(--text-secondary)' }}>{t.common.start}:</strong> {job.start ? new Date(job.start).toLocaleString() : '-'}</div>
-                <div><strong style={{ color: 'var(--text-secondary)' }}>{t.common.end}:</strong> {job.end ? new Date(job.end).toLocaleString() : '-'}</div>
+              <div className="modal-body pm-detail-body">
+                <div><strong className="text-muted">{t.workOrders.orderNumber}:</strong> <span className="text-strong">{job.order}</span></div>
+                <div><strong className="text-muted">{t.workOrders.product}:</strong> {job.operator || '-'}</div>
+                <div><strong className="text-muted">{t.machines.machine}:</strong> {job.machine}</div>
+                <div><strong className="text-muted">{t.common.status}:</strong> <span className={`status-pill status-${job.status}`} className="text-xs">{t.progress.statusOptions[job.status]}</span></div>
+                <div><strong className="text-muted">{t.common.progressLabel}:</strong> <span className="text-strong">{job.progress}%</span></div>
+                <div><strong className="text-muted">{t.common.start}:</strong> {job.start ? new Date(job.start).toLocaleString() : '-'}</div>
+                <div><strong className="text-muted">{t.common.end}:</strong> {job.end ? new Date(job.end).toLocaleString() : '-'}</div>
               </div>
               <div className="modal-footer">
                 <button className="btn btn-blue btn-sm" onClick={() => setDetailJobId(null)}>
