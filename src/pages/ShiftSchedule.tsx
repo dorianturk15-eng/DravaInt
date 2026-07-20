@@ -202,8 +202,8 @@ export default function ShiftSchedule() {
   async function generateSchedule() {
     if (!scheduleDefinitions.length || !participantIds.length) {
       setGenerationError(!scheduleDefinitions.length
-        ? (lang === 'hr' ? 'Nema aktivnih smjena — dodajte ih u postavkama smjena.' : 'No active shift definitions — add them in the shift settings.')
-        : (lang === 'hr' ? 'Nema radnika u bazi — dodajte radnike u Adminu prije generiranja.' : 'No workers in the database — add workers via Admin before generating.'));
+        ? (t.shiftPlanner.noActiveShiftDefinitions)
+        : (t.shiftPlanner.noWorkersDatabaseAdd));
       return;
     }
     setGenerationError('');
@@ -218,7 +218,7 @@ export default function ShiftSchedule() {
       const message = error instanceof Error
         ? error.message
         : (typeof error === 'object' && error !== null && 'message' in error ? String((error as { message: unknown }).message) : '');
-      setGenerationError(message || (lang === 'hr' ? 'Generiranje nije uspjelo.' : 'Schedule generation failed.'));
+      setGenerationError(message || (t.shiftPlanner.scheduleGenerationFailed));
       setIsGenerating(false);
       return;
     }
@@ -449,7 +449,7 @@ export default function ShiftSchedule() {
     setAbsenceWorker('');
   }
 
-  const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(lang === 'hr' ? 'hr-HR' : 'en-US', { weekday: 'short' });
+  const dayLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(t.common.locale, { weekday: 'short' });
 
   async function printSchedule() {
     if (!drafts.length || isPrinting) return;
@@ -471,7 +471,7 @@ export default function ShiftSchedule() {
         definitionById,
       });
     } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : (lang === 'hr' ? 'Izrada PDF-a nije uspjela.' : 'PDF export failed.'));
+      setGenerationError(error instanceof Error ? error.message : (t.shiftPlanner.pdfExportFailed));
     } finally {
       setIsPrinting(false);
     }
@@ -499,40 +499,40 @@ export default function ShiftSchedule() {
         definitionById,
       });
     } catch (error) {
-      setGenerationError(error instanceof Error ? error.message : (lang === 'hr' ? 'Izrada PDF-a nije uspjela.' : 'PDF export failed.'));
+      setGenerationError(error instanceof Error ? error.message : (t.shiftPlanner.pdfExportFailed));
     } finally {
       setPrintingSnapshotId(null);
     }
   }
 
-  const dateTimeLabel = (iso: string) => new Date(iso).toLocaleString(lang === 'hr' ? 'hr-HR' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const dateTimeLabel = (iso: string) => new Date(iso).toLocaleString(t.common.locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
     <div className="wizard-container shift-planner-page">
       <div className="page-heading-row no-print">
         <div>
-          <span className="eyebrow">{lang === 'hr' ? 'Planiranje kapaciteta' : 'Capacity planning'}</span>
+          <span className="eyebrow">{t.shiftPlanner.capacityPlanning}</span>
           <h2>{t.shifts.wizardTitle}</h2>
-          <p className="subtitle-text">{lang === 'hr' ? 'Interaktivna rotacija smjena s provjerom odmora, izostanaka i tjednih sati.' : 'Interactive shift rotation with rest, absence, and weekly-hours validation.'}</p>
+          <p className="subtitle-text">{t.shiftPlanner.interactiveShiftRotationWith}</p>
         </div>
-        <div className="sync-badge"><span className="sync-dot" /> {lang === 'hr' ? 'Sinkronizirano' : 'Synced'}</div>
+        <div className="sync-badge"><span className="sync-dot" /> {t.shiftPlanner.synced}</div>
       </div>
 
       <div className="shift-view-tabs no-print" role="tablist">
-        <button type="button" role="tab" aria-selected={view === 'planner'} className={view === 'planner' ? 'active' : ''} onClick={() => setView('planner')}>{lang === 'hr' ? 'Planer' : 'Planner'}</button>
-        <button type="button" role="tab" aria-selected={view === 'archive'} className={view === 'archive' ? 'active' : ''} onClick={() => setView('archive')}>{lang === 'hr' ? 'Objavljeni rasporedi' : 'Published schedules'}<span className="tab-count">{publicationGroups.length}</span></button>
+        <button type="button" role="tab" aria-selected={view === 'planner'} className={view === 'planner' ? 'active' : ''} onClick={() => setView('planner')}>{t.shiftPlanner.planner}</button>
+        <button type="button" role="tab" aria-selected={view === 'archive'} className={view === 'archive' ? 'active' : ''} onClick={() => setView('archive')}>{t.shiftPlanner.publishedSchedules}<span className="tab-count">{publicationGroups.length}</span></button>
       </div>
 
       {view === 'archive' ? (
         <section className="glass-panel archive-panel no-print">
           <div className="section-title-row">
-            <h3>{lang === 'hr' ? 'Arhiva objavljenih rasporeda' : 'Published schedule archive'}</h3>
+            <h3>{t.shiftPlanner.publishedScheduleArchive}</h3>
             <span>{publicationGroups.length}</span>
           </div>
-          <p className="archive-intro">{lang === 'hr' ? 'Svaka objava sprema trajnu snimku — točno ono što je izdano i ispisano. Snimke se ne mijenjaju; izmjena tjedna stvara novu verziju.' : 'Every publish saves a permanent snapshot — exactly what was issued and printed. Snapshots are never altered; editing a week creates a new version.'}</p>
+          <p className="archive-intro">{t.shiftPlanner.everyPublishSavesPermanent}</p>
           {generationError && <div className="inline-error" role="alert">{generationError}</div>}
           {publicationGroups.length === 0 ? (
-            <p className="archive-empty">{lang === 'hr' ? 'Još nema objavljenih rasporeda. Objavite tjedan u planeru i pojavit će se ovdje.' : 'No published schedules yet. Publish a week in the planner and it will show up here.'}</p>
+            <p className="archive-empty">{t.shiftPlanner.noPublishedSchedulesYet}</p>
           ) : (
             <div className="archive-list">
               {publicationGroups.map(({ key, latest, versions }) => {
@@ -542,14 +542,14 @@ export default function ShiftSchedule() {
                   <article className="archive-group" key={key}>
                     <header className="archive-group-head">
                       <div className="archive-week">
-                        <strong>{latest.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'} {latest.year}</strong>
+                        <strong>{latest.weekNumber}. {t.shiftPlanner.week} {latest.year}</strong>
                         <small>{latest.startDate} — {latest.endDate}</small>
                       </div>
                       <div className="archive-meta">
                         <span className="role-chip">{latest.department}</span>
                         {versions.length > 1
-                          ? <button type="button" className="text-button" onClick={() => setExpandedWeeks((current) => ({ ...current, [key]: !expanded }))}>{expanded ? (lang === 'hr' ? 'Sakrij verzije' : 'Hide versions') : `${versions.length} ${lang === 'hr' ? 'verzija — prikaži sve' : 'versions — show all'}`}</button>
-                          : <span>{lang === 'hr' ? '1 verzija' : '1 version'}</span>}
+                          ? <button type="button" className="text-button" onClick={() => setExpandedWeeks((current) => ({ ...current, [key]: !expanded }))}>{expanded ? (t.shiftPlanner.hideVersions) : `${versions.length} ${t.shiftPlanner.versionsShowAll}`}</button>
+                          : <span>{t.shiftPlanner.singleVersion}</span>}
                       </div>
                     </header>
                     <div className="archive-versions">
@@ -559,14 +559,14 @@ export default function ShiftSchedule() {
                           <div className={`archive-version${isCurrent ? ' is-current' : ''}`} key={snapshot.id}>
                             <div className="archive-version-info">
                               <span className={`version-badge${isCurrent ? ' current' : ''}`}>v{snapshot.version}</span>
-                              {isCurrent && <span className="current-tag">{lang === 'hr' ? 'aktualno' : 'current'}</span>}
-                              <span className="archive-version-meta">{dateTimeLabel(snapshot.publishedAt)} · {snapshot.publishedBy} · {snapshot.assignments.length} {lang === 'hr' ? 'dodjela' : 'assignments'}</span>
+                              {isCurrent && <span className="current-tag">{t.shiftPlanner.current}</span>}
+                              <span className="archive-version-meta">{dateTimeLabel(snapshot.publishedAt)} · {snapshot.publishedBy} · {snapshot.assignments.length} {t.shiftPlanner.assignments}</span>
                             </div>
                             <div className="archive-actions">
-                              <button className="btn btn-ghost btn-sm" onClick={() => setViewingSnapshot(snapshot)}>{lang === 'hr' ? 'Pregled' : 'View'}</button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => setViewingSnapshot(snapshot)}>{t.shiftPlanner.view}</button>
                               <button className="btn btn-ghost btn-sm" disabled={printingSnapshotId !== null} onClick={() => void printSnapshot(snapshot)}>{printingSnapshotId === snapshot.id ? '…' : 'PDF'}</button>
                               <button className="btn btn-ghost btn-sm" onClick={() => downloadCsv([snapshot], nameForWorker, nameForShift)}>CSV</button>
-                              {isCurrent && <button className="btn btn-ghost btn-sm" onClick={() => openFromArchive(snapshot)}>{lang === 'hr' ? 'Uredi u planeru' : 'Edit in planner'}</button>}
+                              {isCurrent && <button className="btn btn-ghost btn-sm" onClick={() => openFromArchive(snapshot)}>{t.shiftPlanner.editPlanner}</button>}
                             </div>
                           </div>
                         );
@@ -582,27 +582,27 @@ export default function ShiftSchedule() {
         <>
           <section className="planner-command-card glass-panel no-print">
             <div className="planner-fields">
-              <label>{lang === 'hr' ? 'Početak plana (ponedjeljak)' : 'Plan start (Monday)'}<input type="date" value={startDate} onChange={(event) => { if (event.target.value) setStartDate(mondayOf(event.target.value)); }} /></label>
-              <label>{lang === 'hr' ? 'Broj tjedana' : 'Weeks'}<input type="number" min={1} max={12} value={weekCount} onChange={(event) => setWeekCount(Number(event.target.value) || 1)} /></label>
-              <label>{lang === 'hr' ? 'Odjel' : 'Department'}<select value={department} onChange={(event) => setDepartment(event.target.value)}><option>Alatnica</option><option>Brizganje</option><option>Montaža</option><option>Kontrola kvalitete</option></select></label>
+              <label>{t.shiftPlanner.planStartMonday}<input type="date" value={startDate} onChange={(event) => { if (event.target.value) setStartDate(mondayOf(event.target.value)); }} /></label>
+              <label>{t.shiftPlanner.weeks}<input type="number" min={1} max={12} value={weekCount} onChange={(event) => setWeekCount(Number(event.target.value) || 1)} /></label>
+              <label>{t.shiftPlanner.department}<select value={department} onChange={(event) => setDepartment(event.target.value)}><option>Alatnica</option><option>Brizganje</option><option>Montaža</option><option>Kontrola kvalitete</option></select></label>
             </div>
             <div className="planner-actions">
-              <button className="btn btn-blue" disabled={isGenerating} onClick={() => void generateSchedule()}><IconRefresh />{isGenerating ? (lang === 'hr' ? 'Generiranje…' : 'Generating…') : (lang === 'hr' ? 'Generiraj' : 'Generate')}</button>
-              <button className="btn btn-green" onClick={saveAll}>{lang === 'hr' ? 'Spremi nacrt' : 'Save draft'}</button>
-              <button className="btn btn-ghost" disabled={isPrinting || drafts.length === 0} onClick={() => void printSchedule()}><IconPrint />{isPrinting ? (lang === 'hr' ? 'Izrada PDF-a…' : 'Building PDF…') : t.common.print}</button>
+              <button className="btn btn-blue" disabled={isGenerating} onClick={() => void generateSchedule()}><IconRefresh />{isGenerating ? (t.shiftPlanner.generating) : (t.shiftPlanner.generate)}</button>
+              <button className="btn btn-green" onClick={saveAll}>{t.shiftPlanner.saveDraft}</button>
+              <button className="btn btn-ghost" disabled={isPrinting || drafts.length === 0} onClick={() => void printSchedule()}><IconPrint />{isPrinting ? (t.shiftPlanner.buildingPdf) : t.common.print}</button>
               <button className="btn btn-ghost" onClick={() => downloadCsv(drafts, nameForWorker, nameForShift)}>CSV</button>
             </div>
             <div className="planner-toggle-row">
-              <label className="weekend-toggle"><input type="checkbox" checked={showWeekend} onChange={(event) => setShowWeekend(event.target.checked)} /> {lang === 'hr' ? 'Prikaži vikend (sub/ned)' : 'Show weekend (Sat/Sun)'}</label>
-              <small>{lang === 'hr' ? 'Vikend se ne rotira automatski — dodijelite ga ručno.' : 'Weekends are not auto-filled — assign them by hand.'}</small>
+              <label className="weekend-toggle"><input type="checkbox" checked={showWeekend} onChange={(event) => setShowWeekend(event.target.checked)} /> {t.shiftPlanner.showWeekendSatSun}</label>
+              <small>{t.shiftPlanner.weekendsNotAutoFilled}</small>
             </div>
-            {saved && <InlineNotice tone="success">✓ {lang === 'hr' ? 'Raspored je spremljen.' : 'Schedule saved.'}</InlineNotice>}
+            {saved && <InlineNotice tone="success">✓ {t.shiftPlanner.scheduleSaved}</InlineNotice>}
             {generationError && <div className="inline-error" role="alert">{generationError}</div>}
           </section>
 
           <section className="planner-sidebar-grid no-print">
             <div className="glass-panel participant-panel">
-              <div className="section-title-row"><h3>{lang === 'hr' ? 'Aktivni radnici' : 'Active workers'}</h3><span>{participantIds.length}/{activeWorkers.length}</span></div>
+              <div className="section-title-row"><h3>{t.shiftPlanner.activeWorkers}</h3><span>{participantIds.length}/{activeWorkers.length}</span></div>
               <div className="worker-selector-grid">
                 {activeWorkers.map((worker) => {
                   const selected = participantIds.includes(worker.id);
@@ -614,15 +614,15 @@ export default function ShiftSchedule() {
             </div>
 
             <div className="glass-panel absence-panel">
-              <div className="section-title-row"><h3>{lang === 'hr' ? 'Izostanci' : 'Absences'}</h3><span>{absences.length}</span></div>
+              <div className="section-title-row"><h3>{t.shiftPlanner.absences}</h3><span>{absences.length}</span></div>
               <div className="absence-form">
-                <select value={absenceWorker} onChange={(event) => setAbsenceWorker(event.target.value)}><option value="">{lang === 'hr' ? 'Odaberi radnika' : 'Select worker'}</option>{activeWorkers.map((worker) => <option key={worker.id} value={worker.id}>{displayName(worker)}</option>)}</select>
+                <select value={absenceWorker} onChange={(event) => setAbsenceWorker(event.target.value)}><option value="">{t.shiftPlanner.selectWorker}</option>{activeWorkers.map((worker) => <option key={worker.id} value={worker.id}>{displayName(worker)}</option>)}</select>
                 <input type="date" value={absenceStart} onChange={(event) => setAbsenceStart(event.target.value)} />
                 <input type="date" value={absenceEnd} onChange={(event) => setAbsenceEnd(event.target.value)} />
-                <button className="btn btn-blue" onClick={addAbsence}>{lang === 'hr' ? 'Dodaj' : 'Add'}</button>
+                <button className="btn btn-blue" onClick={addAbsence}>{t.shiftPlanner.add}</button>
               </div>
               <div className="absence-list">{absences.slice(-4).map((absence) => <span key={absence.id}>{nameForWorker(absence.workerId)} · {absence.startDate} → {absence.endDate}</span>)}</div>
-              <div className="print-options"><label><input type="checkbox" checked={showHours} onChange={(event) => setShowHours(event.target.checked)} /> {lang === 'hr' ? 'Prikaži sate' : 'Show hours'}</label><label><input type="checkbox" checked={hideEmpty} onChange={(event) => setHideEmpty(event.target.checked)} /> {lang === 'hr' ? 'Sakrij prazno' : 'Hide empty'}</label></div>
+              <div className="print-options"><label><input type="checkbox" checked={showHours} onChange={(event) => setShowHours(event.target.checked)} /> {t.shiftPlanner.showHours}</label><label><input type="checkbox" checked={hideEmpty} onChange={(event) => setHideEmpty(event.target.checked)} /> {t.shiftPlanner.hideEmpty}</label></div>
             </div>
           </section>
 
@@ -656,16 +656,16 @@ export default function ShiftSchedule() {
               const modified = !locked && snapshot !== null && isModifiedSincePublish(schedule);
               return <section className={`shift-week-board glass-panel${locked ? ' is-locked' : ''}`} key={schedule.id}>
                 <header className="week-board-header">
-                  <div><span>{schedule.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'}</span><small>{schedule.startDate} — {schedule.endDate}{snapshot ? ` · ${lang === 'hr' ? 'objavljeno' : 'published'} v${snapshot.version} · ${dateTimeLabel(snapshot.publishedAt)}` : ` · ${lang === 'hr' ? 'neobjavljeno' : 'unpublished'}`}</small></div>
+                  <div><span>{schedule.weekNumber}. {t.shiftPlanner.week}</span><small>{schedule.startDate} — {schedule.endDate}{snapshot ? ` · ${t.shiftPlanner.published} v${snapshot.version} · ${dateTimeLabel(snapshot.publishedAt)}` : ` · ${t.shiftPlanner.unpublished}`}</small></div>
                   <div className="week-board-actions">
-                    <span className={`schedule-state state-${schedule.status}`}>{schedule.status === 'published' ? (lang === 'hr' ? 'objavljeno' : 'published') : (lang === 'hr' ? 'nacrt' : 'draft')}</span>
-                    {modified && <span className="schedule-state state-modified" title={lang === 'hr' ? 'Izmijenjeno nakon objave — ponovno objavite za novu verziju' : 'Changed since publish — re-publish for a new version'}>{lang === 'hr' ? 'izmijenjeno' : 'modified'}</span>}
+                    <span className={`schedule-state state-${schedule.status}`}>{schedule.status === 'published' ? (t.shiftPlanner.published) : (t.shiftPlanner.draft)}</span>
+                    {modified && <span className="schedule-state state-modified" title={t.shiftPlanner.changedSincePublishRe}>{t.shiftPlanner.modified}</span>}
                     {locked
-                      ? <button className="btn btn-ghost" onClick={() => void unlockForEditing(schedule)}>{lang === 'hr' ? 'Uredi' : 'Edit'}</button>
-                      : <button className="btn btn-ghost" onClick={() => void publishOne(schedule)}>{snapshot ? (lang === 'hr' ? `Objavi v${snapshot.version + 1}` : `Publish v${snapshot.version + 1}`) : (lang === 'hr' ? 'Objavi' : 'Publish')}</button>}
+                      ? <button className="btn btn-ghost" onClick={() => void unlockForEditing(schedule)}>{t.shiftPlanner.edit}</button>
+                      : <button className="btn btn-ghost" onClick={() => void publishOne(schedule)}>{snapshot ? (lang === 'hr' ? `Objavi v${snapshot.version + 1}` : `Publish v${snapshot.version + 1}`) : (t.shiftPlanner.publish)}</button>}
                   </div>
                 </header>
-                {locked && <p className="lock-banner">{lang === 'hr' ? 'Objavljeni raspored je zaključan. „Uredi” ga vraća u nacrt dok ga ponovno ne objavite. Objavljena verzija ostaje trajno sačuvana u arhivi.' : 'This published schedule is locked. “Edit” returns it to draft until you publish it again — the published version stays permanently in the archive.'}</p>}
+                {locked && <p className="lock-banner">{t.shiftPlanner.publishedScheduleLockedEdit}</p>}
                 {modified && <p className="lock-banner modified-banner">{lang === 'hr' ? `Izmijenjeno nakon objave v${snapshot?.version}. Objavite ponovno da izdate v${(snapshot?.version ?? 0) + 1}; prethodna verzija ostaje u arhivi.` : `Changed since publishing v${snapshot?.version}. Re-publish to issue v${(snapshot?.version ?? 0) + 1}; the previous version stays in the archive.`}</p>}
                 <div className="shift-board-grid" style={{ '--shift-columns': dates.length } as React.CSSProperties}>
                   <div className="shift-grid-corner">{department}</div>
@@ -676,7 +676,7 @@ export default function ShiftSchedule() {
                       const targetId = `${schedule.id}-${date}-${definition.id}`;
                       const assignments = schedule.assignments.filter((assignment) => assignment.date === date && assignment.shiftDefinitionId === definition.id);
                       const dropConflict = dropTarget === targetId && dropWouldConflict(schedule, date, definition.id);
-                      return <div key={targetId} className={`shift-drop-cell${dropTarget === targetId ? ' drag-over' : ''}${dropConflict ? ' conflict-target' : ''}${hideEmpty && assignments.length === 0 ? ' empty-cell' : ''}${isWeekend(date) ? ' is-weekend' : ''}`} title={dropConflict ? (lang === 'hr' ? 'Sukob odmora ili tjednih sati' : 'Rest or weekly-hours conflict') : undefined} onDragOver={(event) => { if (locked) return; event.preventDefault(); setDropTarget(targetId); }} onDragLeave={() => setDropTarget(null)} onDrop={() => { if (!locked) moveAssignment(schedule.id, date, definition.id); }}>
+                      return <div key={targetId} className={`shift-drop-cell${dropTarget === targetId ? ' drag-over' : ''}${dropConflict ? ' conflict-target' : ''}${hideEmpty && assignments.length === 0 ? ' empty-cell' : ''}${isWeekend(date) ? ' is-weekend' : ''}`} title={dropConflict ? (t.shiftPlanner.restWeeklyHoursConflict) : undefined} onDragOver={(event) => { if (locked) return; event.preventDefault(); setDropTarget(targetId); }} onDragLeave={() => setDropTarget(null)} onDrop={() => { if (!locked) moveAssignment(schedule.id, date, definition.id); }}>
                         {assignments.map((assignment) => {
                           const hours = weeklyHours(schedule, assignment.workerId);
                           const overHours = hours > maxWeeklyHours;
@@ -684,7 +684,7 @@ export default function ShiftSchedule() {
                           // Absence recorded after generation: the assignment survives, so at least flag it.
                           const absentConflict = isAbsent(assignment.workerId, assignment.date);
                           const worker = workerById.get(assignment.workerId);
-                          return <div key={assignment.id} draggable={!locked} onDragStart={() => setDragged(assignment)} onDoubleClick={() => { if (!locked) setEditing({ scheduleId: schedule.id, assignmentId: assignment.id }); }} className={`assignment-chip${assignment.isOverride ? ' is-override' : ''}${overHours || restViolation || absentConflict ? ' has-warning' : ''}`} title={`${nameForWorker(assignment.workerId)} · ${hours}h${restViolation ? (lang === 'hr' ? ' · Upozorenje: odmor između smjena' : ' · Rest period warning') : ''}${absentConflict ? (lang === 'hr' ? ' · Upozorenje: radnik ima evidentiranu odsutnost' : ' · Warning: worker has a recorded absence') : ''}`}>
+                          return <div key={assignment.id} draggable={!locked} onDragStart={() => setDragged(assignment)} onDoubleClick={() => { if (!locked) setEditing({ scheduleId: schedule.id, assignmentId: assignment.id }); }} className={`assignment-chip${assignment.isOverride ? ' is-override' : ''}${overHours || restViolation || absentConflict ? ' has-warning' : ''}`} title={`${nameForWorker(assignment.workerId)} · ${hours}h${restViolation ? (t.shiftPlanner.restPeriodWarning) : ''}${absentConflict ? (t.shiftPlanner.warningWorkerHasRecorded) : ''}`}>
                             {editing?.scheduleId === schedule.id && editing.assignmentId === assignment.id ? <select autoFocus value={assignment.workerId} onChange={(event) => reassignWorker(schedule.id, assignment.id, Number(event.target.value))} onBlur={() => setEditing(null)}>{activeWorkers.filter((candidate) => !isAbsent(candidate.id, date)).map((candidate) => <option key={candidate.id} value={candidate.id}>{displayName(candidate)}</option>)}</select> : <><span className="mini-avatar">{worker?.firstName[0]}{worker?.lastName[0]}</span><span>{nameForWorker(assignment.workerId)}</span>{assignment.isOverride && <b>•</b>}{(overHours || restViolation || absentConflict) && <span className="warning-mark">!</span>}</>}
                           </div>;
                         })}
@@ -692,13 +692,13 @@ export default function ShiftSchedule() {
                     }),
                   ])}
                 </div>
-                <footer className="week-board-footer"><span>{schedule.assignments.length} {lang === 'hr' ? 'dodjela' : 'assignments'}</span><span>{schedule.assignments.filter((assignment) => assignment.isOverride).length} {lang === 'hr' ? 'ručnih izmjena' : 'overrides'}</span><button className="text-button" onClick={() => { const worker = activeWorkers[0]; if (worker) exportIcs(worker.id, displayName(worker)); }}>ICS · {activeWorkers[0] ? displayName(activeWorkers[0]) : ''}</button></footer>
+                <footer className="week-board-footer"><span>{schedule.assignments.length} {t.shiftPlanner.assignments}</span><span>{schedule.assignments.filter((assignment) => assignment.isOverride).length} {t.shiftPlanner.overrides}</span><button className="text-button" onClick={() => { const worker = activeWorkers[0]; if (worker) exportIcs(worker.id, displayName(worker)); }}>ICS · {activeWorkers[0] ? displayName(activeWorkers[0]) : ''}</button></footer>
               </section>;
             })}
           </div>
 
           {detailWeekId !== null && (
-            <p className="board-help no-print">{lang === 'hr' ? 'Detalji tjedna — uređivanje po danima. Povucite radnika u drugu ćeliju za ručnu izmjenu. Dvostruki klik otvara brzo pretraživo prebacivanje. Ponovni klik na broj tjedna zatvara detalje.' : 'Week detail — day-level editing. Drag a worker to another cell for a manual override. Double-click for quick reassignment. Click the week number again to close.'}</p>
+            <p className="board-help no-print">{t.shiftPlanner.weekDetailDayLevel}</p>
           )}
         </>
       )}
@@ -712,13 +712,13 @@ export default function ShiftSchedule() {
             <div className="snapshot-modal glass-panel" onClick={(event) => event.stopPropagation()}>
               <header className="snapshot-modal-head">
                 <div>
-                  <span className="eyebrow">{lang === 'hr' ? 'Objavljena snimka — samo za čitanje' : 'Published snapshot — read only'}</span>
-                  <h3>{snapshot.weekNumber}. {lang === 'hr' ? 'tjedan' : 'week'} {snapshot.year} · v{snapshot.version}</h3>
-                  <small>{snapshot.department} · {snapshot.startDate} — {snapshot.endDate} · {lang === 'hr' ? 'objavio' : 'published by'} {snapshot.publishedBy} · {dateTimeLabel(snapshot.publishedAt)}</small>
+                  <span className="eyebrow">{t.shiftPlanner.publishedSnapshotReadOnly}</span>
+                  <h3>{snapshot.weekNumber}. {t.shiftPlanner.week} {snapshot.year} · v{snapshot.version}</h3>
+                  <small>{snapshot.department} · {snapshot.startDate} — {snapshot.endDate} · {t.shiftPlanner.publishedBy} {snapshot.publishedBy} · {dateTimeLabel(snapshot.publishedAt)}</small>
                 </div>
                 <div className="snapshot-modal-actions">
                   <button className="btn btn-ghost btn-sm" disabled={printingSnapshotId !== null} onClick={() => void printSnapshot(snapshot)}>{printingSnapshotId === snapshot.id ? '…' : 'PDF'}</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setViewingSnapshot(null)}>{lang === 'hr' ? 'Zatvori' : 'Close'}</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setViewingSnapshot(null)}>{t.shiftPlanner.close}</button>
                 </div>
               </header>
               <div className="shift-week-board is-locked snapshot-board">
@@ -740,7 +740,7 @@ export default function ShiftSchedule() {
                     }),
                   ])}
                 </div>
-                <footer className="week-board-footer"><span>{snapshot.assignments.length} {lang === 'hr' ? 'dodjela' : 'assignments'}</span><span>{snapshot.assignments.filter((assignment) => assignment.isOverride).length} {lang === 'hr' ? 'ručnih izmjena' : 'overrides'}</span></footer>
+                <footer className="week-board-footer"><span>{snapshot.assignments.length} {t.shiftPlanner.assignments}</span><span>{snapshot.assignments.filter((assignment) => assignment.isOverride).length} {t.shiftPlanner.overrides}</span></footer>
               </div>
             </div>
           </div>

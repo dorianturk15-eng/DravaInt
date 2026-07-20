@@ -26,6 +26,8 @@ export interface TranslationShape {
     documentDate: string;
     createdBy: string;
     language: string;
+    /** BCP-47 tag for toLocaleString — data, not copy. */
+    locale: string;
   };
   shifts: {
     wizardTitle: string;
@@ -245,6 +247,93 @@ export interface TranslationShape {
     machineExists: string;
     noMachines: string;
   };
+  shiftPlanner: {
+    noActiveShiftDefinitions: string;
+    noWorkersDatabaseAdd: string;
+    scheduleGenerationFailed: string;
+    pdfExportFailed: string;
+    capacityPlanning: string;
+    interactiveShiftRotationWith: string;
+    synced: string;
+    planner: string;
+    publishedSchedules: string;
+    publishedScheduleArchive: string;
+    everyPublishSavesPermanent: string;
+    noPublishedSchedulesYet: string;
+    week: string;
+    hideVersions: string;
+    versionsShowAll: string;
+    singleVersion: string;
+    current: string;
+    assignments: string;
+    view: string;
+    editPlanner: string;
+    planStartMonday: string;
+    weeks: string;
+    department: string;
+    generating: string;
+    generate: string;
+    saveDraft: string;
+    buildingPdf: string;
+    showWeekendSatSun: string;
+    weekendsNotAutoFilled: string;
+    scheduleSaved: string;
+    activeWorkers: string;
+    absences: string;
+    selectWorker: string;
+    add: string;
+    showHours: string;
+    hideEmpty: string;
+    published: string;
+    unpublished: string;
+    draft: string;
+    changedSincePublishRe: string;
+    modified: string;
+    edit: string;
+    publish: string;
+    publishedScheduleLockedEdit: string;
+    restWeeklyHoursConflict: string;
+    restPeriodWarning: string;
+    warningWorkerHasRecorded: string;
+    overrides: string;
+    weekDetailDayLevel: string;
+    publishedSnapshotReadOnly: string;
+    publishedBy: string;
+    close: string;
+  };
+  appShell: {
+    workstationOffline: string;
+    changesStoredLocallyWill: string;
+    changesWaitingSync: string;
+    dueTimeHasPassed: string;
+    materialAvailabilityRisk: string;
+    machineScheduleOverlap: string;
+    atLeastTwoOrders: string;
+    capacityThresholdReached: string;
+    todaySAbsence: string;
+    operationsStable: string;
+    noActiveDelaysConflicts: string;
+    navigation: string;
+    quickActions: string;
+    openModule: string;
+    newWorkOrder: string;
+    startOrderCreationPrinting: string;
+    planShifts: string;
+    generatePublishSchedule: string;
+    workstationSettings: string;
+    appearanceSecurityPlanning: string;
+    lockNow: string;
+    secureCurrentWorkstation: string;
+    keepConnected: string;
+    yourRoleCannotAccess: string;
+    mainNavigation: string;
+    openMenu: string;
+    commandPaletteCtrlK: string;
+    search: string;
+    online: string;
+    offline: string;
+    text: string;
+  };
   roles: {
     title: string;
     roleName: string;
@@ -255,6 +344,93 @@ export interface TranslationShape {
 
 export const translations: Record<Lang, TranslationShape> = {
   hr: {
+    appShell: {
+      workstationOffline: 'Radna stanica je izvan mreže',
+      changesStoredLocallyWill: 'Promjene se čuvaju lokalno i sinkronizirat će se nakon povratka veze.',
+      changesWaitingSync: 'Promjene čekaju sinkronizaciju',
+      dueTimeHasPassed: 'Rok je probijen ili je nalog označen kao kašnjenje.',
+      materialAvailabilityRisk: 'Rizik dostupnosti materijala',
+      machineScheduleOverlap: 'Preklapanje na stroju',
+      atLeastTwoOrders: 'Najmanje dva naloga koriste isti stroj u preklapajućem terminu.',
+      capacityThresholdReached: 'Prag kapaciteta je dosegnut',
+      todaySAbsence: 'Današnja odsutnost',
+      operationsStable: 'Operacije su stabilne',
+      noActiveDelaysConflicts: 'Nema aktivnih kašnjenja, konflikata ili problema sa sinkronizacijom.',
+      navigation: 'Navigacija',
+      quickActions: 'Brze radnje',
+      openModule: 'Otvori modul',
+      newWorkOrder: 'Novi radni nalog',
+      startOrderCreationPrinting: 'Pokreni izradu i ispis naloga',
+      planShifts: 'Planiraj smjene',
+      generatePublishSchedule: 'Generiraj i objavi raspored',
+      workstationSettings: 'Postavke radne stanice',
+      appearanceSecurityPlanning: 'Izgled, sigurnost i planiranje',
+      lockNow: 'Zaključaj sada',
+      secureCurrentWorkstation: 'Zaštiti trenutnu radnu stanicu',
+      keepConnected: 'Ostani povezan',
+      yourRoleCannotAccess: 'Nemate ovlasti za ovaj modul.',
+      mainNavigation: 'Glavna navigacija',
+      openMenu: 'Otvori izbornik',
+      commandPaletteCtrlK: 'Paleta naredbi (Ctrl+K)',
+      search: 'Traži',
+      online: 'Povezano',
+      offline: 'Izvan mreže',
+      text: ' active',
+    },
+    shiftPlanner: {
+      noActiveShiftDefinitions: 'Nema aktivnih smjena — dodajte ih u postavkama smjena.',
+      noWorkersDatabaseAdd: 'Nema radnika u bazi — dodajte radnike u Adminu prije generiranja.',
+      scheduleGenerationFailed: 'Generiranje nije uspjelo.',
+      pdfExportFailed: 'Izrada PDF-a nije uspjela.',
+      capacityPlanning: 'Planiranje kapaciteta',
+      interactiveShiftRotationWith: 'Interaktivna rotacija smjena s provjerom odmora, izostanaka i tjednih sati.',
+      synced: 'Sinkronizirano',
+      planner: 'Planer',
+      publishedSchedules: 'Objavljeni rasporedi',
+      publishedScheduleArchive: 'Arhiva objavljenih rasporeda',
+      everyPublishSavesPermanent: 'Svaka objava sprema trajnu snimku — točno ono što je izdano i ispisano. Snimke se ne mijenjaju; izmjena tjedna stvara novu verziju.',
+      noPublishedSchedulesYet: 'Još nema objavljenih rasporeda. Objavite tjedan u planeru i pojavit će se ovdje.',
+      week: 'tjedan',
+      hideVersions: 'Sakrij verzije',
+      versionsShowAll: 'verzija — prikaži sve',
+      singleVersion: '1 verzija',
+      current: 'aktualno',
+      assignments: 'dodjela',
+      view: 'Pregled',
+      editPlanner: 'Uredi u planeru',
+      planStartMonday: 'Početak plana (ponedjeljak)',
+      weeks: 'Broj tjedana',
+      department: 'Odjel',
+      generating: 'Generiranje…',
+      generate: 'Generiraj',
+      saveDraft: 'Spremi nacrt',
+      buildingPdf: 'Izrada PDF-a…',
+      showWeekendSatSun: 'Prikaži vikend (sub/ned)',
+      weekendsNotAutoFilled: 'Vikend se ne rotira automatski — dodijelite ga ručno.',
+      scheduleSaved: 'Raspored je spremljen.',
+      activeWorkers: 'Aktivni radnici',
+      absences: 'Izostanci',
+      selectWorker: 'Odaberi radnika',
+      add: 'Dodaj',
+      showHours: 'Prikaži sate',
+      hideEmpty: 'Sakrij prazno',
+      published: 'objavljeno',
+      unpublished: 'neobjavljeno',
+      draft: 'nacrt',
+      changedSincePublishRe: 'Izmijenjeno nakon objave — ponovno objavite za novu verziju',
+      modified: 'izmijenjeno',
+      edit: 'Uredi',
+      publish: 'Objavi',
+      publishedScheduleLockedEdit: 'Objavljeni raspored je zaključan. „Uredi” ga vraća u nacrt dok ga ponovno ne objavite. Objavljena verzija ostaje trajno sačuvana u arhivi.',
+      restWeeklyHoursConflict: 'Sukob odmora ili tjednih sati',
+      restPeriodWarning: ' · Upozorenje: odmor između smjena',
+      warningWorkerHasRecorded: ' · Upozorenje: radnik ima evidentiranu odsutnost',
+      overrides: 'ručnih izmjena',
+      weekDetailDayLevel: 'Detalji tjedna — uređivanje po danima. Povucite radnika u drugu ćeliju za ručnu izmjenu. Dvostruki klik otvara brzo pretraživo prebacivanje. Ponovni klik na broj tjedna zatvara detalje.',
+      publishedSnapshotReadOnly: 'Objavljena snimka — samo za čitanje',
+      publishedBy: 'objavio',
+      close: 'Zatvori',
+    },
     appTitle: 'Drava International - Planer',
     nav: {
       dashboard: 'Pregled',
@@ -280,6 +456,7 @@ export const translations: Record<Lang, TranslationShape> = {
       documentDate: 'Datum dokumenta',
       createdBy: 'Dokument izradio',
       language: 'Jezik',
+      locale: 'hr-HR',
     },
     shifts: {
       wizardTitle: 'Čarobnjak za izradu rasporeda',
@@ -507,6 +684,93 @@ export const translations: Record<Lang, TranslationShape> = {
     },
   },
   en: {
+    appShell: {
+      workstationOffline: 'Workstation is offline',
+      changesStoredLocallyWill: 'Changes are stored locally and will sync when the connection returns.',
+      changesWaitingSync: 'Changes waiting to sync',
+      dueTimeHasPassed: 'The due time has passed or the order is marked delayed.',
+      materialAvailabilityRisk: 'Material availability risk',
+      machineScheduleOverlap: 'Machine schedule overlap',
+      atLeastTwoOrders: 'At least two orders use the same machine during overlapping time.',
+      capacityThresholdReached: 'Capacity threshold reached',
+      todaySAbsence: 'Today’s absence',
+      operationsStable: 'Operations are stable',
+      noActiveDelaysConflicts: 'No active delays, conflicts, or synchronization issues.',
+      navigation: 'Navigation',
+      quickActions: 'Quick actions',
+      openModule: 'Open module',
+      newWorkOrder: 'New work order',
+      startOrderCreationPrinting: 'Start order creation and printing',
+      planShifts: 'Plan shifts',
+      generatePublishSchedule: 'Generate and publish a schedule',
+      workstationSettings: 'Workstation settings',
+      appearanceSecurityPlanning: 'Appearance, security, and planning',
+      lockNow: 'Lock now',
+      secureCurrentWorkstation: 'Secure the current workstation',
+      keepConnected: 'Keep connected',
+      yourRoleCannotAccess: 'Your role cannot access this module.',
+      mainNavigation: 'Main navigation',
+      openMenu: 'Open menu',
+      commandPaletteCtrlK: 'Command palette (Ctrl+K)',
+      search: 'Search',
+      online: 'Online',
+      offline: 'Offline',
+      text: '',
+    },
+    shiftPlanner: {
+      noActiveShiftDefinitions: 'No active shift definitions — add them in the shift settings.',
+      noWorkersDatabaseAdd: 'No workers in the database — add workers via Admin before generating.',
+      scheduleGenerationFailed: 'Schedule generation failed.',
+      pdfExportFailed: 'PDF export failed.',
+      capacityPlanning: 'Capacity planning',
+      interactiveShiftRotationWith: 'Interactive shift rotation with rest, absence, and weekly-hours validation.',
+      synced: 'Synced',
+      planner: 'Planner',
+      publishedSchedules: 'Published schedules',
+      publishedScheduleArchive: 'Published schedule archive',
+      everyPublishSavesPermanent: 'Every publish saves a permanent snapshot — exactly what was issued and printed. Snapshots are never altered; editing a week creates a new version.',
+      noPublishedSchedulesYet: 'No published schedules yet. Publish a week in the planner and it will show up here.',
+      week: 'week',
+      hideVersions: 'Hide versions',
+      versionsShowAll: 'versions — show all',
+      singleVersion: '1 version',
+      current: 'current',
+      assignments: 'assignments',
+      view: 'View',
+      editPlanner: 'Edit in planner',
+      planStartMonday: 'Plan start (Monday)',
+      weeks: 'Weeks',
+      department: 'Department',
+      generating: 'Generating…',
+      generate: 'Generate',
+      saveDraft: 'Save draft',
+      buildingPdf: 'Building PDF…',
+      showWeekendSatSun: 'Show weekend (Sat/Sun)',
+      weekendsNotAutoFilled: 'Weekends are not auto-filled — assign them by hand.',
+      scheduleSaved: 'Schedule saved.',
+      activeWorkers: 'Active workers',
+      absences: 'Absences',
+      selectWorker: 'Select worker',
+      add: 'Add',
+      showHours: 'Show hours',
+      hideEmpty: 'Hide empty',
+      published: 'published',
+      unpublished: 'unpublished',
+      draft: 'draft',
+      changedSincePublishRe: 'Changed since publish — re-publish for a new version',
+      modified: 'modified',
+      edit: 'Edit',
+      publish: 'Publish',
+      publishedScheduleLockedEdit: 'This published schedule is locked. “Edit” returns it to draft until you publish it again — the published version stays permanently in the archive.',
+      restWeeklyHoursConflict: 'Rest or weekly-hours conflict',
+      restPeriodWarning: ' · Rest period warning',
+      warningWorkerHasRecorded: ' · Warning: worker has a recorded absence',
+      overrides: 'overrides',
+      weekDetailDayLevel: 'Week detail — day-level editing. Drag a worker to another cell for a manual override. Double-click for quick reassignment. Click the week number again to close.',
+      publishedSnapshotReadOnly: 'Published snapshot — read only',
+      publishedBy: 'published by',
+      close: 'Close',
+    },
     appTitle: 'Drava International - Planner',
     nav: {
       dashboard: 'Dashboard',
@@ -532,6 +796,7 @@ export const translations: Record<Lang, TranslationShape> = {
       documentDate: 'Document date',
       createdBy: 'Created by',
       language: 'Language',
+      locale: 'en-US',
     },
     shifts: {
       wizardTitle: 'Schedule Generator Wizard',
