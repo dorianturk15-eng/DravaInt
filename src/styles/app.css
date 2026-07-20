@@ -40,5 +40,6 @@
 @import './pages/gantt-workspace.css';
 @import './command-layer.css';
 @import './pages/machine-board.css';
+@import './pages/admin.css';
 @import './components.css';
 @import './rotation-board.css';

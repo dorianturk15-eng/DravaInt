@@ -10,7 +10,8 @@ import { detectOperationOverlaps } from '../scheduling/jobOperations';
 import { OverlapEnforcementCard } from '../components/OverlapEnforcementCard';
 import { requestFocus } from '../navigation/focusTarget';
 import { useRoles } from '../roles/RolesContext';
-import { IconUpload, IconTrash, IconEdit, IconPlus, IconList, IconGear } from '../components/Icons';
+import { IconUpload, IconTrash, IconEdit, IconPlus, IconList, IconGear, IconUser, IconKey, IconSave, IconAlert } from '../components/Icons';
+import { EmptyState, InlineNotice, PageHeader } from '../components/Page';
 import { useWorkers, type Worker } from '../workers/WorkersContext';
 import { useSettings } from '../settings/SettingsContext';
 
@@ -289,14 +290,9 @@ export default function Admin() {
 
   return (
     <div className="wizard-container">
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ margin: '0 0 6px 0', fontFamily: 'var(--font-title)', fontWeight: 800 }}>{t.admin.title}</h2>
-        <p className="subtitle-text" style={{ margin: 0 }}>
-          {t.admin.subtitle}
-        </p>
-      </div>
+      <PageHeader title={t.admin.title} subtitle={t.admin.subtitle} />
 
-      <div className="view-toggle" style={{ marginBottom: 25 }}>
+      <div className="view-toggle stack-gap-lg">
         <button className={adminTab === 'logo' ? 'active' : ''} onClick={() => setAdminTab('logo')}>
           {t.admin.logoSection}
         </button>
@@ -304,13 +300,13 @@ export default function Admin() {
           {t.admin.machinesSection}
         </button>
         <button className={adminTab === 'workers' ? 'active' : ''} onClick={() => setAdminTab('workers')}>
-          👤 {lang === 'hr' ? 'Radnici' : 'Workers'}
+          <IconUser className="panel-title-icon" /> {lang === 'hr' ? 'Radnici' : 'Workers'}
         </button>
         <button className={adminTab === 'roles' ? 'active' : ''} onClick={() => setAdminTab('roles')}>
           <IconList className="panel-title-icon" /> {lang === 'hr' ? 'Uloge radnika' : 'Worker Roles'}
         </button>
         <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}>
-          🔑 {lang === 'hr' ? 'Korisnički računi' : 'Login Accounts'}
+          <IconKey className="panel-title-icon" /> {lang === 'hr' ? 'Korisnički računi' : 'Login Accounts'}
         </button>
         <button className={adminTab === 'system' ? 'active' : ''} onClick={() => setAdminTab('system')}>
           <IconGear className="panel-title-icon" /> {lang === 'hr' ? 'Sustav' : 'System'}
@@ -318,31 +314,31 @@ export default function Admin() {
       </div>
 
       {adminTab === 'logo' && (
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-          <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
+        <div className="step-box admin-card">
+          <div className="step-title admin-section-title">
             {t.admin.logoSection}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center' }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="admin-split-row">
+            <div className="admin-split-main">
               <label className="premium-upload">
                 <input type="file" accept="image/*" onChange={handleLogoFile} />
                 <span className="premium-upload-icon"><IconUpload /></span>
                 <span><strong>{lang === 'hr' ? 'Odaberite logotip' : 'Choose company logo'}</strong><small>PNG, JPG, SVG · {lang === 'hr' ? 'preporučena prozirna pozadina' : 'transparent background recommended'}</small></span>
                 <b>{lang === 'hr' ? 'Pregledaj' : 'Browse'}</b>
               </label>
-              <p className="subtitle-text" style={{ fontSize: 12, marginTop: 8 }}>
+              <p className="subtitle-text admin-note">
                 {lang === 'hr' ? 'Učitajte prilagođeni logotip tvrtke koji će se prikazivati na ispisima radnih naloga.' : 'Upload a custom company logo that will display on printed work orders.'}
               </p>
             </div>
             {pendingLogo && (
-              <div style={{ textAlign: 'center', border: '1px solid var(--border-color)', padding: 12, borderRadius: 8, background: '#ffffff' }}>
-                <div style={{ fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 6 }}>{t.admin.currentLogo}</div>
-                <img src={pendingLogo} alt="Logo" style={{ maxHeight: 60, width: 'auto', display: 'block', margin: '0 auto' }} />
+              <div className="logo-preview-canvas">
+                <div className="logo-preview-label">{t.admin.currentLogo}</div>
+                <img src={pendingLogo} alt="Logo" className="logo-preview-image" />
               </div>
             )}
           </div>
 
-          <div className="action-bar" style={{ justifyContent: 'flex-start', marginTop: 25, borderTop: '1px solid var(--border-color)', paddingTop: 20 }}>
+          <div className="action-bar admin-action-bar">
             <button className="btn btn-green" onClick={saveLogo}>
               <IconUpload />
               {t.admin.save}
@@ -352,23 +348,23 @@ export default function Admin() {
               {t.admin.clear}
             </button>
           </div>
-          {savedMsg && <p style={{ color: '#10b981', fontSize: 13, fontWeight: 'bold', marginTop: 10 }}>✓ {t.admin.saved}</p>}
+          {savedMsg && <InlineNotice tone="success">✓ {t.admin.saved}</InlineNotice>}
         </div>
       )}
 
       {adminTab === 'machines' && (
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-          <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
+        <div className="step-box admin-card">
+          <div className="step-title admin-section-title">
             {t.admin.machinesSection}
           </div>
 
-          <div className="grid-inputs time-settings" style={{ marginBottom: 25 }}>
+          <div className="grid-inputs time-settings stack-gap-lg">
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{t.admin.machineName}</label>
+              <label className="admin-field-label">{t.admin.machineName}</label>
               <input type="text" value={machineName} onChange={(e) => setMachineName(e.target.value)} />
             </div>
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{t.admin.machineType}</label>
+              <label className="admin-field-label">{t.admin.machineType}</label>
               <select value={machineType} onChange={(e) => setMachineType(e.target.value as MachineType)}>
                 {MACHINE_TYPES.map((type) => (
                   <option key={type} value={type}>{machineTypeLabels[type]}</option>
@@ -377,15 +373,15 @@ export default function Admin() {
             </div>
             {machineType === 'mill' && (
               <div>
-                <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{t.admin.machineAxis}</label>
+                <label className="admin-field-label">{t.admin.machineAxis}</label>
                 <select value={machineAxis} onChange={(e) => setMachineAxis(Number(e.target.value) as MillAxis)}>
                   <option value={3}>3 {t.machines.axisShort}</option>
                   <option value={5}>5 {t.machines.axisShort}</option>
                 </select>
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-              <button className="btn btn-blue" onClick={submitMachine} style={{ flex: 1 }}>
+            <div className="admin-row-end">
+              <button className="btn btn-blue" onClick={submitMachine} className="flex-1">
                 {editingMachineId ? <IconEdit /> : <IconPlus />}
                 {editingMachineId ? t.admin.editMachine : t.admin.addMachine}
               </button>
@@ -396,11 +392,11 @@ export default function Admin() {
               )}
             </div>
           </div>
-          {machineError && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10, fontWeight: 'bold' }}>{machineError}</p>}
+          {machineError && <p className="admin-error-text">{machineError}</p>}
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
             {machines.length === 0 ? (
-              <p className="subtitle-text" style={{ fontSize: 13, textAlign: 'center', padding: '20px 0' }}>{t.admin.noMachines}</p>
+              <EmptyState compact>{t.admin.noMachines}</EmptyState>
             ) : (
               <table className="data-table">
                 <thead>
@@ -414,23 +410,23 @@ export default function Admin() {
                 <tbody>
                   {machines.map((m) => (
                     <tr key={m.id}>
-                      <td style={{ fontWeight: 600 }}>{m.name}</td>
+                      <td className="cell-strong">{m.name}</td>
                       <td>{machineTypeLabels[m.type]}</td>
                       <td>{m.axis ? `${m.axis} ${t.machines.axisShort}` : '-'}</td>
                       <td>
-                        <div style={{ display: 'flex', gap: 8 }}>
+                        <div className="admin-row">
                           <button
                             className="btn btn-blue btn-sm"
                             onClick={() => startEditMachine(m.id, m.name, m.type, m.axis)}
                           >
-                            <IconEdit style={{ width: 12, height: 12 }} />
+                            <IconEdit className="icon-xs" />
                             {t.admin.edit}
                           </button>
                           <button
                             className="btn btn-red btn-sm"
                             onClick={() => removeMachine(m.id)}
                           >
-                            <IconTrash style={{ width: 12, height: 12 }} />
+                            <IconTrash className="icon-xs" />
                             {t.admin.delete}
                           </button>
                         </div>
@@ -457,16 +453,16 @@ export default function Admin() {
             }
             const rows = [...byName.entries()].sort((a, b) => a[0].localeCompare(b[0]));
             return (
-              <div style={{ marginTop: 24, border: '1px solid var(--danger-color)', borderRadius: 'var(--radius-card)', padding: 16 }}>
-                <div style={{ fontWeight: 700, color: 'var(--danger-color)', marginBottom: 6 }}>
-                  ⚠ {lang === 'hr' ? 'Nepovezani strojevi' : 'Unmapped machines'}
+              <div className="admin-danger-zone">
+                <div className="admin-danger-title">
+                  <IconAlert className="panel-title-icon" /> {lang === 'hr' ? 'Nepovezani strojevi' : 'Unmapped machines'}
                 </div>
-                <p className="subtitle-text" style={{ fontSize: 12, marginBottom: 12 }}>
+                <p className="subtitle-text admin-note has-gap">
                   {lang === 'hr'
                     ? `${unmapped.length} referenc(a) na stroj ne odgovara nijednom registriranom stroju. Registrirajte stroj ili ispravite operaciju; pokrenite migraciju povezivanja (machineId) da se preostale operacije povežu po id-u.`
                     : `${unmapped.length} machine reference(s) match no registered machine. Register the machine or fix the operation; run the machineId backfill so remaining operations match by id.`}
                 </p>
-                <div style={{ overflowX: 'auto' }}>
+                <div className="table-scroll">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -482,9 +478,9 @@ export default function Admin() {
                         const focusJob = jobs.find((job) => job.order === firstOrder);
                         return (
                         <tr key={name}>
-                          <td style={{ fontWeight: 600 }}>{name}</td>
+                          <td className="cell-strong">{name}</td>
                           <td>{info.count}</td>
-                          <td style={{ fontSize: 12 }}>{[...info.orders].slice(0, 10).join(', ')}{info.orders.size > 10 ? '…' : ''}</td>
+                          <td className="cell-sm">{[...info.orders].slice(0, 10).join(', ')}{info.orders.size > 10 ? '…' : ''}</td>
                           <td>
                             <button type="button" className="btn btn-blue btn-sm" onClick={() => requestFocus({ tab: 'machines', jobId: focusJob?.id, machineName: name })}>
                               {t.machineBoard.showOnBoard}
@@ -503,18 +499,18 @@ export default function Admin() {
       )}
 
       {adminTab === 'workers' && (
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-          <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
-            👤 {lang === 'hr' ? 'Evidencija Radnika u Radionici' : 'Shop Floor Workers Directory'}
+        <div className="step-box admin-card">
+          <div className="step-title admin-section-title">
+            <IconUser className="panel-title-icon" /> {lang === 'hr' ? 'Evidencija Radnika u Radionici' : 'Shop Floor Workers Directory'}
           </div>
 
-          <div className="grid-inputs time-settings" style={{ marginBottom: 25 }}>
+          <div className="grid-inputs time-settings stack-gap-lg">
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{lang === 'hr' ? 'Ime radnika' : 'Worker Name'}</label>
+              <label className="admin-field-label">{lang === 'hr' ? 'Ime radnika' : 'Worker Name'}</label>
               <input type="text" value={workerName} onChange={(e) => setWorkerName(e.target.value)} placeholder="npr. Ivan Horvat" />
             </div>
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{t.roles.title}</label>
+              <label className="admin-field-label">{t.roles.title}</label>
               <select value={workerRole} onChange={(e) => setWorkerRole(e.target.value)}>
                 <option value="">{t.roles.noRole}</option>
                 {roles.filter((r) => r.is_active).map((r) => (
@@ -525,7 +521,7 @@ export default function Admin() {
               </select>
             </div>
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{lang === 'hr' ? 'Korisnički račun (opcionalno)' : 'Link Login Account (Optional)'}</label>
+              <label className="admin-field-label">{lang === 'hr' ? 'Korisnički račun (opcionalno)' : 'Link Login Account (Optional)'}</label>
               <select value={workerAccount} onChange={(e) => setWorkerAccount(e.target.value)}>
                 <option value="">{lang === 'hr' ? 'Nema računa' : 'No account linked'}</option>
                 {users.map((u) => (
@@ -536,11 +532,11 @@ export default function Admin() {
               </select>
             </div>
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{lang === 'hr' ? 'Kvalifikacije' : 'Qualifications'}</label>
+              <label className="admin-field-label">{lang === 'hr' ? 'Kvalifikacije' : 'Qualifications'}</label>
               <input value={workerQualifications} onChange={(e) => setWorkerQualifications(e.target.value)} placeholder="CNC-1, CNC-2, Kontrola kvalitete" />
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-              <button className="btn btn-blue" onClick={handleAddWorker} style={{ flex: 1 }}>
+            <div className="admin-row-end">
+              <button className="btn btn-blue" onClick={handleAddWorker} className="flex-1">
                 {editingWorkerId !== null ? <IconEdit /> : <IconPlus />}
                 {editingWorkerId !== null ? (lang === 'hr' ? 'Uredi radnika' : 'Edit Worker') : (lang === 'hr' ? 'Dodaj radnika' : 'Add Worker')}
               </button>
@@ -551,9 +547,9 @@ export default function Admin() {
               )}
             </div>
           </div>
-          {workerError && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10, fontWeight: 'bold' }}>{workerError}</p>}
+          {workerError && <p className="admin-error-text">{workerError}</p>}
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -568,26 +564,26 @@ export default function Admin() {
               <tbody>
                 {workersList.map((w) => (
                   <tr key={w.id}>
-                    <td style={{ fontWeight: 600 }}>{displayName(w)}</td>
+                    <td className="cell-strong">{displayName(w)}</td>
                     <td>
-                      <span style={{ background: 'var(--primary-light)', color: 'var(--primary-color)', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>{w.roleName}</span>
+                      <span className="admin-role-chip">{w.roleName}</span>
                     </td>
-                    <td>{w.email ? <span style={{ fontFamily: 'monospace' }}>{w.email}</span> : <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{lang === 'hr' ? 'Nema' : 'None'}</span>}</td>
-                    <td style={{ fontSize: 11 }}>{w.qualifications.join(', ') || '—'}</td>
-                    <td><select value={w.status} onChange={(e) => void updateWorker(w.id, { status: e.target.value as Worker['status'] })} style={{ width: 'auto', padding: '5px 7px', fontSize: 10 }}><option value="available">Available</option><option value="busy">Busy</option><option value="break">Break</option><option value="absent">Absent</option></select></td>
+                    <td>{w.email ? <span className="mono">{w.email}</span> : <span className="admin-meta is-xs">{lang === 'hr' ? 'Nema' : 'None'}</span>}</td>
+                    <td className="cell-xs">{w.qualifications.join(', ') || '—'}</td>
+                    <td><select value={w.status} onChange={(e) => void updateWorker(w.id, { status: e.target.value as Worker['status'] })} className="input-inline is-xs"><option value="available">Available</option><option value="busy">Busy</option><option value="break">Break</option><option value="absent">Absent</option></select></td>
                     <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div className="admin-row">
                         <button className="btn btn-blue btn-sm" onClick={() => handleEditWorker(w)}>
-                          <IconEdit style={{ width: 12, height: 12 }} />
+                          <IconEdit className="icon-xs" />
                           {t.admin.edit}
                         </button>
                         <button className={w.isActive ? 'btn btn-red btn-sm' : 'btn btn-green btn-sm'} onClick={() => w.isActive ? handleDeleteWorker(w.id) : void updateWorker(w.id, { isActive: true })}>
-                          <IconTrash style={{ width: 12, height: 12 }} />
+                          <IconTrash className="icon-xs" />
                           {w.isActive ? (lang === 'hr' ? 'Arhiviraj' : 'Archive') : (lang === 'hr' ? 'Aktiviraj' : 'Activate')}
                         </button>
                         {!w.isActive && (
                           <button className="btn btn-red btn-sm" onClick={() => void handleRemoveWorker(w)}>
-                            <IconTrash style={{ width: 12, height: 12 }} />
+                            <IconTrash className="icon-xs" />
                             {lang === 'hr' ? 'Izbriši trajno' : 'Delete permanently'}
                           </button>
                         )}
@@ -602,16 +598,16 @@ export default function Admin() {
       )}
 
       {adminTab === 'roles' && (
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-          <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
+        <div className="step-box admin-card">
+          <div className="step-title admin-section-title">
             <IconList className="panel-title-icon" /> {lang === 'hr' ? 'Uloge Radnika' : 'Worker Roles Manager'}
           </div>
 
-          <p className="subtitle-text" style={{ marginBottom: 20, fontSize: 12 }}>
+          <p className="subtitle-text admin-note has-gap">
             {lang === 'hr' ? 'Pregledajte i uredite uloge svih radnika u sustavu:' : 'View and edit roles of all workers in the system:'}
           </p>
 
-          <div style={{ overflowX: 'auto', marginBottom: 30 }}>
+          <div className="table-scroll has-gap">
             <table className="data-table">
               <thead>
                 <tr>
@@ -622,7 +618,7 @@ export default function Admin() {
               <tbody>
                 {workersList.map((w) => (
                   <tr key={w.id}>
-                    <td style={{ fontWeight: 600 }}>{displayName(w)}</td>
+                    <td className="cell-strong">{displayName(w)}</td>
                     <td>
                       <select
                         value={w.roleName}
@@ -630,7 +626,7 @@ export default function Admin() {
                           const role = roles.find((item) => item.name === e.target.value);
                           void updateWorker(w.id, { roleName: e.target.value, roleId: role?.id ?? null });
                         }}
-                        style={{ width: 'auto', minWidth: 220, padding: '6px 12px', fontSize: 12 }}
+                        className="input-inline is-wide"
                       >
                         {roles.filter((r) => r.is_active || r.name === w.roleName).map((r) => (
                           <option key={r.id} value={r.name}>
@@ -645,12 +641,12 @@ export default function Admin() {
             </table>
           </div>
 
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 20 }}>
-            <div className="step-title" style={{ fontSize: 14, color: 'var(--text-primary)', marginBottom: 15 }}>
-              🛠️ {lang === 'hr' ? 'Definirane Uloge' : 'Defined Roles Catalog'}
+          <div className="admin-divider-top">
+            <div className="step-title admin-section-title is-sub">
+              <IconGear className="panel-title-icon" /> {lang === 'hr' ? 'Definirane Uloge' : 'Defined Roles Catalog'}
             </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
+            <div className="admin-wrap-row has-gap">
+              <div className="admin-split-main">
                 <input
                   type="text"
                   value={newRoleName}
@@ -658,24 +654,24 @@ export default function Admin() {
                   placeholder={t.roles.roleName}
                 />
               </div>
-              <button className="btn btn-blue" onClick={submitRole} style={{ width: 'auto' }}>
+              <button className="btn btn-blue" onClick={submitRole} className="btn-inline">
                 <IconPlus />
                 {t.roles.addRole}
               </button>
             </div>
-            {roleError && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10, fontWeight: 'bold' }}>{roleError}</p>}
+            {roleError && <p className="admin-error-text">{roleError}</p>}
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            <div className="admin-wrap-row">
               {roles.length === 0 ? (
-                <p className="subtitle-text" style={{ fontSize: 13 }}>{lang === 'hr' ? 'Nema definiranih uloga.' : 'No roles defined.'}</p>
+                <p className="subtitle-text admin-note is-md">{lang === 'hr' ? 'Nema definiranih uloga.' : 'No roles defined.'}</p>
               ) : (
                 roles.map((r) => (
-                  <span key={r.id} className="role-chip" style={{ padding: '6px 12px', background: 'var(--bg-step)', borderRadius: 20, border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 600, opacity: r.is_active ? 1 : 0.55 }}>{r.name}</span>
-                    <button onClick={() => setRoleActive(r.id, !r.is_active)} title={r.is_active ? 'Deactivate role' : 'Activate role'} style={{ background: 'none', border: 'none', color: r.is_active ? 'var(--success-color)' : 'var(--text-secondary)', cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>
+                  <span key={r.id} className="role-chip admin-chip">
+                    <span className={`role-name${r.is_active ? '' : ' is-inactive'}`}>{r.name}</span>
+                    <button onClick={() => setRoleActive(r.id, !r.is_active)} title={r.is_active ? 'Deactivate role' : 'Activate role'} className={`role-toggle${r.is_active ? ' is-active' : ''}`}>
                       {r.is_active ? 'ACTIVE' : 'INACTIVE'}
                     </button>
-                    <button onClick={() => removeRole(r.id)} title={t.admin.delete} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 10, display: 'inline-flex', alignItems: 'center' }}>
+                    <button onClick={() => removeRole(r.id)} title={t.admin.delete} className="role-toggle">
                       ✕
                     </button>
                   </span>
@@ -687,22 +683,22 @@ export default function Admin() {
       )}
 
       {adminTab === 'users' && (
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-          <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
-            🔑 {lang === 'hr' ? 'Korisnički Računi za Prijavu' : 'App Login Accounts'}
+        <div className="step-box admin-card">
+          <div className="step-title admin-section-title">
+            <IconKey className="panel-title-icon" /> {lang === 'hr' ? 'Korisnički Računi za Prijavu' : 'App Login Accounts'}
           </div>
 
-          <div className="grid-inputs time-settings" style={{ marginBottom: 25 }}>
+          <div className="grid-inputs time-settings stack-gap-lg">
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{t.admin.username}</label>
+              <label className="admin-field-label">{t.admin.username}</label>
               <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="npr. jhorvat" />
             </div>
             <div>
-              <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{t.admin.password}</label>
+              <label className="admin-field-label">{t.admin.password}</label>
               <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-              <button className="btn btn-blue" onClick={submitUser} style={{ flex: 1 }}>
+            <div className="admin-row-end">
+              <button className="btn btn-blue" onClick={submitUser} className="flex-1">
                 {editingUsername ? <IconEdit /> : <IconPlus />}
                 {editingUsername ? t.admin.editUser : t.admin.addUser}
               </button>
@@ -713,9 +709,9 @@ export default function Admin() {
               )}
             </div>
           </div>
-          {userError && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10, fontWeight: 'bold' }}>{userError}</p>}
+          {userError && <p className="admin-error-text">{userError}</p>}
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -728,23 +724,23 @@ export default function Admin() {
               <tbody>
                 {users.map((u) => (
                   <tr key={u.username}>
-                    <td style={{ fontWeight: 600 }}>{u.username}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{'•'.repeat(Math.min(8, u.password.length))}</td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{lastLogins[u.username] ? new Date(lastLogins[u.username]).toLocaleString() : '—'}</td>
+                    <td className="cell-strong">{u.username}</td>
+                    <td className="cell-muted">{'•'.repeat(Math.min(8, u.password.length))}</td>
+                    <td className="admin-meta">{lastLogins[u.username] ? new Date(lastLogins[u.username]).toLocaleString() : '—'}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div className="admin-row">
                         <button
                           className="btn btn-blue btn-sm"
                           onClick={() => startEdit(u.username, u.password, u.role)}
                         >
-                          <IconEdit style={{ width: 12, height: 12 }} />
+                          <IconEdit className="icon-xs" />
                           {t.admin.edit}
                         </button>
                         <button
                           className="btn btn-red btn-sm"
                           onClick={() => handleDelete(u.username)}
                         >
-                          <IconTrash style={{ width: 12, height: 12 }} />
+                          <IconTrash className="icon-xs" />
                           {t.admin.delete}
                         </button>
                       </div>
@@ -758,47 +754,47 @@ export default function Admin() {
       )}
 
       {adminTab === 'system' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="admin-stack">
           <SyncDiagnostics language={lang} />
           <OverlapEnforcementCard language={lang} conflictCount={detectOperationOverlaps(jobs, machines).length} />
           {/* Key-Value Config Editor */}
-          <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-            <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
+          <div className="step-box admin-card">
+            <div className="step-title admin-section-title">
               <IconGear className="panel-title-icon" /> {lang === 'hr' ? 'Uređivanje Postavki Sustava' : 'System Configuration Editor'}
             </div>
-            <div className="grid-inputs time-settings" style={{ marginBottom: 20 }}>
+            <div className="grid-inputs time-settings stack-gap">
               <div>
-                <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{lang === 'hr' ? 'Trajanje smjene (sati)' : 'Shift Duration (Hours)'}</label>
+                <label className="admin-field-label">{lang === 'hr' ? 'Trajanje smjene (sati)' : 'Shift Duration (Hours)'}</label>
                 <input type="number" min={1} max={24} value={shiftHours} onChange={(e) => setShiftHours(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{lang === 'hr' ? 'Maksimalni tjedni sati' : 'Max Weekly Hours'}</label>
+                <label className="admin-field-label">{lang === 'hr' ? 'Maksimalni tjedni sati' : 'Max Weekly Hours'}</label>
                 <input type="number" min={1} max={168} value={maxHours} onChange={(e) => setMaxHours(e.target.value)} />
               </div>
               <div>
-                <label style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>{lang === 'hr' ? 'Limit uskog grla stroja' : 'Machine Bottleneck Limit (Hrs)'}</label>
+                <label className="admin-field-label">{lang === 'hr' ? 'Limit uskog grla stroja' : 'Machine Bottleneck Limit (Hrs)'}</label>
                 <input type="number" min={1} max={100} value={bottleneckHrs} onChange={(e) => setBottleneckHrs(e.target.value)} />
               </div>
             </div>
-            <button className="btn btn-blue" onClick={saveSystemConfigs} style={{ width: 'auto', padding: '8px 16px' }}>
-              💾 {lang === 'hr' ? 'Spremi Postavke' : 'Save Configurations'}
+            <button className="btn btn-blue" onClick={saveSystemConfigs} className="btn-inline">
+              <IconSave className="panel-title-icon" /> {lang === 'hr' ? 'Spremi Postavke' : 'Save Configurations'}
             </button>
-            {cfgSaved && <span style={{ color: 'var(--success-color)', fontSize: 13, marginLeft: 15, fontWeight: 'bold' }}>✓ Saved!</span>}
+            {cfgSaved && <span className="admin-inline-saved">✓ Saved!</span>}
           </div>
 
           {/* Backup Import/Export Utility */}
-          <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-            <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
-              💾 {lang === 'hr' ? 'Izvoz i Uvoz Sigurnosne Kopije' : 'Database Import/Export Backup'}
+          <div className="step-box admin-card">
+            <div className="step-title admin-section-title">
+              <IconSave className="panel-title-icon" /> {lang === 'hr' ? 'Izvoz i Uvoz Sigurnosne Kopije' : 'Database Import/Export Backup'}
             </div>
-            <p className="subtitle-text" style={{ marginBottom: 20 }}>
+            <p className="subtitle-text stack-gap">
               {lang === 'hr' ? 'Izvezite cijelu lokalnu bazu podataka u JSON datoteku ili učitajte postojeću.' : 'Export your entire local workspace database to a JSON file or import a saved backup.'}
             </p>
-            <div style={{ display: 'flex', gap: 15, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button className="btn btn-green" onClick={handleExportBackup} style={{ width: 'auto', padding: '10px 18px' }}>
-                📤 {lang === 'hr' ? 'Izvezi sigurnosnu kopiju' : 'Export JSON Backup'}
+            <div className="admin-wrap-row is-centered">
+              <button className="btn btn-green" onClick={handleExportBackup} className="btn-inline is-lg">
+                <IconUpload className="panel-title-icon" /> {lang === 'hr' ? 'Izvezi sigurnosnu kopiju' : 'Export JSON Backup'}
               </button>
-              <div style={{ borderLeft: '1px solid var(--border-color)', height: 35, display: 'inline-block' }} />
+              <div className="admin-vrule" />
               <label className="premium-upload premium-upload-compact">
                 <input type="file" accept=".json" onChange={handleImportBackup} />
                 <span className="premium-upload-icon">↥</span>

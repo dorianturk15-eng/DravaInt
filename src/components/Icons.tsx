@@ -243,3 +243,19 @@ export function IconAlertOutline(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function IconUser(props: SVGProps<SVGSVGElement>) {
+  return <svg {...outline({ ...props })}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>;
+}
+
+export function IconKey(props: SVGProps<SVGSVGElement>) {
+  return <svg {...outline({ ...props })}><circle cx="8" cy="15" r="4" /><path d="m10.8 12.2 8-8M17 5l2.5 2.5M14.5 7.5 17 10" /></svg>;
+}
+
+export function IconSave(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...outline({ ...props })}>
+      <path d="M5 3h11l3 3v15H5z" /><path d="M8 3v6h8V3M8 21v-6h8v6" />
+    </svg>
+  );
+}

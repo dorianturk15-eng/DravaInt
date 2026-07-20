@@ -1,0 +1,171 @@
+/* Administration page.
+   Extracted from Admin.tsx inline styles (UI_MODERNIZATION_PLAN Tier 1.1) —
+   this page carried 103 of the app's 304 inline styles, most of them the same
+   handful of patterns repeated per section. */
+
+.admin-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+}
+
+/* Was repeated verbatim on eight section headings. */
+.admin-section-title {
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  margin-bottom: var(--space-5);
+}
+
+.admin-section-title.is-sub {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-4);
+}
+
+/* Was repeated verbatim on twelve form labels. */
+.admin-field-label {
+  display: block;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  margin-bottom: 6px;
+}
+
+.admin-error-text {
+  color: var(--danger-color);
+  font-size: 13px;
+  margin-top: var(--space-2);
+  font-weight: 700;
+}
+
+.admin-meta { color: var(--text-secondary); font-size: var(--text-sm); }
+.admin-meta.is-xs { font-size: var(--text-xs); }
+
+.admin-row { display: flex; gap: var(--space-2); }
+.admin-row-end { display: flex; align-items: flex-end; gap: var(--space-2); }
+
+.admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-3);
+  background: var(--bg-step);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+}
+
+.admin-danger-zone {
+  margin-top: var(--space-6);
+  border: 1px solid var(--danger-color);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+}
+
+/* Logo preview. The white canvas is DELIBERATE and stays white in dark mode:
+   company logos are drawn for white paper and are usually dark-on-transparent,
+   so previewing one on the dark card surface would render it invisible. This
+   is the one place a literal light surface is correct rather than an F2 miss —
+   hence the fixed ink colour on it too. */
+.logo-preview-canvas {
+  text-align: center;
+  border: 1px solid var(--border-color);
+  padding: var(--space-3);
+  border-radius: var(--radius-inner);
+  background: #ffffff;
+}
+
+.logo-preview-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.logo-preview-image {
+  max-height: 60px;
+  width: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Shared-ish helpers this page introduced. */
+.icon-xs { width: 12px; height: 12px; }
+.table-scroll.has-gap { margin-bottom: var(--space-7); }
+
+/* --- Second sweep pass --- */
+
+.stack-gap { margin-bottom: var(--space-5); }
+.stack-gap-lg { margin-bottom: var(--space-6); }
+.flex-1 { flex: 1; }
+.mono { font-family: monospace; }
+
+.admin-split-row { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: center; }
+.admin-split-main { flex: 1; min-width: 200px; }
+.admin-stack { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.admin-wrap-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.admin-wrap-row.has-gap { margin-bottom: var(--space-5); }
+.admin-wrap-row.is-centered { gap: var(--space-4); align-items: center; }
+
+.admin-note { font-size: var(--text-sm); margin-top: var(--space-2); }
+.admin-note.has-gap { margin-top: 0; margin-bottom: var(--space-3); }
+.admin-note.is-md { font-size: 13px; }
+
+.admin-action-bar {
+  justify-content: flex-start;
+  margin-top: var(--space-6);
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--space-5);
+}
+
+.admin-divider-top { border-top: 1px solid var(--border-color); padding-top: var(--space-5); }
+.admin-danger-title { font-weight: 700; color: var(--danger-color); margin-bottom: 6px; }
+
+.admin-vrule {
+  border-left: 1px solid var(--border-color);
+  height: 35px;
+  display: inline-block;
+}
+
+.admin-inline-saved {
+  color: var(--success-color);
+  font-size: 13px;
+  margin-left: var(--space-4);
+  font-weight: 700;
+}
+
+.admin-role-chip {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.role-name { font-weight: 600; }
+.role-name.is-inactive { opacity: 0.55; }
+
+.role-toggle {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.role-toggle.is-active { color: var(--success-color); }
+
+/* Inline-sized form controls, overriding the mobile-first full-width default. */
+.input-inline { width: auto; }
+.input-inline.is-xs { padding: 5px 7px; font-size: 10px; }
+.input-inline.is-wide { min-width: 220px; padding: 6px var(--space-3); font-size: var(--text-sm); }
+.btn-inline { width: auto; padding: var(--space-2) var(--space-4); }
+.btn-inline.is-lg { padding: var(--space-2) 18px; }
+
+/* Table cell sizing. */
+.data-table .cell-sm { font-size: var(--text-sm); }
+.data-table .cell-xs { font-size: var(--text-xs); }
+.data-table .cell-muted { color: var(--text-secondary); }
