@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { InlineNotice } from './Page';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
 import { useSettings, type AppTab } from '../settings/SettingsContext';
@@ -81,7 +82,7 @@ export function SettingsModal({ open, onClose, isAdmin }: { open: boolean; onClo
       <div className="settings-tab-bar" role="tablist">{tabs.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} className={`settings-tab-btn${tab === item.id ? ' active' : ''}`} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
 
       <div className="modal-body settings-body">
-        {notice && <div className="inline-success" role="status">✓ {notice}</div>}
+        {notice && <InlineNotice tone="success">✓ {notice}</InlineNotice>}
 
         {tab === 'general' && <div className="settings-section-grid">
           {matches('language jezik hr en') && <section className="setting-card"><div><strong>{lang === 'hr' ? 'Jezik sučelja' : 'Interface language'}</strong><small>HR / EN</small></div><div className="segmented-setting"><button className={lang === 'hr' ? 'active' : ''} onClick={() => setLang('hr')}>HR</button><button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button></div></section>}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { InlineNotice } from './Page';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { clearParkedMutations, discardOfflineQueueItem, flushOfflineQueue, getOfflineQueueItems, getParkedMutations, OFFLINE_QUEUE_EVENT, type OfflineQueueItem, type ParkedMutation } from '../sync/offlineQueue';
 import { supabase } from '../supabase/client';
@@ -75,7 +76,7 @@ export function SyncDiagnostics({ language }: { language: 'hr' | 'en' }) {
     </div>
 
     {lastError && <div className="sync-error-banner"><strong>{hr ? 'Posljednja pogreška sinkronizacije' : 'Last synchronization error'}</strong><span>{lastError.table} · {lastError.operation} · {lastError.message}</span>{lastError.at && <small>{new Date(lastError.at).toLocaleString(hr ? 'hr-HR' : 'en-GB')}</small>}</div>}
-    {notice && <div className="inline-success">✓ {notice}</div>}
+    {notice && <InlineNotice tone="success">✓ {notice}</InlineNotice>}
 
     <div className="queue-toolbar"><div><strong>{hr ? 'Promjene na čekanju' : 'Pending changes'}</strong><small>{hr ? 'Ponovno pokušajte slanje ili odbacite samo promjenu koju više ne želite primijeniti.' : 'Retry delivery or discard only a change that should no longer be applied.'}</small></div><button className="btn btn-blue" onClick={() => void retry()} disabled={busy || !online || !supabase || queue.length === 0}>{busy ? (hr ? 'Sinkronizacija…' : 'Syncing…') : (hr ? 'Pokušaj ponovno' : 'Retry all')}</button></div>
     {queue.length ? <div className="queue-list">{queue.map((item) => <article key={item.id}><span className={`queue-operation operation-${item.operation}`}>{item.operation}</span><div><strong>{item.table}</strong><small>{new Date(item.createdAt).toLocaleString(hr ? 'hr-HR' : 'en-GB')} · #{item.id}</small></div><code>{Object.keys(item.payload ?? item.match ?? {}).slice(0, 4).join(', ') || 'record'}</code><button onClick={() => item.id && void discard(item.id)}>{hr ? 'Odbaci' : 'Discard'}</button></article>)}</div> : <div className="queue-empty"><span>✓</span><strong>{hr ? 'Nema promjena na čekanju' : 'No pending changes'}</strong><small>{hr ? 'Lokalni i udaljeni podaci su usklađeni.' : 'Local and remote data are aligned.'}</small></div>}

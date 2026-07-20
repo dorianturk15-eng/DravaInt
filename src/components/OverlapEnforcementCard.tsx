@@ -1,3 +1,4 @@
+import { IconAlert } from './Icons';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
 
@@ -82,51 +83,51 @@ export function OverlapEnforcementCard({ language, conflictCount }: OverlapEnfor
   const enforceBlocked = conflictCount > 0 && !override;
 
   return (
-    <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-      <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 16 }}>
-        🚦 {hr ? 'Provođenje preklapanja operacija' : 'Operation overlap enforcement'}
+    <div className="step-box admin-card">
+      <div className="step-title oec-title">
+        <IconAlert className="panel-title-icon" /> {hr ? 'Provođenje preklapanja operacija' : 'Operation overlap enforcement'}
       </div>
-      <p className="subtitle-text" style={{ fontSize: 12, marginBottom: 16 }}>
+      <p className="subtitle-text text-sm oec-lead">
         {hr
           ? 'Phase D bilježi preklapanja operacija na istom stroju. U načinu "warn" upozorenja se zapisuju, ali se upis dopušta; "enforce" odbija upis (DR001).'
           : 'Phase D detects operations sharing a machine. In "warn" mode conflicts are logged but the write is allowed; "enforce" rejects the write (DR001).'}
       </p>
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+      <div className="oec-stat-row">
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>{hr ? 'Trenutni način' : 'Current mode'}</div>
-          <strong style={{ fontSize: 18, color: mode === 'enforce' ? 'var(--danger-color)' : 'var(--text-primary)' }}>{mode === 'unknown' ? '—' : mode}</strong>
+          <div className="oec-stat-label">{hr ? 'Trenutni način' : 'Current mode'}</div>
+          <strong className={`oec-stat-value${mode === 'enforce' ? ' is-danger' : ''}`}>{mode === 'unknown' ? '—' : mode}</strong>
         </div>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>{hr ? 'Nerazriješeni konflikti' : 'Unresolved conflicts'}</div>
-          <strong style={{ fontSize: 18, color: conflictCount > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>{conflictCount}</strong>
+          <div className="oec-stat-label">{hr ? 'Nerazriješeni konflikti' : 'Unresolved conflicts'}</div>
+          <strong className={`oec-stat-value${conflictCount > 0 ? ' is-danger' : ' is-ok'}`}>{conflictCount}</strong>
         </div>
       </div>
 
       {conflictCount > 0 && (
-        <p style={{ color: 'var(--danger-color)', fontSize: 12, marginBottom: 10 }}>
+        <p className="oec-error">
           {hr ? `${conflictCount} nerazriješen(ih) konflikt(a) — razriješite ih prije provođenja.` : `${conflictCount} unresolved conflict(s) — resolve them before enforcing.`}
         </p>
       )}
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+      <div className="oec-action-row">
         <button type="button" className="btn btn-blue" disabled={saving || mode === 'warn'} onClick={() => void writeMode('warn')}>{hr ? 'Postavi na "warn"' : 'Set "warn"'}</button>
         <button type="button" className="btn btn-red" disabled={saving || mode === 'enforce' || enforceBlocked} onClick={() => void writeMode('enforce')}>{hr ? 'Provedi ("enforce")' : 'Enforce'}</button>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+        <label className="oec-inline-label">
           <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} disabled={conflictCount === 0} />
           {hr ? 'Nadjačaj (provedi unatoč konfliktima)' : 'Override (enforce despite conflicts)'}
         </label>
       </div>
-      {message && <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>{message}</p>}
+      {message && <p className="oec-hint">{message}</p>}
 
-      <div style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 14 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{hr ? 'Nedavna upozorenja (warn)' : 'Recent overlap warnings'}</div>
+      <div className="oec-divider-top">
+        <div className="oec-subhead">{hr ? 'Nedavna upozorenja (warn)' : 'Recent overlap warnings'}</div>
         {warningsError ? (
-          <p className="subtitle-text" style={{ fontSize: 12 }}>{warningsError}</p>
+          <p className="subtitle-text text-sm">{warningsError}</p>
         ) : warnings.length === 0 ? (
-          <p className="subtitle-text" style={{ fontSize: 12 }}>{hr ? 'Nema zabilježenih upozorenja.' : 'No warnings logged.'}</p>
+          <p className="subtitle-text text-sm">{hr ? 'Nema zabilježenih upozorenja.' : 'No warnings logged.'}</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
             <table className="data-table">
               <thead><tr><th>{hr ? 'Nalog' : 'Job'}</th><th>{hr ? 'Stroj' : 'Machine'}</th><th>{hr ? 'Drugi nalog' : 'Other order'}</th><th>{hr ? 'Vrijeme' : 'Time'}</th></tr></thead>
               <tbody>
@@ -135,7 +136,7 @@ export function OverlapEnforcementCard({ language, conflictCount }: OverlapEnfor
                     <td>{row.recordId}</td>
                     <td>{row.machine ?? '—'}</td>
                     <td>{row.otherOrder ?? '—'}</td>
-                    <td style={{ fontSize: 11 }}>{new Date(row.createdAt).toLocaleString()}</td>
+                    <td className="text-xs">{new Date(row.createdAt).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

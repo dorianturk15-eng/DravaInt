@@ -36,7 +36,8 @@
 .planner-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .planner-actions .btn { width: auto; }
 .btn-ghost { background: var(--bg-step); color: var(--text-primary); border: 1px solid var(--border-color); }
-.inline-success { margin-top: 12px; padding: 9px 12px; color: var(--success-color); background: color-mix(in srgb, var(--success-color) 10%, transparent); border-radius: 8px; font-size: 12px; font-weight: 700; }
+/* .inline-success retired — every call site now uses InlineNotice (see
+   src/components/Page.tsx). Removed rather than left as a dead rule. */
 
 .planner-sidebar-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.75fr); gap: 16px; margin-bottom: 16px; }
 .participant-panel, .absence-panel { padding: 18px; }

@@ -596,7 +596,7 @@ export default function ShiftSchedule() {
               <label className="weekend-toggle"><input type="checkbox" checked={showWeekend} onChange={(event) => setShowWeekend(event.target.checked)} /> {lang === 'hr' ? 'Prikaži vikend (sub/ned)' : 'Show weekend (Sat/Sun)'}</label>
               <small>{lang === 'hr' ? 'Vikend se ne rotira automatski — dodijelite ga ručno.' : 'Weekends are not auto-filled — assign them by hand.'}</small>
             </div>
-            {saved && <div className="inline-success" role="status">✓ {lang === 'hr' ? 'Raspored je spremljen.' : 'Schedule saved.'}</div>}
+            {saved && <InlineNotice tone="success">✓ {lang === 'hr' ? 'Raspored je spremljen.' : 'Schedule saved.'}</InlineNotice>}
             {generationError && <div className="inline-error" role="alert">{generationError}</div>}
           </section>
 

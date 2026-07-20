@@ -118,3 +118,50 @@
   background: color-mix(in srgb, var(--danger-color) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--danger-color) 24%, transparent);
 }
+
+/* ===== Operation overlap enforcement card (Admin > Sustav) =====
+   Extracted from OverlapEnforcementCard.tsx inline styles. This component
+   predates the sweep and was not in the plan's "304 across the 7 pages"
+   count — the audit only counted pages. */
+
+.oec-title { font-size: var(--text-lg); color: var(--text-primary); margin-bottom: var(--space-4); }
+.oec-lead { margin-bottom: var(--space-4); }
+.oec-subhead { font-weight: 700; font-size: 13px; margin-bottom: var(--space-2); }
+.oec-error { color: var(--danger-color); font-size: var(--text-sm); margin-bottom: var(--space-2); }
+.oec-hint { font-size: var(--text-sm); color: var(--text-secondary); margin-top: 6px; }
+
+.oec-stat-row {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.oec-action-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.oec-inline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+}
+
+.oec-divider-top {
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--border-color);
+  padding-top: 14px;
+}
+
+.oec-stat-label { font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); }
+
+/* State-driven colour becomes a modifier rather than a ternary in a style object. */
+.oec-stat-value { font-size: 18px; color: var(--text-primary); }
+.oec-stat-value.is-danger { color: var(--danger-color); }
+.oec-stat-value.is-ok { color: var(--success-color); }
