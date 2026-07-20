@@ -381,7 +381,7 @@ export default function Admin() {
               </div>
             )}
             <div className="admin-row-end">
-              <button className="btn btn-blue" onClick={submitMachine} className="flex-1">
+              <button className="btn btn-blue flex-1" onClick={submitMachine}>
                 {editingMachineId ? <IconEdit /> : <IconPlus />}
                 {editingMachineId ? t.admin.editMachine : t.admin.addMachine}
               </button>
@@ -536,7 +536,7 @@ export default function Admin() {
               <input value={workerQualifications} onChange={(e) => setWorkerQualifications(e.target.value)} placeholder="CNC-1, CNC-2, Kontrola kvalitete" />
             </div>
             <div className="admin-row-end">
-              <button className="btn btn-blue" onClick={handleAddWorker} className="flex-1">
+              <button className="btn btn-blue flex-1" onClick={handleAddWorker}>
                 {editingWorkerId !== null ? <IconEdit /> : <IconPlus />}
                 {editingWorkerId !== null ? (lang === 'hr' ? 'Uredi radnika' : 'Edit Worker') : (lang === 'hr' ? 'Dodaj radnika' : 'Add Worker')}
               </button>
@@ -654,7 +654,7 @@ export default function Admin() {
                   placeholder={t.roles.roleName}
                 />
               </div>
-              <button className="btn btn-blue" onClick={submitRole} className="btn-inline">
+              <button className="btn btn-blue btn-inline" onClick={submitRole}>
                 <IconPlus />
                 {t.roles.addRole}
               </button>
@@ -698,7 +698,7 @@ export default function Admin() {
               <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
             </div>
             <div className="admin-row-end">
-              <button className="btn btn-blue" onClick={submitUser} className="flex-1">
+              <button className="btn btn-blue flex-1" onClick={submitUser}>
                 {editingUsername ? <IconEdit /> : <IconPlus />}
                 {editingUsername ? t.admin.editUser : t.admin.addUser}
               </button>
@@ -776,7 +776,7 @@ export default function Admin() {
                 <input type="number" min={1} max={100} value={bottleneckHrs} onChange={(e) => setBottleneckHrs(e.target.value)} />
               </div>
             </div>
-            <button className="btn btn-blue" onClick={saveSystemConfigs} className="btn-inline">
+            <button className="btn btn-blue btn-inline" onClick={saveSystemConfigs}>
               <IconSave className="panel-title-icon" /> {lang === 'hr' ? 'Spremi Postavke' : 'Save Configurations'}
             </button>
             {cfgSaved && <span className="admin-inline-saved">✓ Saved!</span>}
@@ -791,7 +791,7 @@ export default function Admin() {
               {lang === 'hr' ? 'Izvezite cijelu lokalnu bazu podataka u JSON datoteku ili učitajte postojeću.' : 'Export your entire local workspace database to a JSON file or import a saved backup.'}
             </p>
             <div className="admin-wrap-row is-centered">
-              <button className="btn btn-green" onClick={handleExportBackup} className="btn-inline is-lg">
+              <button className="btn btn-green btn-inline is-lg" onClick={handleExportBackup}>
                 <IconUpload className="panel-title-icon" /> {lang === 'hr' ? 'Izvezi sigurnosnu kopiju' : 'Export JSON Backup'}
               </button>
               <div className="admin-vrule" />

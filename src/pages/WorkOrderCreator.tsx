@@ -351,7 +351,7 @@ export default function WorkOrderCreator() {
             <span className="text-xs-muted has-inset">({job.machine || 'General'})</span>
             {job.operator && <span className="woc-chip">{job.operator}</span>}
           </div>
-          <button className="btn btn-blue" onClick={() => setPrintOrderId(job.id)} className="btn-mini">
+          <button className="btn btn-blue btn-mini" onClick={() => setPrintOrderId(job.id)}>
             <IconPrint className="icon-xs has-gap-r" />
             {t.workOrders.print}
           </button>
@@ -542,7 +542,7 @@ export default function WorkOrderCreator() {
             </select>
           </div>
           <div className="row-end-tight">
-            <button className="btn btn-blue" onClick={addOperation} className="w-full">
+            <button className="btn btn-blue w-full" onClick={addOperation}>
               <IconPlus className="inline-icon" />
               {editingOpId !== null ? (lang === 'hr' ? 'Spremi korak' : 'Save step') : t.workOrders.addOperation}
             </button>
@@ -755,7 +755,7 @@ export default function WorkOrderCreator() {
                       <div className="text-sm-strong">{snap.label}</div>
                       <div className="text-xxs-muted">{new Date(snap.timestamp).toLocaleString()}</div>
                     </div>
-                    <button className="btn btn-blue" onClick={() => restoreSnapshot(snap.jobs)} className="btn-mini is-md">
+                    <button className="btn btn-blue btn-mini is-md" onClick={() => restoreSnapshot(snap.jobs)}>
                       <IconRefresh className="inline-icon-sm icon-xs" /> {lang === 'hr' ? 'Vrati' : 'Restore'}
                     </button>
                   </div>

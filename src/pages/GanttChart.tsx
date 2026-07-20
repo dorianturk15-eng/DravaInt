@@ -848,13 +848,12 @@ export default function GanttChart() {
       </div>
 
       <div className="gantt-button-row">
-        <button className="btn btn-blue" onClick={saveBaseline} className="btn-mini is-md">
+        <button className="btn btn-blue btn-mini is-md" onClick={saveBaseline}>
           💾 {lang === 'hr' ? 'Spremi bazni plan' : 'Save Baseline'}
         </button>
         <button
-          className="btn btn-green"
+          className={`btn btn-green btn-mini is-md gantt-baseline-toggle${showBaseline ? ' is-on' : ''}`}
           onClick={() => setShowBaseline(!showBaseline)}
-          className={`btn-mini is-md gantt-baseline-toggle${showBaseline ? ' is-on' : ''}`}
         >
           🔍 {lang === 'hr' ? 'Prikaži odstupanja' : 'Show Deviations'}
         </button>

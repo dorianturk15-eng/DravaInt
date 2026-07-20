@@ -336,7 +336,7 @@ export default function ProgressMonitoring() {
                 <div><strong className="text-muted">{t.workOrders.orderNumber}:</strong> <span className="text-strong">{job.order}</span></div>
                 <div><strong className="text-muted">{t.workOrders.product}:</strong> {job.operator || '-'}</div>
                 <div><strong className="text-muted">{t.machines.machine}:</strong> {job.machine}</div>
-                <div><strong className="text-muted">{t.common.status}:</strong> <span className={`status-pill status-${job.status}`} className="text-xs">{t.progress.statusOptions[job.status]}</span></div>
+                <div><strong className="text-muted">{t.common.status}:</strong> <span className={`status-pill status-${job.status} text-xs`}>{t.progress.statusOptions[job.status]}</span></div>
                 <div><strong className="text-muted">{t.common.progressLabel}:</strong> <span className="text-strong">{job.progress}%</span></div>
                 <div><strong className="text-muted">{t.common.start}:</strong> {job.start ? new Date(job.start).toLocaleString() : '-'}</div>
                 <div><strong className="text-muted">{t.common.end}:</strong> {job.end ? new Date(job.end).toLocaleString() : '-'}</div>
