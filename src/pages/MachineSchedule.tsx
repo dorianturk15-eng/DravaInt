@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { IconPlus } from '../components/Icons';
+import { PageHeader } from '../components/Page';
 import { useScheduling } from '../scheduling/SchedulingContext';
 import { useMachines } from '../machines/MachinesContext';
 import { useWorkers } from '../workers/WorkersContext';
@@ -45,13 +46,22 @@ export default function MachineSchedule() {
 
   return (
     <div className="wizard-container">
-      <h2 className="mb-xs">{t.machines.title}</h2>
-      <p className="subtitle-text text-md woc-lead">{t.machines.subtitle}</p>
+      <PageHeader title={t.machines.title} subtitle={t.machines.subtitle} />
+
+
+      <MachineBoard />
+
+      <p className="subtitle-text text-sm mt-lg">
+        {t.machines.sharedNote}
+      </p>
 
       <details className="step-box board-add-manually">
         <summary className="step-title">
-          <span className="step-number">1</span>
+          <span className="disclosure-chevron" aria-hidden="true" />
           {t.machines.addJob} · {t.machineBoard.addManually}
+          <small>{lang === 'hr'
+            ? 'Stariji obrazac — stvara nalog bez rute. Za uobičajen rad koristite ploču iznad.'
+            : 'Legacy form — creates a job with no routing. For normal work use the board above.'}</small>
         </summary>
         <div className="grid-inputs workers-ruster">
           <div>
@@ -116,15 +126,6 @@ export default function MachineSchedule() {
         </div>
       </details>
 
-      <p className="subtitle-text text-sm mt-lg">
-        {t.machines.sharedNote}
-      </p>
-
-      <div className="step-title mt-lg">
-        <span className="step-number">2</span>
-        {t.machines.title}
-      </div>
-      <MachineBoard />
     </div>
   );
 }

@@ -201,8 +201,46 @@
 .board-empty-hint p { margin: 0; font-size: 13px; }
 
 /* Legacy manual-add collapsed section */
-.board-add-manually > summary { cursor: pointer; list-style: revert; }
-.board-add-manually[open] > summary { margin-bottom: 12px; }
+/* Legacy manual-add form. It now sits BELOW the board (F10): the page used to
+   open with "Step 1: add job manually" above the actual work surface, which
+   inverted their importance — the board has its own quick-create, so this form
+   is the secondary path, not the entry point.
+   The summary gets a visible chevron and an explanatory line rather than
+   relying on the bare default disclosure triangle (F9). */
+.board-add-manually > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.board-add-manually > summary::-webkit-details-marker { display: none; }
+.board-add-manually[open] > summary { margin-bottom: var(--space-3); }
+
+.board-add-manually > summary small {
+  flex: 1 0 100%;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--text-secondary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.disclosure-chevron {
+  /* inline-block: transforms do not render on non-replaced inline elements. */
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: rotate(-45deg);
+  transition: transform var(--transition-fast);
+}
+
+details[open] > summary .disclosure-chevron { transform: rotate(45deg); }
 
 /* Dashboard capacity → board link */
 .dashboard-machine-link { border: none; background: transparent; color: var(--primary-color); font: inherit; cursor: pointer; padding: 0; text-align: left; }
