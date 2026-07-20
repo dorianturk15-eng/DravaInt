@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildShiftSchedulePdf, titleBlockRows, dayMonth, dayMonthYear, dayMonthRange,
+  layoutColumns, CONTENT_W,
   type ShiftPdfInput,
 } from './shiftPdf';
 import type { ShiftDefinition, ShiftScheduleRecord } from './ShiftsContext';
@@ -187,5 +188,30 @@ describe('document dates follow the document language', () => {
     const months = Array.from({ length: 12 }, (_, m) =>
       dayMonth(`2026-${String(m + 1).padStart(2, '0')}-01`, 'en').slice(3));
     expect(months).toEqual(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+  });
+});
+
+describe('table fills the sheet width', () => {
+  it('leaves no dead space on the right at any week count', () => {
+    // The table used to stop short of the right margin whenever a fixed
+    // per-week maximum kicked in — 24mm adrift at five weeks, 63mm at four —
+    // which read as an unfinished sheet rather than as deliberate white space.
+    for (let weeks = 1; weeks <= 12; weeks++) {
+      const { nameW, blockW } = layoutColumns(weeks);
+      expect(nameW + blockW * weeks).toBeCloseTo(CONTENT_W, 6);
+    }
+  });
+
+  it('spends surplus width on the name column before padding the weeks', () => {
+    // Few weeks: the name column takes the slack, so long names stop truncating.
+    expect(layoutColumns(4).nameW).toBeGreaterThan(layoutColumns(8).nameW);
+    // Many weeks: nothing spare, so the name column stays at its minimum.
+    expect(layoutColumns(8).nameW).toBe(46);
+  });
+
+  it('never starves a week column below what a shift code needs', () => {
+    for (let weeks = 1; weeks <= 12; weeks++) {
+      expect(layoutColumns(weeks).blockW).toBeGreaterThan(15);
+    }
   });
 });

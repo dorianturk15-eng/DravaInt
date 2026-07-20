@@ -43,7 +43,7 @@ const PAGE_H = 210;
 const MARGIN_X = 16;
 const MARGIN_TOP = 16;
 const MARGIN_BOTTOM = 15;
-const CONTENT_W = PAGE_W - MARGIN_X * 2;
+export const CONTENT_W = PAGE_W - MARGIN_X * 2;
 
 // Ink palette — restrained, print-appropriate. Body is near-black rather than
 // pure black, which reads softer on paper, matching how TeX renders.
@@ -493,9 +493,19 @@ function drawHeader(
 // Week/uniformity are computed by src/shifts/rotation.ts — the same helpers the
 // Rotation Board uses — so the sheet and the screen cannot disagree.
 
-const NAME_W = 46;
+/** Minimum width of the worker-name column. It grows to absorb surplus width
+ *  when there are few week columns — see layoutColumns(). */
+const NAME_W_MIN = 46;
+/** Past this the name column stops looking like a column and starts looking
+ *  like a margin, so any further surplus goes to the week columns instead. */
+const NAME_W_MAX = 74;
 /** Hours sub-column at the right of each week column. */
 const WEEK_HOURS_W = 9;
+/** Narrowest a week column may be before it stops fitting "1 06–14". */
+const WEEK_BLOCK_MIN = 17 + WEEK_HOURS_W;
+/** The width a week column actually wants; beyond this, extra space is better
+ *  spent on the name column than on padding an already-comfortable cell. */
+const WEEK_BLOCK_PREFERRED = 30 + WEEK_HOURS_W;
 const WEEK_TIER_H = 5.4;
 const WEEK_DATE_TIER_H = 5.4;
 const GRID_HEAD_H = WEEK_TIER_H + WEEK_DATE_TIER_H;
@@ -542,6 +552,26 @@ function buildRoster(input: ShiftPdfInput, weeks: ShiftScheduleRecord[]): Array<
     .map(({ id, group }) => ({ id, group }));
 }
 
+/**
+ * Share the content width between the name column and the week columns so the
+ * table always reaches the right margin.
+ *
+ * A fixed per-week maximum used to leave the table stopping short: five weeks
+ * ended 24mm shy of the margin and four weeks 63mm, which read as the sheet
+ * being unfinished rather than as deliberate white space. Surplus now goes to
+ * the name column first — where it buys something real, since long Croatian
+ * names were being truncated — and once that is full, to the week columns.
+ */
+export function layoutColumns(weekCount: number): { nameW: number; blockW: number } {
+  const even = (CONTENT_W - NAME_W_MIN) / weekCount;
+  if (even <= WEEK_BLOCK_PREFERRED) return { nameW: NAME_W_MIN, blockW: even };
+  // More room than the week columns want: widen the name column, then spread
+  // whatever is still spare back across the weeks.
+  const surplus = (even - WEEK_BLOCK_PREFERRED) * weekCount;
+  const nameW = Math.min(NAME_W_MAX, NAME_W_MIN + surplus);
+  return { nameW, blockW: (CONTENT_W - nameW) / weekCount };
+}
+
 interface WeekCell {
   /** The week's shift, or null when the worker has no assignments that week. */
   definition: ShiftDefinition | null;
@@ -583,14 +613,14 @@ function drawGroupHeading(doc: jsPDF, heading: string, y: number, tableRight: nu
 }
 
 /** Vertical hairlines separating the name column and each week block. */
-function drawVerticals(doc: jsPDF, blocks: WeekBlock[], yTop: number, yBottom: number) {
+function drawVerticals(doc: jsPDF, blocks: WeekBlock[], nameW: number, yTop: number, yBottom: number) {
   setDraw(doc, HAIRLINE);
   doc.setLineWidth(0.2);
-  doc.line(MARGIN_X + NAME_W, yTop, MARGIN_X + NAME_W, yBottom);
+  doc.line(MARGIN_X + nameW, yTop, MARGIN_X + nameW, yBottom);
   blocks.forEach((b) => doc.line(b.x + b.w, yTop, b.x + b.w, yBottom));
 }
 
-function drawGridHeader(doc: jsPDF, input: ShiftPdfInput, blocks: WeekBlock[], y: number): number {
+function drawGridHeader(doc: jsPDF, input: ShiftPdfInput, blocks: WeekBlock[], nameW: number, y: number): number {
   const t = L[input.lang];
   const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
   const lastDay = blocks[0].dates.length - 1;
@@ -637,7 +667,7 @@ function drawGridHeader(doc: jsPDF, input: ShiftPdfInput, blocks: WeekBlock[], y
   // Thin rule between the week tier and the date tier.
   setDraw(doc, HAIRLINE);
   doc.setLineWidth(0.2);
-  doc.line(MARGIN_X + NAME_W, y + WEEK_TIER_H, tableRight, y + WEEK_TIER_H);
+  doc.line(MARGIN_X + nameW, y + WEEK_TIER_H, tableRight, y + WEEK_TIER_H);
 
   const bottom = y + GRID_HEAD_H;
   setDraw(doc, RULE);
@@ -652,6 +682,7 @@ function drawGridRow(
   blocks: WeekBlock[],
   codes: Map<number, number>,
   order: number[],
+  nameW: number,
   workerId: number,
   rowNumber: number,
   y: number,
@@ -678,7 +709,7 @@ function drawGridRow(
   doc.setFontSize(9.2);
   setInk(doc, INK);
   let name = input.workerName(workerId);
-  while (doc.getTextWidth(name) > MARGIN_X + NAME_W - nameX - 1.5 && name.length > 4) name = `${name.slice(0, -2)}…`;
+  while (doc.getTextWidth(name) > MARGIN_X + nameW - nameX - 1.5 && name.length > 4) name = `${name.slice(0, -2)}…`;
   doc.text(name, nameX, midY);
 
   // One block per worker-week, plus the weekly-hours total.
@@ -698,14 +729,19 @@ function drawGridRow(
       const textY = y + BODY_ROW_H / 2 + 1.2;
 
       if (cell.uniform) {
-        const times = `${cell.definition.startTime.slice(0, 2)}–${cell.definition.endTime.slice(0, 2)}`;
         doc.setFont(FONT, 'bold');
         doc.setFontSize(8.8);
         const codeW = doc.getTextWidth(code);
+        const gap = 1.6;
+        // Spend a wide column on the full times rather than on padding: with
+        // only a few weeks on the sheet the columns are generous, and
+        // "06:00–14:00" is more useful there than whitespace.
         doc.setFont(FONT, 'normal');
         doc.setFontSize(7.6);
+        const full = `${cell.definition.startTime}–${cell.definition.endTime}`;
+        const short = `${cell.definition.startTime.slice(0, 2)}–${cell.definition.endTime.slice(0, 2)}`;
+        const times = codeW + gap + doc.getTextWidth(full) <= cellW ? full : short;
         const timesW = doc.getTextWidth(times);
-        const gap = 1.6;
         const showTimes = codeW + gap + timesW <= cellW;
         const totalW = showTimes ? codeW + gap + timesW : codeW;
         const startX = cellX + Math.max(0, (cellW - totalW) / 2);
@@ -834,12 +870,8 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
 
   // How many week-blocks fit across the sheet, and how wide each is once the
   // available width is shared out (kept within sensible min/max bounds).
-  const availW = CONTENT_W - NAME_W;
   // A week column holds "1 06–14" (or five day codes) plus the hours cell.
-  // Below the minimum the times drop and only the shift code prints.
-  const minBlockW = 17 + WEEK_HOURS_W;
-  const maxBlockW = 30 + WEEK_HOURS_W;
-  const weeksPerPage = Math.max(1, Math.floor(availW / minBlockW));
+  const weeksPerPage = Math.max(1, Math.floor((CONTENT_W - NAME_W_MIN) / WEEK_BLOCK_MIN));
 
   const chunks: ShiftScheduleRecord[][] = [];
   for (let i = 0; i < weeks.length; i += weeksPerPage) chunks.push(weeks.slice(i, i + weeksPerPage));
@@ -847,11 +879,11 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
 
   let firstPage = true;
   chunks.forEach((chunkWeeks) => {
-    const blockW = Math.min(maxBlockW, Math.max(minBlockW, availW / chunkWeeks.length));
+    const { nameW, blockW } = layoutColumns(chunkWeeks.length);
     const blocks: WeekBlock[] = chunkWeeks.map((schedule, i) => ({
       schedule,
       dates: datesOf(schedule, dayCount),
-      x: MARGIN_X + NAME_W + i * blockW,
+      x: MARGIN_X + nameW + i * blockW,
       w: blockW,
     }));
     const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
@@ -869,7 +901,7 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
 
       let y = drawHeader(doc, input, chunkWeeks, roster.length, defs, codes);
       const gridTop = y;
-      y = drawGridHeader(doc, input, blocks, y);
+      y = drawGridHeader(doc, input, blocks, nameW, y);
 
       let prevGroup: string | null = null;
       let drawn = 0;
@@ -896,7 +928,7 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
             y += GROUP_LABEL_H;
           }
         }
-        drawGridRow(doc, input, blocks, codes, order, id, rowStart + 1, y, drawn % 2 === 1);
+        drawGridRow(doc, input, blocks, codes, order, nameW, id, rowStart + 1, y, drawn % 2 === 1);
         prevGroup = group;
         y += BODY_ROW_H;
         rowStart += 1;
@@ -907,7 +939,7 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
       setDraw(doc, RULE);
       doc.setLineWidth(0.5);
       doc.line(MARGIN_X, y, tableRight, y);
-      drawVerticals(doc, blocks, gridTop, y);
+      drawVerticals(doc, blocks, nameW, gridTop, y);
 
       drawLegendAndFootnote(doc, input, footerTop);
       drawSignatures(doc, input);
