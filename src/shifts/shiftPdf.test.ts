@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildShiftSchedulePdf, type ShiftPdfInput } from './shiftPdf';
+import { buildShiftSchedulePdf, titleBlockRows, type ShiftPdfInput } from './shiftPdf';
 import type { ShiftDefinition, ShiftScheduleRecord } from './ShiftsContext';
 
 const definitions: ShiftDefinition[] = [
@@ -80,6 +80,26 @@ describe('buildShiftSchedulePdf', () => {
     // Smoke test: a 7-day layout must still build without overflow errors.
     const doc = await buildShiftSchedulePdf(makeInput({ dayCount: 7 }));
     expect(doc.getNumberOfPages()).toBe(1);
+  });
+
+  it('still builds with a company name set (metadata/monogram use only)', async () => {
+    // companyName no longer prints on the letterhead, but it still feeds the
+    // monogram fallback and PDF metadata, so the input contract is unchanged.
+    const doc = await buildShiftSchedulePdf(makeInput({ companyName: 'Drava International d.o.o.' }));
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
+
+  it('leads the title block with a facility row built from the department', () => {
+    const rows = titleBlockRows('hr', 'Objavljeno', 'Alatnica', 'Ivan');
+    expect(rows[0]).toEqual(['Pogon', 'Proizvodni pogon - Alatnica']);
+    // The department is data-driven, not hardcoded to Alatnica.
+    expect(titleBlockRows('hr', 'Nacrt', 'Kontrola kvalitete')[0][1])
+      .toBe('Proizvodni pogon - Kontrola kvalitete');
+    expect(titleBlockRows('en', 'Draft', 'Alatnica')[0])
+      .toEqual(['Facility', 'Production plant - Alatnica']);
+    // The pre-existing rows still follow, in order.
+    expect(rows.map(([label]) => label))
+      .toEqual(['Pogon', 'Dokument', 'Izrađeno', 'Izradio', 'Status']);
   });
 
   it('paginates a large crew onto extra sheets', async () => {

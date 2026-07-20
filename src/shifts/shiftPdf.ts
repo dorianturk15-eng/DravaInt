@@ -127,6 +127,7 @@ const L = {
     partial: 'Djelomično',
     workersOf: 'radnika',
     department: 'Odjel',
+    plantLabel: 'Pogon',
     docLabel: 'Dokument',
     createdLabel: 'Izrađeno',
     byLabel: 'Izradio',
@@ -154,6 +155,7 @@ const L = {
     partial: 'Partial',
     workersOf: 'workers',
     department: 'Department',
+    plantLabel: 'Facility',
     docLabel: 'Document',
     createdLabel: 'Created',
     byLabel: 'Prepared by',
@@ -239,14 +241,33 @@ function drawLogo(doc: jsPDF, input: ShiftPdfInput, x: number, y: number) {
  * engineering drawings — stating what the document is, when it was created, by
  * whom, and its approval status. Anchored top-right.
  */
-function drawTitleBlock(doc: jsPDF, input: ShiftPdfInput, statusText: string, x: number, y: number, w: number) {
-  const t = L[input.lang];
-  const rows: Array<[string, string]> = [
+export function titleBlockRows(
+  lang: 'hr' | 'en',
+  statusText: string,
+  department: string,
+  preparedBy?: string,
+): Array<[string, string]> {
+  const t = L[lang];
+  return [
+    // Facility first: what plant → what document → when → who → status.
+    [t.plantLabel, `${t.plant} - ${department}`],
     [t.docLabel, t.docName],
     [t.createdLabel, docStamp()],
-    [t.byLabel, input.preparedBy?.trim() || '—'],
+    [t.byLabel, preparedBy?.trim() || '—'],
     [t.status, statusText],
   ];
+}
+
+function drawTitleBlock(
+  doc: jsPDF,
+  input: ShiftPdfInput,
+  statusText: string,
+  department: string,
+  x: number,
+  y: number,
+  w: number,
+) {
+  const rows = titleBlockRows(input.lang, statusText, department, input.preparedBy);
   const rowH = 6.6;
   const labelW = 26;
   const height = rowH * rows.length;
@@ -318,21 +339,23 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, weeks: ShiftScheduleRecord
   const t = L[input.lang];
   const y = MARGIN_TOP;
 
-  // --- Letterhead: logo + company name, left ---
+  // --- Letterhead: logo only, left ---
+  // No company-name text line: the logo is the letterhead. `companyName` is
+  // still used for the monogram fallback in drawLogo and for PDF metadata.
   drawLogo(doc, input, MARGIN_X, y);
-  const textX = MARGIN_X + LOGO_BOX + 5;
-  doc.setFont(FONT, 'bold');
-  doc.setFontSize(13);
-  setInk(doc, INK);
-  doc.text(input.companyName ?? 'DravaInt', textX, y + 7);
-  doc.setFont(FONT, 'normal');
-  doc.setFontSize(9);
-  setInk(doc, MUTED);
-  doc.text(`${t.plant} · ${weeks[0].department}`, textX, y + 12.5);
 
   // --- Document title block, right ---
+  // The plant/department identity now lives in the block's first row.
   const blockW = 86;
-  drawTitleBlock(doc, input, statusFor(weeks, input.lang), PAGE_W - MARGIN_X - blockW, y, blockW);
+  const blockH = drawTitleBlock(
+    doc,
+    input,
+    statusFor(weeks, input.lang),
+    weeks[0].department,
+    PAGE_W - MARGIN_X - blockW,
+    y,
+    blockW,
+  );
 
   // --- Document title + range, left, below the letterhead ---
   doc.setFont(FONT, 'bold');
@@ -345,7 +368,9 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, weeks: ShiftScheduleRecord
   setInk(doc, MUTED);
   doc.text(`${rangeFor(weeks, input.lang)}   ·   ${rosterCount} ${t.workersOf}`, MARGIN_X, y + 36);
 
-  const ruleY = y + 40;
+  // Derive the rule from whichever column runs longer, so adding a title-block
+  // row pushes the rule down instead of colliding with it.
+  const ruleY = Math.max(y + 40, y + blockH + 4);
   // Letterhead rule: heavy rule + hairline just beneath — reads as "official".
   setDraw(doc, RULE);
   doc.setLineWidth(0.7);
