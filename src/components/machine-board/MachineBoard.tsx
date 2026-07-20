@@ -16,7 +16,7 @@ import {
 import { toLocalDateTimeString } from '../../scheduling/cpm';
 import { buildMachineLookup, resolveMachineId } from '../../scheduling/machineIdentity';
 import { requestFocus } from '../../navigation/focusTarget';
-import { useMachineBoardController } from './useMachineBoardController';
+import { useMachineBoardController, resolveBoundaryResize } from './useMachineBoardController';
 import { MachineLane } from './MachineLane';
 import { TaskCard } from './TaskCard';
 import { ConnectionLayer, type RenderedConnector } from './ConnectionLayer';
@@ -188,22 +188,20 @@ export function MachineBoard() {
   }
 
   // Live resize geometry: the edge under the pointer must visibly follow it (and land where the
-  // snapped commit will put it), instead of the card only jumping after the drop.
-  let liveResize: { key: string; dx: number; dw: number } | null = null;
+  // snapped/clamped commit will put it), instead of the card only jumping after the drop. A boundary
+  // drag moves two cards at once, so this is keyed per card.
+  const liveResize = new Map<string, { dx: number; dw: number }>();
   if (interaction?.kind === 'resize-start' || interaction?.kind === 'resize-end') {
     const layout = controller.cardLayouts.get(interaction.ref.key);
     const isEnd = interaction.kind === 'resize-end';
     if (layout && interaction.ref.isOperation) {
-      // A non-first operation has no movable start (no left handle is rendered), so only the right
-      // edge previews there.
-      const resizable = isEnd || interaction.ref.opIndex === 0;
-      if (resizable) {
+      if (isEnd || interaction.ref.opIndex === 0) {
         const deltaHours = (isEnd ? interaction.liveDeltaXPx : -interaction.liveDeltaXPx) / pixelsPerHour;
         const newHours = Math.max(MIN_OP_HOURS, Math.round((interaction.originHours + deltaHours) / MIN_OP_HOURS) * MIN_OP_HOURS);
         const deltaPx = (newHours - interaction.originHours) * pixelsPerHour;
-        // Right edge grows the width; left edge moves the left edge and grows the width to match, so
-        // the operation's end (and every downstream op) stays put.
-        liveResize = isEnd ? { key: interaction.ref.key, dx: 0, dw: deltaPx } : { key: interaction.ref.key, dx: -deltaPx, dw: deltaPx };
+        // Right edge grows the width; the first op's left edge moves the left edge and grows the
+        // width to match, so the operation's end (and every downstream op) stays put.
+        liveResize.set(interaction.ref.key, isEnd ? { dx: 0, dw: deltaPx } : { dx: -deltaPx, dw: deltaPx });
         resizePill = { x: layout.x + (isEnd ? layout.width + deltaPx : -deltaPx), y: layout.y - 26, text: `${interaction.originHours} h → ${newHours} h` };
         // Ghost the downstream operations at their reflowed positions — only the right edge reflows
         // them; a left-edge resize deliberately leaves them where they are.
@@ -215,11 +213,28 @@ export function MachineBoard() {
             if (otherLayout) reflowGhosts.push({ key: other.key, x: otherLayout.x + deltaPx, y: otherLayout.y, width: otherLayout.width, height: otherLayout.height });
           });
         }
+      } else if (interaction.ref.opIndex !== null) {
+        // Later operation's left edge = the boundary with the previous op. Preview via the same
+        // resolver the commit uses, so the edge rests exactly where it will be written — including
+        // when it hits the neighbour's bound and stops.
+        const job = jobs.find((item) => item.id === interaction.ref.jobId);
+        const previousSlot = job && controller.board.slots.find((other) => other.jobId === interaction.ref.jobId && other.opIndex === interaction.ref.opIndex! - 1);
+        const boundary = job ? resolveBoundaryResize(job, interaction.ref.opIndex, interaction.liveDeltaXPx / pixelsPerHour) : null;
+        if (boundary) {
+          const deltaPx = boundary.appliedHours * pixelsPerHour;
+          // This op: left edge follows the pointer, right edge (and everything after) stays put.
+          liveResize.set(interaction.ref.key, { dx: deltaPx, dw: -deltaPx });
+          // Previous op: its right edge is the same boundary, so it grows/shrinks to match.
+          if (previousSlot) liveResize.set(previousSlot.key, { dx: 0, dw: deltaPx });
+          const boundaryMs = interaction.slotStartMs + boundary.appliedHours * 3_600_000;
+          const boundaryLabel = new Date(boundaryMs).toLocaleString(controller.locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+          resizePill = { x: layout.x + deltaPx, y: layout.y - 26, text: `${boundaryLabel} · ${boundary.previousHours} h | ${boundary.currentHours} h` };
+        }
       }
     } else if (layout && !interaction.ref.isChainSegment) {
       // Plain single-machine card: the resized edge moves the job's own window.
       const deltaPx = interaction.liveDeltaXPx;
-      liveResize = isEnd ? { key: interaction.ref.key, dx: 0, dw: deltaPx } : { key: interaction.ref.key, dx: deltaPx, dw: -deltaPx };
+      liveResize.set(interaction.ref.key, isEnd ? { dx: 0, dw: deltaPx } : { dx: deltaPx, dw: -deltaPx });
       const newHours = Math.max(0.25, (layout.width + (isEnd ? deltaPx : -deltaPx)) / pixelsPerHour);
       resizePill = { x: layout.x + (isEnd ? layout.width + deltaPx : deltaPx), y: layout.y - 26, text: `${Math.round(newHours * 4) / 4} h` };
     }
@@ -233,7 +248,7 @@ export function MachineBoard() {
   }
 
   function liveResizeFor(slotKey: string): { dx: number; dw: number } | null {
-    return liveResize && liveResize.key === slotKey ? { dx: liveResize.dx, dw: liveResize.dw } : null;
+    return liveResize.get(slotKey) ?? null;
   }
 
   const showEmptyBoard = !isMobile && controller.board.slots.length === 0 && machines.length > 0;

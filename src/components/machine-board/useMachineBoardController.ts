@@ -186,6 +186,54 @@ function patchOperationMachine(job: Job, opIndex: number, newMachine: string, ne
   return { operations, machine: joinMachineChain(operations.map((op) => op.machine)) };
 }
 
+export interface BoundaryResize {
+  operations: NonNullable<Job['operations']>;
+  /** Snapped + clamped hours the boundary actually moved (positive = later). */
+  appliedHours: number;
+  /** Resulting hours either side of the moved boundary. */
+  previousHours: number;
+  currentHours: number;
+}
+
+/**
+ * Dragging a later operation's LEFT edge moves the boundary it shares with the previous operation:
+ * whatever hours this op gives up, the previous one takes (and vice versa). The order's total hours,
+ * its end, and every other operation are untouched — only the two times either side of the boundary
+ * change.
+ *
+ * Travel is bounded by the neighbour, which is what makes the drag feel "bounded by the rule next to
+ * it": pulling left can't starve the previous op below {@link MIN_OP_HOURS}, pulling right can't
+ * starve this one. Clamping happens after snapping so the edge can still come to rest exactly on the
+ * bound. Returns null when the drag resolves to no change (or there is no previous op).
+ *
+ * Exported so the board's live preview and this commit path compute the identical result — the edge
+ * you see under the pointer is exactly what gets written.
+ */
+export function resolveBoundaryResize(job: Job, opIndex: number, requestedDeltaHours: number): BoundaryResize | null {
+  const ops = job.operations ?? [];
+  const previous = ops[opIndex - 1];
+  const current = ops[opIndex];
+  if (!previous || !current) return null;
+
+  const previousHours = Math.max(0, previous.hours || 0);
+  const currentHours = Math.max(0, current.hours || 0);
+  const snapped = Math.round(requestedDeltaHours / MIN_OP_HOURS) * MIN_OP_HOURS;
+  const lowerBound = -(previousHours - MIN_OP_HOURS); // dragging left: previous op shrinks
+  const upperBound = currentHours - MIN_OP_HOURS; // dragging right: this op shrinks
+  const round2 = (value: number) => Math.round(value * 100) / 100;
+  const applied = round2(Math.min(upperBound, Math.max(lowerBound, snapped)));
+  if (Math.abs(applied) < 1e-6) return null;
+
+  const nextPreviousHours = round2(previousHours + applied);
+  const nextCurrentHours = round2(currentHours - applied);
+  const operations = ops.map((op, index) => {
+    if (index === opIndex - 1) return { ...op, hours: nextPreviousHours };
+    if (index === opIndex) return { ...op, hours: nextCurrentHours };
+    return op;
+  });
+  return { operations, appliedHours: applied, previousHours: nextPreviousHours, currentHours: nextCurrentHours };
+}
+
 /** Edits one operation's hours (reflowing later ops) and keeps the job's parent window in step. */
 function patchOperationHours(job: Job, opIndex: number, newHours: number): Partial<Job> {
   const operations = (job.operations ?? []).map((op, index) => (index === opIndex ? { ...op, hours: newHours } : op));
@@ -574,10 +622,9 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
         return;
       }
 
-      // --- Left edge: the edge under the pointer must actually move. Only the FIRST operation has a
-      //     movable start (a later op's start is pinned by the ops before it, so no left handle is
-      //     rendered there). Move job.start and change this op's hours by the same amount, so the
-      //     op's END — and therefore every downstream operation — stays exactly where it was. ---
+      // --- Left edge, FIRST operation: nothing precedes it, so its start is the order's start. Move
+      //     job.start and change this op's hours by the same amount, so the op's END — and therefore
+      //     every downstream operation — stays exactly where it was. ---
       if (ref.opIndex === 0) {
         const newHours = snapHours(state.originHours - deltaMs / 3_600_000);
         const appliedShiftMs = (state.originHours - newHours) * 3_600_000;
@@ -589,7 +636,18 @@ export function useMachineBoardController(options: MachineBoardControllerOptions
         pushHistory();
         void updateJob(ref.jobId, { operations, start: startStr, end: endStr }).then(showResult);
         runCascade(ref.jobId, startStr, endStr);
+        return;
       }
+
+      // --- Left edge, LATER operation: this edge is the boundary with the previous operation, so
+      //     dragging it moves that boundary in whichever direction you pull — the previous op gives
+      //     up (or takes back) exactly the hours this one gains (or loses). The order's total, its
+      //     end, and every other operation stay put; only the two times either side of the boundary
+      //     change. Travel is bounded by the neighbour: neither side may fall below MIN_OP_HOURS. ---
+      const boundary = resolveBoundaryResize(job, ref.opIndex, deltaMs / 3_600_000);
+      if (!boundary) return;
+      pushHistory();
+      void updateJob(ref.jobId, { operations: boundary.operations }).then(showResult);
       return;
     }
     if (ref.isChainSegment) {

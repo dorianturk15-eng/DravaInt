@@ -136,9 +136,9 @@ export function TaskCard({
     >
       {!slot.isFirstSlot && <span className="board-task-card-chain" aria-hidden="true">‹</span>}
       {horizontalLocked && <span className="board-task-card-lock" title={lockHint} aria-hidden="true">🔒</span>}
-      {/* Left handle only where the start can actually move: a plain card, or a route's FIRST
-          operation. A later op's start is pinned by the ops before it, so no handle is offered. */}
-      {slot.isFirstSlot && <div className="board-task-card-resize left" onPointerDown={(event) => onResizePointerDown(event, 'start')} title="Resize" />}
+      {/* Left handle on plain cards, on a route's first operation (moves the order's start), and on
+          later operations (drags the boundary shared with the previous op, bounded by it). */}
+      {(slot.isFirstSlot || slot.isOperation) && <div className="board-task-card-resize left" onPointerDown={(event) => onResizePointerDown(event, 'start')} title="Resize" />}
       {slot.isFirstSlot && <div className="board-task-card-connect left" onPointerDown={(event) => onConnectPointerDown(event, 'start')} title="Drag to link" />}
       <div className="board-task-card-body">
         <strong>{title}</strong>
