@@ -5,6 +5,8 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { useLogo } from '../logo/LogoContext';
 import { useShifts, type PublicationSnapshot, type ShiftAssignment, type ShiftDefinition, type ShiftScheduleRecord } from '../shifts/ShiftsContext';
 import { downloadShiftSchedulePdf } from '../shifts/shiftPdf';
+import { dominantShift, planRotation } from '../shifts/rotation';
+import { RotationBoard } from '../shifts/RotationBoard';
 import { useWorkers } from '../workers/WorkersContext';
 
 const DAY_MS = 86_400_000;
@@ -84,7 +86,7 @@ function downloadCsv(schedules: Array<{ weekNumber: number; assignments: ShiftAs
 export default function ShiftSchedule() {
   const { lang, t } = useLanguage();
   const { username } = useAuth();
-  const { workers, activeWorkers, displayName } = useWorkers();
+  const { workers, activeWorkers, displayName, updateWorker } = useWorkers();
   const { logo } = useLogo();
   const { definitions, schedules, publications, absences, saveSchedule, publishSchedule, generateSchedule: generateRemoteSchedule, saveAbsence, exportIcs } = useShifts();
   const today = isoDate(new Date());
@@ -118,6 +120,9 @@ export default function ShiftSchedule() {
   const [viewingSnapshot, setViewingSnapshot] = useState<PublicationSnapshot | null>(null);
   const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
   const [printingSnapshotId, setPrintingSnapshotId] = useState<number | null>(null);
+  /** The week whose day grid is open. The day grid is the per-week DETAIL editor
+   *  now — the Rotation Board is the landing view — so null means "board only". */
+  const [detailWeekId, setDetailWeekId] = useState<number | null>(null);
 
   useEffect(() => {
     // Prune selections for workers that no longer exist (e.g. a stale localStorage
@@ -228,8 +233,27 @@ export default function ShiftSchedule() {
     }
     const previousOverrides = schedules.flatMap((schedule) => schedule.assignments).filter((assignment) => assignment.isOverride);
     const generated: ShiftScheduleRecord[] = [];
+    const weeks = Math.min(12, Math.max(1, weekCount));
 
-    for (let weekIndex = 0; weekIndex < Math.min(12, Math.max(1, weekCount)); weekIndex++) {
+    // Mirror of generate_shift_schedule v3 (migration 0010): phase anchored to
+    // each worker's own previous week, plus the never-rotates fixed group.
+    const priorWeekStart = addDays(weekStart, -7);
+    const priorSchedule = schedules.find(
+      (schedule) => schedule.startDate === priorWeekStart && schedule.department === department,
+    );
+    const laneOrder = scheduleDefinitions.map((definition) => definition.id);
+    const rotation = planRotation({
+      workers: participantIds.map((id) => ({
+        id,
+        fixedShiftDefinitionId: workerById.get(id)?.fixedShiftDefinitionId ?? null,
+      })),
+      definitions: scheduleDefinitions.map((definition) => ({ id: definition.id, isActive: true })),
+      weekCount: weeks,
+      previousWeekShift: (workerId) =>
+        priorSchedule ? dominantShift(priorSchedule.assignments, workerId, laneOrder) : null,
+    });
+
+    for (let weekIndex = 0; weekIndex < weeks; weekIndex++) {
       const currentWeekStart = addDays(weekStart, weekIndex * 7);
       const existing = schedules.find((schedule) => schedule.startDate === currentWeekStart && schedule.department === department);
       const scheduleId = existing?.id ?? Date.now() + weekIndex;
@@ -239,15 +263,16 @@ export default function ShiftSchedule() {
       // Only Mon–Fri is rotated. Weekend columns stay empty and are filled by hand.
       for (let day = 0; day < WORKDAY_COUNT; day++) {
         const date = addDays(currentWeekStart, day);
-        participantIds.forEach((workerId, workerIndex) => {
+        participantIds.forEach((workerId) => {
           if (isAbsent(workerId, date)) return;
           const override = previousOverrides.find((item) => item.workerId === workerId && item.date === date);
           if (override) {
             assignments.push({ ...override, id: assignmentId++, scheduleId });
             return;
           }
-          const shift = scheduleDefinitions[(workerIndex + weekIndex) % scheduleDefinitions.length];
-          assignments.push({ id: assignmentId++, scheduleId, workerId, shiftDefinitionId: shift.id, date, isOverride: false, notes: '' });
+          const shiftId = rotation.weeks[weekIndex].get(workerId);
+          if (shiftId == null) return;
+          assignments.push({ id: assignmentId++, scheduleId, workerId, shiftDefinitionId: shiftId, date, isOverride: false, notes: '' });
         });
       }
 
@@ -283,6 +308,43 @@ export default function ShiftSchedule() {
     } : schedule));
     setDragged(null);
     setDropTarget(null);
+  }
+
+  /**
+   * Week-grain edit from the Rotation Board: move a worker onto one shift for a
+   * whole week, writing through to the per-day assignments that remain the
+   * storage format. The rows are marked as overrides so regeneration preserves
+   * a deliberate week-level decision, exactly as it preserves a per-day drag.
+   *
+   * `applyForward` extends the change to every later week in the horizon —
+   * "this worker is on second shift from week 31 onwards". Published weeks are
+   * skipped; they must be unlocked explicitly like anywhere else on the page.
+   */
+  function setWeekShift(scheduleId: number, workerId: number, shiftDefinitionId: number, applyForward: boolean) {
+    const fromIndex = drafts.findIndex((schedule) => schedule.id === scheduleId);
+    if (fromIndex === -1) return;
+    setDrafts((current) => current.map((schedule, index) => {
+      const inScope = applyForward ? index >= fromIndex : schedule.id === scheduleId;
+      if (!inScope || schedule.status === 'published') return schedule;
+      return {
+        ...schedule,
+        assignments: schedule.assignments.map((assignment) => assignment.workerId === workerId
+          ? { ...assignment, shiftDefinitionId, isOverride: true }
+          : assignment),
+      };
+    }));
+  }
+
+  /** Pin a worker out of the rotation (or return them to it). */
+  async function toggleFixedShift(workerId: number, shiftDefinitionId: number | null) {
+    await updateWorker(workerId, { fixedShiftDefinitionId: shiftDefinitionId });
+  }
+
+  /** Does this worker's week breach the weekly-hours cap or a rest period? */
+  function weekHasWarning(schedule: ShiftScheduleRecord, workerId: number) {
+    if (weeklyHours(schedule, workerId) > maxWeeklyHours) return true;
+    return schedule.assignments.some((assignment) => assignment.workerId === workerId
+      && (hasRestViolation(schedule, assignment) || isAbsent(assignment.workerId, assignment.date)));
   }
 
   function reassignWorker(scheduleId: number, assignmentId: number, workerId: number) {
@@ -564,8 +626,30 @@ export default function ShiftSchedule() {
             </div>
           </section>
 
+          <RotationBoard
+            weeks={drafts}
+            workers={participantIds
+              .map((id) => workerById.get(id))
+              .filter((worker): worker is NonNullable<typeof worker> => Boolean(worker))
+              .map((worker) => ({
+                id: worker.id,
+                name: displayName(worker),
+                initials: `${worker.firstName[0] ?? ''}${worker.lastName[0] ?? ''}`,
+                fixedShiftDefinitionId: worker.fixedShiftDefinitionId ?? null,
+              }))}
+            definitions={scheduleDefinitions}
+            lang={lang}
+            datesFor={(schedule) => Array.from({ length: WORKDAY_COUNT }, (_, day) => addDays(schedule.startDate, day))}
+            isAbsent={isAbsent}
+            hasWarning={weekHasWarning}
+            onOpenWeek={(scheduleId) => setDetailWeekId((current) => current === scheduleId ? null : scheduleId)}
+            onSetWeekShift={setWeekShift}
+            onTogglePin={(workerId, shiftDefinitionId) => void toggleFixedShift(workerId, shiftDefinitionId)}
+            readOnlyWeek={(schedule) => schedule.status === 'published'}
+          />
+
           <div className="shift-board-scroll no-print">
-            {drafts.map((schedule) => {
+            {drafts.filter((schedule) => schedule.id === detailWeekId).map((schedule) => {
               const dates = Array.from({ length: dayCount }, (_, day) => addDays(schedule.startDate, day));
               const locked = schedule.status === 'published';
               const snapshot = latestSnapshotFor(schedule);
@@ -613,7 +697,9 @@ export default function ShiftSchedule() {
             })}
           </div>
 
-          <p className="board-help no-print">{lang === 'hr' ? 'Povucite radnika u drugu ćeliju za ručnu izmjenu. Dvostruki klik otvara brzo pretraživo prebacivanje.' : 'Drag a worker to another cell for a manual override. Double-click for quick reassignment.'}</p>
+          {detailWeekId !== null && (
+            <p className="board-help no-print">{lang === 'hr' ? 'Detalji tjedna — uređivanje po danima. Povucite radnika u drugu ćeliju za ručnu izmjenu. Dvostruki klik otvara brzo pretraživo prebacivanje. Ponovni klik na broj tjedna zatvara detalje.' : 'Week detail — day-level editing. Drag a worker to another cell for a manual override. Double-click for quick reassignment. Click the week number again to close.'}</p>
+          )}
         </>
       )}
 

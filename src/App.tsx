@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactElement } from 'react';
 import './App.css';
+import './styles/rotation-board.css';
 import { useLanguage } from './i18n/LanguageContext';
 import { useAuth } from './auth/AuthContext';
 import { useTheme } from './theme/ThemeContext';
