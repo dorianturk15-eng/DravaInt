@@ -88,15 +88,10 @@
 }
 
 /* Shared-ish helpers this page introduced. */
-.icon-xs { width: 12px; height: 12px; }
 .table-scroll.has-gap { margin-bottom: var(--space-7); }
 
 /* --- Second sweep pass --- */
 
-.stack-gap { margin-bottom: var(--space-5); }
-.stack-gap-lg { margin-bottom: var(--space-6); }
-.flex-1 { flex: 1; }
-.mono { font-family: monospace; }
 
 .admin-split-row { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: center; }
 .admin-split-main { flex: 1; min-width: 200px; }

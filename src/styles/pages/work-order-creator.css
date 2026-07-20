@@ -1,0 +1,92 @@
+/* Work Order Creator.
+   Extracted from WorkOrderCreator.tsx inline styles (Tier 1.1). The
+   `print-document` block at the end of that file is deliberately NOT swept:
+   converging the HTML print path onto the vector-PDF approach is Tier 3 (F12),
+   and rewriting its inline styles now would be thrown away by that work. */
+
+.woc-columns { display: flex; gap: var(--space-5); flex-wrap: wrap; margin-top: var(--space-4); }
+
+.woc-panel {
+  flex: 1;
+  min-width: 300px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+}
+
+.woc-panel.is-primary { flex: 1.3; min-width: 320px; }
+
+.woc-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.woc-tile {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--bg-step);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-inner);
+}
+
+.woc-tile.is-compact { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); }
+
+.woc-callout {
+  border-left: 4px solid var(--primary-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.woc-section-title { font-size: var(--text-lg); color: var(--text-primary); margin-bottom: var(--space-4); }
+.woc-note { margin-bottom: var(--space-4); font-size: var(--text-sm); }
+.woc-lead { margin: 0 0 var(--space-5); }
+
+.woc-chip {
+  font-size: var(--text-xs);
+  background: var(--primary-light);
+  color: var(--primary-color);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: var(--space-2);
+}
+
+.woc-error { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--danger-color); font-weight: 700; }
+.woc-status { font-size: 13px; margin-top: var(--space-2); }
+.woc-status.is-success { color: var(--success-color); }
+.woc-status.is-error { color: var(--danger-color); }
+
+.woc-secondary-action {
+  width: min(280px, 50%);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Order hierarchy rows. The nesting depth is data, so it arrives as
+   --tree-level; the dashed rail and indent step are design and live here. */
+.woc-tree-row { margin-top: var(--space-2); margin-left: calc(var(--tree-level, 0) * 20px); }
+
+.woc-tree-row.is-nested {
+  border-left: 1px dashed var(--border-color-strong);
+  padding-left: var(--space-4);
+}
+
+/* Priority colour is data (priorityMeta), the chip shape is design. */
+.woc-priority-chip {
+  background: var(--chip-color, var(--primary-color));
+  color: #fff;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}

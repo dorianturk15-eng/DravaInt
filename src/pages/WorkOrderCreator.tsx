@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
-import { IconPlus, IconTrash, IconPrint, IconAlert } from '../components/Icons';
+import { IconPlus, IconTrash, IconPrint, IconAlert, IconList, IconFlow, IconUser, IconGantt, IconRefresh } from '../components/Icons';
 import { useScheduling, type Job, type OperationStep, type JobPriority } from '../scheduling/SchedulingContext';
 import { hasChildren, collectDescendants } from '../scheduling/hierarchy';
 import { useLogo } from '../logo/LogoContext';
@@ -344,15 +344,15 @@ export default function WorkOrderCreator() {
   function DocumentTreeNode({ job, level = 0 }: { job: typeof jobs[0]; level: number }) {
     const children = jobs.filter((j) => j.parentId === job.id);
     return (
-      <div style={{ marginLeft: level * 20, borderLeft: level > 0 ? '1px dashed var(--border-color-strong)' : 'none', paddingLeft: level > 0 ? 15 : 0, marginTop: 8 }}>
-        <div style={{ padding: '8px 12px', background: 'var(--bg-step)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border-color)' }}>
+      <div className={`woc-tree-row${level > 0 ? ' is-nested' : ''}`} style={{ '--tree-level': level } as React.CSSProperties}>
+        <div className="woc-tile is-compact">
           <div>
-            <span style={{ fontWeight: 700, color: 'var(--primary-color)' }}>📄 {job.order}</span>
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>({job.machine || 'General'})</span>
-            {job.operator && <span style={{ fontSize: 11, background: 'var(--primary-light)', color: 'var(--primary-color)', padding: '2px 6px', borderRadius: 4, marginLeft: 8 }}>{job.operator}</span>}
+            <span className="text-accent-strong"><IconList className="inline-icon-sm icon-xs" /> {job.order}</span>
+            <span className="text-xs-muted has-inset">({job.machine || 'General'})</span>
+            {job.operator && <span className="woc-chip">{job.operator}</span>}
           </div>
-          <button className="btn btn-blue" onClick={() => setPrintOrderId(job.id)} style={{ padding: '4px 8px', fontSize: 11, width: 'auto' }}>
-            <IconPrint style={{ width: 11, height: 11, marginRight: 4 }} />
+          <button className="btn btn-blue" onClick={() => setPrintOrderId(job.id)} className="btn-mini">
+            <IconPrint className="icon-xs has-gap-r" />
             {t.workOrders.print}
           </button>
         </div>
@@ -394,29 +394,29 @@ export default function WorkOrderCreator() {
   return (
     <>
     <div className="wizard-container no-print">
-      <h2 style={{ marginBottom: 5 }}>{t.workOrders.title}</h2>
-      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.workOrders.subtitle}</p>
+      <h2 className="mb-xs">{t.workOrders.title}</h2>
+      <p className="subtitle-text text-md woc-lead">{t.workOrders.subtitle}</p>
 
-      <div className="view-toggle" style={{ marginBottom: 20 }}>
+      <div className="view-toggle stack-gap">
         <button className={creatorTab === 'create' ? 'active' : ''} onClick={() => setCreatorTab('create')}>
-          📐 {lang === 'hr' ? 'Izrada Naloga' : 'Create & Orders'}
+          <IconFlow className="panel-title-icon" /> {lang === 'hr' ? 'Izrada Naloga' : 'Create & Orders'}
         </button>
         <button className={creatorTab === 'timemachine' ? 'active' : ''} onClick={() => setCreatorTab('timemachine')}>
-          ⏳ {lang === 'hr' ? 'Time Machine & Stablo' : 'Time Machine & Hierarchy'}
+          <IconRefresh className="panel-title-icon" /> {lang === 'hr' ? 'Time Machine & Stablo' : 'Time Machine & Hierarchy'}
         </button>
       </div>
 
       {creatorTab === 'create' && (
         <>
         {editingJob && (
-          <div className="step-box" style={{ borderLeft: '4px solid var(--primary-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div className="step-box woc-callout">
             <div>
-              <strong style={{ color: 'var(--primary-color)' }}>✏️ {t.workOrders.editingOrder}: {editingJob.order}</strong>
-              <div className="subtitle-text" style={{ fontSize: 12, marginTop: 4 }}>
+              <strong className="text-accent">✏️ {t.workOrders.editingOrder}: {editingJob.order}</strong>
+              <div className="subtitle-text text-sm has-gap-xs">
                 {lang === 'hr' ? 'Spremanjem se ažurira postojeći nalog — ne stvara se kopija.' : 'Saving updates the existing order — no copy is created.'}
               </div>
             </div>
-            <button className="btn btn-ghost" style={{ width: 'auto' }} onClick={cancelEdit}>
+            <button className="btn btn-ghost btn-inline" onClick={cancelEdit}>
               {t.workOrders.cancelEdit}
             </button>
           </div>
@@ -429,9 +429,9 @@ export default function WorkOrderCreator() {
         <div className="grid-inputs time-settings">
           <div>
             <label>{t.workOrders.orderNumber}</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input type="text" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder={suggestedOrder} style={{ flex: 1, minWidth: 0 }} />
-              <button type="button" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setOrderNumber(suggestedOrder)} title={lang === 'hr' ? `Sljedeći broj: ${suggestedOrder}` : `Next number: ${suggestedOrder}`}>
+            <div className="row-gap-sm">
+              <input type="text" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder={suggestedOrder} className="flex-1-min" />
+              <button type="button" className="btn btn-ghost nowrap" onClick={() => setOrderNumber(suggestedOrder)} title={lang === 'hr' ? `Sljedeći broj: ${suggestedOrder}` : `Next number: ${suggestedOrder}`}>
                 {lang === 'hr' ? 'Generiraj' : 'Generate'}
               </button>
             </div>
@@ -495,7 +495,7 @@ export default function WorkOrderCreator() {
             </div>
           )}
           {cadError && (
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--danger-color)', fontWeight: 'bold' }}>
+            <div className="woc-error">
               <IconAlert className="panel-title-icon" /> {cadError}
             </div>
           )}
@@ -541,15 +541,14 @@ export default function WorkOrderCreator() {
               {activeWorkers.map((worker) => <option key={worker.id} value={worker.id}>{displayName(worker)}</option>)}
             </select>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-            <button className="btn btn-blue" onClick={addOperation} style={{ width: '100%' }}>
-              <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
+          <div className="row-end-tight">
+            <button className="btn btn-blue" onClick={addOperation} className="w-full">
+              <IconPlus className="inline-icon" />
               {editingOpId !== null ? (lang === 'hr' ? 'Spremi korak' : 'Save step') : t.workOrders.addOperation}
             </button>
             {editingOpId !== null && (
               <button
-                className="btn btn-ghost"
-                style={{ width: 'auto', whiteSpace: 'nowrap' }}
+                className="btn btn-ghost btn-inline nowrap"
                 onClick={() => { setEditingOpId(null); setOpForm({ name: '', machine: '', hours: '', operatorId: '' }); }}
               >
                 {lang === 'hr' ? 'Odustani' : 'Cancel'}
@@ -558,25 +557,24 @@ export default function WorkOrderCreator() {
           </div>
         </div>
 
-        <div style={{ marginTop: 15 }}>
+        <div className="mt-md">
           {operations.length === 0 ? (
-            <p className="subtitle-text" style={{ fontSize: 13 }}>{t.workOrders.noOperations}</p>
+            <p className="subtitle-text text-md">{t.workOrders.noOperations}</p>
           ) : (
             <div className="flow-row">
               {operations.map((op, i) => (
-                <div key={op.id} style={{ display: 'flex', alignItems: 'center' }}>
+                <div key={op.id} className="row-center">
                   <div className="flow-block" style={editingOpId === op.id ? { outline: '2px solid var(--primary-color)', outlineOffset: 1 } : undefined}>
                     <button className="flow-remove" onClick={() => removeOperation(op.id)} title="Remove">
-                      <IconTrash style={{ width: 10, height: 10 }} />
+                      <IconTrash className="icon-xxs" />
                     </button>
                     <div className="flow-name">{op.name}</div>
                     <div className="flow-meta">{op.machine}</div>
                     <div className="flow-meta">{op.hours} h</div>
-                    {op.operator && <div className="flow-meta">👤 {op.operator}</div>}
-                    <div style={{ display: 'flex', gap: 4, marginTop: 6, justifyContent: 'center' }}>
+                    {op.operator && <div className="flow-meta"><IconUser className="inline-icon-sm icon-xs" /> {op.operator}</div>}
+                    <div className="row-center-tight">
                       <button
-                        className="btn btn-ghost"
-                        style={{ padding: '2px 6px', fontSize: 11, width: 'auto', minWidth: 0 }}
+                        className="btn btn-ghost btn-micro"
                         onClick={() => moveOperation(op.id, -1)}
                         disabled={i === 0}
                         title={lang === 'hr' ? 'Pomakni ranije u slijedu' : 'Move earlier in the sequence'}
@@ -585,8 +583,7 @@ export default function WorkOrderCreator() {
                         ◀
                       </button>
                       <button
-                        className="btn btn-ghost"
-                        style={{ padding: '2px 6px', fontSize: 11, width: 'auto', minWidth: 0 }}
+                        className="btn btn-ghost btn-micro"
                         onClick={() => editOperation(op.id)}
                         title={lang === 'hr' ? 'Uredi korak' : 'Edit step'}
                         aria-label={lang === 'hr' ? `Uredi korak "${op.name}"` : `Edit step "${op.name}"`}
@@ -594,8 +591,7 @@ export default function WorkOrderCreator() {
                         ✎
                       </button>
                       <button
-                        className="btn btn-ghost"
-                        style={{ padding: '2px 6px', fontSize: 11, width: 'auto', minWidth: 0 }}
+                        className="btn btn-ghost btn-micro"
                         onClick={() => moveOperation(op.id, 1)}
                         disabled={i === operations.length - 1}
                         title={lang === 'hr' ? 'Pomakni kasnije u slijedu' : 'Move later in the sequence'}
@@ -617,7 +613,7 @@ export default function WorkOrderCreator() {
             </div>
           )}
           {operations.length > 0 && (
-            <p style={{ fontSize: 13, marginTop: 10 }}>
+            <p className="woc-status">
               <strong>{t.workOrders.totalHours}:</strong> {totalHours} h
             </p>
           )}
@@ -626,7 +622,7 @@ export default function WorkOrderCreator() {
 
       <div className="action-bar">
         <button className="btn btn-green" onClick={submitOrder}>
-          <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
+          <IconPlus className="inline-icon" />
           {editingJob ? t.workOrders.saveChanges : t.workOrders.createOrder}
         </button>
         {editingJob && (
@@ -635,24 +631,24 @@ export default function WorkOrderCreator() {
           </button>
         )}
       </div>
-      {message && <p style={{ color: 'var(--success-color)', fontSize: 13, marginTop: 10 }}>{message}</p>}
-      {error && <p style={{ color: 'var(--danger-color)', fontSize: 13, marginTop: 10 }}>{error}</p>}
+      {message && <p className="woc-status is-success">{message}</p>}
+      {error && <p className="woc-status is-error">{error}</p>}
 
-      <div className="step-box" style={{ marginTop: 20 }}>
-        <div className="step-title" style={{ justifyContent: 'space-between' }}>
+      <div className="step-box mt-lg">
+        <div className="step-title justify-between">
           <span>{t.workOrders.createdOrders}</span>
           <input
             type="text"
             value={orderSearch}
             onChange={(event) => setOrderSearch(event.target.value)}
             placeholder={lang === 'hr' ? 'Traži po broju, proizvodu ili operaciji…' : 'Search by number, product, or operation…'}
-            style={{ width: 'min(280px, 50%)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}
+            className="woc-secondary-action"
           />
         </div>
         {visibleOrders.length === 0 ? (
-          <p className="subtitle-text" style={{ fontSize: 13 }}>{t.workOrders.noCreatedOrders}</p>
+          <p className="subtitle-text text-md">{t.workOrders.noCreatedOrders}</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -670,13 +666,13 @@ export default function WorkOrderCreator() {
                   return (
                   <tr key={job.id}>
                     <td>
-                      {parent && <span className="subtitle-text" style={{ fontSize: 11 }}>{parent.order} → </span>}
+                      {parent && <span className="subtitle-text text-xs">{parent.order} → </span>}
                       {job.order}
                     </td>
                     <td>{job.product || '-'}</td>
                     <td>{job.operations?.map((op) => op.name).join(' → ') || '-'}</td>
                     <td>
-                      <span style={{ background: priorityMeta(job.priority).color, color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                      <span className="woc-priority-chip" style={{ '--chip-color': priorityMeta(job.priority).color } as React.CSSProperties}>
                         {priorityLabel(job.priority, lang)}
                       </span>
                     </td>
@@ -686,12 +682,12 @@ export default function WorkOrderCreator() {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div className="row-gap-xs">
                         <button
                           className="btn btn-blue btn-sm"
                           onClick={() => setPrintOrderId(job.id)}
                         >
-                          <IconPrint style={{ marginRight: 4, verticalAlign: -2, width: 12, height: 12 }} />
+                          <IconPrint className="icon-xs inline-icon-sm" />
                           {t.workOrders.print}
                         </button>
                         <button
@@ -722,17 +718,17 @@ export default function WorkOrderCreator() {
     )}
 
       {creatorTab === 'timemachine' && (
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 15 }}>
+        <div className="woc-columns">
           {/* Tree View (Left Pane) */}
-          <div className="step-box" style={{ flex: 1.3, minWidth: 320, background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-            <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 15 }}>
-              🌳 {lang === 'hr' ? 'Stablo Radnih Naloga' : 'Work Order Hierarchy Tree'}
+          <div className="step-box woc-panel is-primary">
+            <div className="step-title woc-section-title">
+              <IconGantt className="panel-title-icon" /> {lang === 'hr' ? 'Stablo Radnih Naloga' : 'Work Order Hierarchy Tree'}
             </div>
-            <p className="subtitle-text" style={{ marginBottom: 15, fontSize: 12 }}>
+            <p className="subtitle-text woc-note">
               {lang === 'hr' ? 'Prikaz odnosa nadređenih i podređenih naloga:' : 'View nested relationships of parent and child work orders:'}
             </p>
             {jobs.filter(j => !j.parentId).length === 0 ? (
-              <p className="subtitle-text" style={{ fontSize: 13 }}>{lang === 'hr' ? 'Nema kreiranih dokumenata.' : 'No documents created yet.'}</p>
+              <p className="subtitle-text text-md">{lang === 'hr' ? 'Nema kreiranih dokumenata.' : 'No documents created yet.'}</p>
             ) : (
               jobs.filter(j => !j.parentId).map((rootJob) => (
                 <DocumentTreeNode key={rootJob.id} job={rootJob} level={0} />
@@ -741,26 +737,26 @@ export default function WorkOrderCreator() {
           </div>
 
           {/* Time Machine Archive (Right Pane) */}
-          <div className="step-box" style={{ flex: 1, minWidth: 300, background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
-            <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 15 }}>
-              ⏳ {lang === 'hr' ? 'Time Machine Sigurnosne Kopije' : 'Time Machine Snapshots'}
+          <div className="step-box woc-panel">
+            <div className="step-title woc-section-title">
+              <IconRefresh className="panel-title-icon" /> {lang === 'hr' ? 'Time Machine Sigurnosne Kopije' : 'Time Machine Snapshots'}
             </div>
-            <p className="subtitle-text" style={{ marginBottom: 15, fontSize: 12 }}>
+            <p className="subtitle-text woc-note">
               {lang === 'hr' ? 'Vratite sustav i dokumente na bilo koju točku u vremenu:' : 'Restore database states and active documents to any past backup point:'}
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto', paddingRight: 5 }}>
+            <div className="woc-scroll-list">
               {backups.length === 0 ? (
-                <p className="subtitle-text" style={{ fontSize: 12 }}>{lang === 'hr' ? 'Nema snimljenih sigurnosnih kopija.' : 'No snapshots recorded yet.'}</p>
+                <p className="subtitle-text text-sm">{lang === 'hr' ? 'Nema snimljenih sigurnosnih kopija.' : 'No snapshots recorded yet.'}</p>
               ) : (
                 backups.map((snap, idx) => (
-                  <div key={idx} style={{ padding: 12, background: 'var(--bg-step)', borderRadius: 8, border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={idx} className="woc-tile">
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 12 }}>{snap.label}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{new Date(snap.timestamp).toLocaleString()}</div>
+                      <div className="text-sm-strong">{snap.label}</div>
+                      <div className="text-xxs-muted">{new Date(snap.timestamp).toLocaleString()}</div>
                     </div>
-                    <button className="btn btn-blue" onClick={() => restoreSnapshot(snap.jobs)} style={{ padding: '6px 10px', fontSize: 11, width: 'auto' }}>
-                      ⏳ {lang === 'hr' ? 'Vrati' : 'Restore'}
+                    <button className="btn btn-blue" onClick={() => restoreSnapshot(snap.jobs)} className="btn-mini is-md">
+                      <IconRefresh className="inline-icon-sm icon-xs" /> {lang === 'hr' ? 'Vrati' : 'Restore'}
                     </button>
                   </div>
                 ))

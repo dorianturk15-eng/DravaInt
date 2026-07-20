@@ -1,0 +1,49 @@
+/* Single-purpose utility classes.
+ *
+ * Imported LAST so a utility reliably wins over the page rule it is layered on
+ * — that is the whole point of a utility. Kept deliberately small: these exist
+ * because the inline-style sweep produced the same one-liners on several pages,
+ * not as an invitation to build a utility framework. Anything that describes a
+ * COMPONENT belongs in that component's module, not here.
+ */
+
+/* Type */
+.text-md { font-size: 13px; }
+.text-sm { font-size: var(--text-sm); }
+.text-xs { font-size: var(--text-xs); }
+.text-sm-strong { font-size: var(--text-sm); font-weight: 700; }
+.text-xs-muted { font-size: var(--text-xs); color: var(--text-secondary); }
+.text-xxs-muted { font-size: 10px; color: var(--text-secondary); }
+.text-accent { color: var(--primary-color); }
+.text-accent-strong { color: var(--primary-color); font-weight: 700; }
+.has-inset { margin-left: var(--space-2); }
+.has-gap-xs { margin-top: var(--space-1); }
+
+.row-center { display: flex; align-items: center; }
+.row-gap-sm { display: flex; gap: var(--space-2); }
+.row-gap-xs { display: flex; gap: 6px; }
+.row-end-tight { display: flex; align-items: flex-end; gap: 6px; }
+.row-center-tight { display: flex; gap: var(--space-1); margin-top: 6px; justify-content: center; }
+.justify-between { justify-content: space-between; }
+.flex-1-min { flex: 1; min-width: 0; }
+.w-full { width: 100%; }
+.nowrap { white-space: nowrap; }
+.mt-md { margin-top: var(--space-4); }
+.mt-lg { margin-top: var(--space-5); }
+.mb-xs { margin-bottom: var(--space-1); }
+
+.btn-micro { padding: 2px 6px; font-size: var(--text-xs); width: auto; min-width: 0; }
+.btn-mini { padding: var(--space-1) var(--space-2); font-size: var(--text-xs); width: auto; }
+.btn-mini.is-md { padding: 6px var(--space-2); }
+
+.inline-icon { margin-right: 6px; vertical-align: -3px; }
+.inline-icon-sm { margin-right: var(--space-1); vertical-align: -2px; }
+.icon-xxs { width: 10px; height: 10px; }
+.has-gap-r { margin-right: var(--space-1); }
+
+/* Moved here from page modules during the sweep. */
+.icon-xs { width: 12px; height: 12px; }
+.stack-gap { margin-bottom: var(--space-5); }
+.stack-gap-lg { margin-bottom: var(--space-6); }
+.flex-1 { flex: 1; }
+.mono { font-family: monospace; }
