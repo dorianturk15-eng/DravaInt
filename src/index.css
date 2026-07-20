@@ -28,6 +28,26 @@
   --warning-light: #fffbeb;
   --danger-color: #ef4444;
   --danger-light: #fef2f2;
+  /* Idle/inactive stroke for diagrams (routing map nodes and connectors).
+     Themed, unlike the literal #cbd5e1 it replaces — that stayed light grey
+     in dark mode and effectively disappeared against the dark card. */
+  --accent-muted-stroke: #cbd5e1;
+  /* Spacing — the 4px grid the layout already follows implicitly. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  /* Type scale */
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
   /* Shape */
   --radius-card: 12px;
   --radius-inner: 8px;
@@ -76,6 +96,7 @@
   --warning-light: rgba(245, 158, 11, 0.12);
   --danger-color: #f43f5e;
   --danger-light: rgba(244, 63, 94, 0.12);
+  --accent-muted-stroke: #475569;
 }
 
 * {

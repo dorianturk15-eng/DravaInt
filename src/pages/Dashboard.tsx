@@ -16,6 +16,7 @@ import { useSettings } from '../settings/SettingsContext';
 import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from '../scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput, getJobConflicts } from '../scheduling/cpm';
 import { requestFocus } from '../navigation/focusTarget';
+import { routingStates } from '../scheduling/routingProgress';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   planned: 'var(--primary-color)',
@@ -217,6 +218,7 @@ export default function Dashboard() {
             <div className="routing-order-list">
               {jobsWithOps.map((job) => {
                 const ops = job.operations ?? [];
+                const states = routingStates(job);
                 const viewBoxWidth = Math.max(220, 40 + ops.length * 100);
                 return (
                   <div className="routing-order-row" key={job.id}>
@@ -226,7 +228,13 @@ export default function Dashboard() {
                         const x = 40 + i * 100;
                         const y = 26;
                         const isLast = i === ops.length - 1;
-                        const statusColor = job.status === 'done' ? 'var(--success-color)' : i === 1 ? '#3b82f6' : '#cbd5e1';
+                        const state = states[i];
+                        const isActive = state === 'active';
+                        const statusColor = state === 'done'
+                          ? 'var(--success-color)'
+                          : isActive
+                            ? 'var(--primary-color)'
+                            : 'var(--accent-muted-stroke)';
 
                         return (
                           <g key={op.id}>
@@ -239,8 +247,8 @@ export default function Dashboard() {
                                 y2={y}
                                 stroke={statusColor}
                                 strokeWidth="3"
-                                strokeDasharray={i === 1 ? '4,4' : 'none'}
-                                style={i === 1 ? { animation: 'dash 1s linear infinite' } : {}}
+                                strokeDasharray={isActive ? '4,4' : 'none'}
+                                style={isActive ? { animation: 'dash 1s linear infinite' } : {}}
                               />
                             )}
                             {/* Node circle */}
@@ -251,7 +259,7 @@ export default function Dashboard() {
                               fill="var(--bg-card)"
                               stroke={statusColor}
                               strokeWidth="3"
-                              style={i === 1 && job.status !== 'done' ? { animation: 'pulse-glow 1.5s infinite' } : {}}
+                              style={isActive ? { animation: 'pulse-glow 1.5s infinite' } : {}}
                             />
                             <text x={x} y={y + 4} fontSize="8" fontWeight="bold" textAnchor="middle" fill="var(--text-primary)">
                               {i + 1}
