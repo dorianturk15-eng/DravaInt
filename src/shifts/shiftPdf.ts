@@ -1,5 +1,6 @@
 import type { jsPDF } from 'jspdf';
 import type { ShiftDefinition, ShiftScheduleRecord } from './ShiftsContext';
+import { dominantShift } from './rotation';
 
 /**
  * Professional shift-schedule PDF.
@@ -75,15 +76,6 @@ function rasterFormat(dataUrl: string): 'PNG' | 'JPEG' | 'WEBP' | null {
   return null;
 }
 
-function dayName(date: string, lang: 'hr' | 'en') {
-  return new Date(`${date}T12:00:00`).toLocaleDateString(lang === 'hr' ? 'hr-HR' : 'en-US', { weekday: 'short' });
-}
-
-function isWeekend(date: string) {
-  const day = new Date(`${date}T12:00:00`).getDay();
-  return day === 0 || day === 6;
-}
-
 function docStamp() {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -109,6 +101,10 @@ export interface ShiftPdfInput {
   /** Grouping key (e.g. trade / role) used only to order and visually separate
    *  workers with a divider rule — never printed on the document. */
   workerGroup?: (id: number) => string;
+  /** Printable name for a group key, or null to keep the silent-divider
+   *  behaviour. An unlabelled rule is fine for separating trades, but the
+   *  fixed-shift vs rotating split is meaningless unless it is named. */
+  groupLabel?: (group: string) => string | null;
   /** Shift lanes present in a given schedule (regular + any retired lane still used). */
   lanesFor: (schedule: ShiftScheduleRecord) => ShiftDefinition[];
   /** Localised weekly-hours total for a worker within a schedule. */
@@ -138,6 +134,7 @@ const L = {
     hours: 'Sati',
     off: '—',
     legend: 'Legenda smjena',
+    exceptionNote: 'Jedan blok = smjena za cijeli tjedan. Tjedan s odstupanjem (zamjena, izostanak, nepotpun tjedan) ima traku po danima ispod bloka; prazan kvadratić = radnik taj dan nije raspoređen.',
     footnote: 'Treća smjena se ne planira. Noćni rad evidentira se kao prekovremeni sati radnika.',
     preparedBy: 'Izradio',
     approvedBy: 'Odobrio',
@@ -166,6 +163,7 @@ const L = {
     hours: 'Hours',
     off: '—',
     legend: 'Shift legend',
+    exceptionNote: 'One block = the shift for the whole week. A week that deviates (override, absence, partial week) carries a per-day strip beneath the block; a hollow square means the worker is not scheduled that day.',
     footnote: 'The third shift is not scheduled. Overnight work is logged as the worker’s overtime.',
     preparedBy: 'Prepared by',
     approvedBy: 'Approved by',
@@ -205,20 +203,27 @@ function drawPageFooter(doc: jsPDF, lang: 'hr' | 'en', pageNo: number, totalPage
   doc.text(pageText, PAGE_W - MARGIN_X - doc.getTextWidth(pageText), y);
 }
 
-const LOGO_BOX = 20;
+/** Letterhead logo bounding box, in mm. The letterhead is logo-only, so this is
+ *  the whole company mark on the sheet and it is sized to read as one. */
+const LOGO_BOX = 60;
+/** Monogram tile side. The fallback mark is typographic, so it does NOT want the
+ *  full 60 mm — a 60 mm ink square would overwhelm the page. */
+const MONOGRAM_BOX = 26;
 
-/** Company logo top-left, or a typographic monogram tile if none is set. */
-function drawLogo(doc: jsPDF, input: ShiftPdfInput, x: number, y: number) {
+/** Company logo top-left, or a typographic monogram tile if none is set.
+ *  Returns the height actually drawn so the header can lay out beneath it —
+ *  a wide logo scaled to the box width occupies far less than the box height. */
+function drawLogo(doc: jsPDF, input: ShiftPdfInput, x: number, y: number): number {
   const format = input.logo ? rasterFormat(input.logo) : null;
   if (input.logo && format) {
     try {
       const props = doc.getImageProperties(input.logo);
-      // Fit within the box, preserving aspect ratio, top-left aligned.
+      // Fit within the box, preserving aspect ratio.
       let w = LOGO_BOX;
       let h = (props.height / props.width) * w;
       if (h > LOGO_BOX) { h = LOGO_BOX; w = (props.width / props.height) * h; }
-      doc.addImage(input.logo, format, x, y + (LOGO_BOX - h) / 2, w, h);
-      return;
+      doc.addImage(input.logo, format, x, y, w, h);
+      return h;
     } catch {
       // Fall through to the monogram if the logo can't be embedded.
     }
@@ -228,12 +233,13 @@ function drawLogo(doc: jsPDF, input: ShiftPdfInput, x: number, y: number) {
   const initials = (input.companyName ?? 'DravaInt')
     .split(/\s+/).map((word) => word[0]).join('').slice(0, 2).toUpperCase() || 'DI';
   setFill(doc, INK);
-  doc.rect(x, y, LOGO_BOX, LOGO_BOX, 'F');
+  doc.rect(x, y, MONOGRAM_BOX, MONOGRAM_BOX, 'F');
   doc.setFont(FONT, 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(19);
   doc.setTextColor(255, 255, 255);
   const tw = doc.getTextWidth(initials);
-  doc.text(initials, x + LOGO_BOX / 2 - tw / 2, y + LOGO_BOX / 2 + 2.6);
+  doc.text(initials, x + MONOGRAM_BOX / 2 - tw / 2, y + MONOGRAM_BOX / 2 + 3.3);
+  return MONOGRAM_BOX;
 }
 
 /**
@@ -342,7 +348,7 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, weeks: ShiftScheduleRecord
   // --- Letterhead: logo only, left ---
   // No company-name text line: the logo is the letterhead. `companyName` is
   // still used for the monogram fallback in drawLogo and for PDF metadata.
-  drawLogo(doc, input, MARGIN_X, y);
+  const logoH = drawLogo(doc, input, MARGIN_X, y);
 
   // --- Document title block, right ---
   // The plant/department identity now lives in the block's first row.
@@ -357,20 +363,27 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, weeks: ShiftScheduleRecord
     blockW,
   );
 
-  // --- Document title + range, left, below the letterhead ---
+  // --- Document title + range, BESIDE the logo ---
+  // Stacking the title under the logo cost ~20 mm of sheet height once the logo
+  // was enlarged, which pushed a roster row onto a second page. The gutter is
+  // the logo BOX width (not the drawn width) so the title's left edge stays put
+  // whatever the logo's aspect ratio; the pair is centred on the logo's actual
+  // height so a short wide logo doesn't leave the title floating.
+  const textX = MARGIN_X + LOGO_BOX + 8;
+  const titleY = y + Math.max(logoH / 2, 9) + 1;
   doc.setFont(FONT, 'bold');
   doc.setFontSize(21);
   setInk(doc, INK);
-  doc.text(t.title, MARGIN_X, y + 30);
+  doc.text(t.title, textX, titleY);
 
   doc.setFont(FONT, 'normal');
   doc.setFontSize(10.5);
   setInk(doc, MUTED);
-  doc.text(`${rangeFor(weeks, input.lang)}   ·   ${rosterCount} ${t.workersOf}`, MARGIN_X, y + 36);
+  doc.text(`${rangeFor(weeks, input.lang)}   ·   ${rosterCount} ${t.workersOf}`, textX, titleY + 6);
 
-  // Derive the rule from whichever column runs longer, so adding a title-block
-  // row pushes the rule down instead of colliding with it.
-  const ruleY = Math.max(y + 40, y + blockH + 4);
+  // The rule clears whichever runs deepest: the logo, the title block, or the
+  // range line.
+  const ruleY = Math.max(y + logoH, y + blockH, titleY + 6) + 5;
   // Letterhead rule: heavy rule + hairline just beneath — reads as "official".
   setDraw(doc, RULE);
   doc.setLineWidth(0.7);
@@ -384,17 +397,35 @@ function drawHeader(doc: jsPDF, input: ShiftPdfInput, weeks: ShiftScheduleRecord
 
 // ---- Multi-week roster grid ----
 //
-// Rather than repeating "06:00–14:00" in every cell, each day shows a compact
-// colour-coded shift number (1 = first shift, 2 = second …); the legend spells
-// the times out once. That frees enough width to lay several week-blocks side
-// by side on one sheet — workers down the left, weeks across.
+// The unit of scheduling in this department is the WORKER-WEEK: a worker holds
+// one shift Monday to Friday and steps to the next shift the following week.
+// The grid used to print one column per DAY, so a normal week was the same
+// digit repeated five times — five columns to say one thing, and the weekly
+// pattern (the point of the document) had to be inferred by eye.
+//
+// Now there is one column per week and one block per worker-week, matching the
+// Rotation Board's model on screen. Days survive as the EXCEPTION mechanism:
+// a week whose days do not all share one shift prints its dominant shift plus a
+// per-day tick strip marking the days that differ, so overrides, absences and
+// partial weeks are still faithfully representable. Uniform weeks print no
+// ticks at all, which is what makes the exceptions visible.
+//
+// Week/uniformity are computed by src/shifts/rotation.ts — the same helpers the
+// Rotation Board uses — so the sheet and the screen cannot disagree.
 
 const NAME_W = 46;
+/** Hours sub-column at the right of each week column. */
 const WEEK_HOURS_W = 11;
 const WEEK_TIER_H = 6;
-const DAY_TIER_H = 8;
-const GRID_HEAD_H = WEEK_TIER_H + DAY_TIER_H;
-const BODY_ROW_H = 7.8;
+const WEEK_DATE_TIER_H = 6;
+const GRID_HEAD_H = WEEK_TIER_H + WEEK_DATE_TIER_H;
+/** Tall enough for the shift block plus a tick strip on exception weeks. */
+const BODY_ROW_H = 11;
+const TICK_H = 2.2;
+/** Height of a printed group heading row (fixed-shift vs rotating). */
+const GROUP_LABEL_H = 6;
+/** Vertical space the signature block occupies at the foot of the sheet. */
+const SIGNATURE_BAND_H = 16;
 
 interface WeekBlock {
   schedule: ShiftScheduleRecord;
@@ -430,6 +461,46 @@ function buildRoster(input: ShiftPdfInput, weeks: ShiftScheduleRecord[]): Array<
     .map(({ id, group }) => ({ id, group }));
 }
 
+interface WeekCell {
+  /** The week's shift, or null when the worker has no assignments that week. */
+  definition: ShiftDefinition | null;
+  /** True when every date in the block carries the same shift. */
+  uniform: boolean;
+  /** Per-date shift, null where the worker is not scheduled (off/absent). */
+  days: Array<ShiftDefinition | null>;
+}
+
+/**
+ * Collapse a worker's week into one printable block.
+ *
+ * `uniform` is stricter than rotation.isUniformWeek: a week that is missing a
+ * day (an absence, or a partial week) is NOT uniform here even though the days
+ * it does have agree, because the sheet must show that the week is incomplete.
+ */
+function weekCellFor(input: ShiftPdfInput, block: WeekBlock, workerId: number, order: number[]): WeekCell {
+  const mine = block.schedule.assignments.filter((a) => a.workerId === workerId);
+  const days = block.dates.map((date) => {
+    const assignment = mine.find((a) => a.date === date);
+    return assignment ? input.definitionById.get(assignment.shiftDefinitionId) ?? null : null;
+  });
+  const dominantId = dominantShift(mine, workerId, order);
+  const definition = dominantId == null ? null : input.definitionById.get(dominantId) ?? null;
+  const uniform = days.every((d) => d !== null && d.id === definition?.id);
+  return { definition, uniform, days };
+}
+
+/**
+ * A full-width tinted band naming a roster group (fixed-shift vs rotating).
+ * Spans the whole table rather than sitting inside the name column: the label
+ * is longer than the 46 mm name column, so confining it there ran the text
+ * across the first vertical rule.
+ */
+function drawGroupHeading(doc: jsPDF, heading: string, y: number, tableRight: number) {
+  setFill(doc, WEEKEND_FILL);
+  doc.rect(MARGIN_X, y, tableRight - MARGIN_X, GROUP_LABEL_H, 'F');
+  label(doc, heading, MARGIN_X + 2, y + 4.1, 6.6, MUTED);
+}
+
 /** Vertical hairlines separating the name column and each week block. */
 function drawVerticals(doc: jsPDF, blocks: WeekBlock[], yTop: number, yBottom: number) {
   setDraw(doc, HAIRLINE);
@@ -441,7 +512,7 @@ function drawVerticals(doc: jsPDF, blocks: WeekBlock[], yTop: number, yBottom: n
 function drawGridHeader(doc: jsPDF, input: ShiftPdfInput, blocks: WeekBlock[], y: number): number {
   const t = L[input.lang];
   const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
-  const dayCount = blocks[0].dates.length;
+  const lastDay = blocks[0].dates.length - 1;
 
   // Booktabs top rule.
   setDraw(doc, RULE);
@@ -457,40 +528,32 @@ function drawGridHeader(doc: jsPDF, input: ShiftPdfInput, blocks: WeekBlock[], y
   doc.setCharSpace(0);
 
   blocks.forEach((block) => {
-    const dayW = (block.w - WEEK_HOURS_W) / dayCount;
-    // Week tier: one label per block ("Tj. 29 · 13.07.–17.07.").
-    const cx = block.x + block.w / 2;
-    const full = `${t.weekAbbr} ${block.schedule.weekNumber} · ${DM(block.dates[0])}–${DM(block.dates[dayCount - 1])}`;
+    const cx = block.x + (block.w - WEEK_HOURS_W) / 2;
+    // Tier 1: the week number, which is the column's identity.
     doc.setFont(FONT, 'bold');
-    doc.setFontSize(7.6);
+    doc.setFontSize(8.4);
     setInk(doc, INK);
     doc.setCharSpace(0.2);
-    const label2 = doc.getTextWidth(full) > block.w - 4 ? `${t.weekAbbr} ${block.schedule.weekNumber}` : full;
-    doc.text(label2, cx - doc.getTextWidth(label2) / 2, y + 4.1);
+    const week = `${t.weekAbbr} ${block.schedule.weekNumber}`;
+    doc.text(week, cx - doc.getTextWidth(week) / 2, y + 4.3);
     doc.setCharSpace(0);
 
-    // Day tier: single-letter day headers, weekend columns tinted.
-    block.dates.forEach((date, di) => {
-      const dx = block.x + di * dayW;
-      if (isWeekend(date)) {
-        setFill(doc, WEEKEND_FILL);
-        doc.rect(dx, y + WEEK_TIER_H, dayW, DAY_TIER_H, 'F');
-      }
-      const letter = dayName(date, input.lang).charAt(0).toUpperCase();
-      doc.setFont(FONT, 'bold');
-      doc.setFontSize(7);
-      setInk(doc, isWeekend(date) ? MUTED : INK);
-      doc.text(letter, dx + dayW / 2 - doc.getTextWidth(letter) / 2, y + WEEK_TIER_H + 5.4);
-    });
+    // Tier 2: the dates the week covers.
+    doc.setFont(FONT, 'normal');
+    doc.setFontSize(6.8);
+    setInk(doc, MUTED);
+    const range = `${DM(block.dates[0])}–${DM(block.dates[lastDay])}`;
+    doc.text(range, cx - doc.getTextWidth(range) / 2, y + WEEK_TIER_H + 4.2);
+
     // Hours sub-column header ("h" is understood in both languages).
-    const hx = block.x + dayCount * dayW + WEEK_HOURS_W / 2;
+    const hx = block.x + block.w - WEEK_HOURS_W / 2;
     doc.setFont(FONT, 'bold');
     doc.setFontSize(7);
     setInk(doc, MUTED);
-    doc.text('h', hx - doc.getTextWidth('h') / 2, y + WEEK_TIER_H + 5.4);
+    doc.text('h', hx - doc.getTextWidth('h') / 2, y + WEEK_TIER_H + 4.2);
   });
 
-  // Thin rule between the week tier and the day tier.
+  // Thin rule between the week tier and the date tier.
   setDraw(doc, HAIRLINE);
   doc.setLineWidth(0.2);
   doc.line(MARGIN_X + NAME_W, y + WEEK_TIER_H, tableRight, y + WEEK_TIER_H);
@@ -507,28 +570,18 @@ function drawGridRow(
   input: ShiftPdfInput,
   blocks: WeekBlock[],
   codes: Map<number, number>,
+  order: number[],
   workerId: number,
   rowNumber: number,
   y: number,
   zebra: boolean,
 ) {
   const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
-  const dayCount = blocks[0].dates.length;
 
   if (zebra) {
     setFill(doc, ZEBRA_FILL);
     doc.rect(MARGIN_X, y, tableRight - MARGIN_X, BODY_ROW_H, 'F');
   }
-  // Weekend tint per weekend day column.
-  blocks.forEach((block) => {
-    const dayW = (block.w - WEEK_HOURS_W) / dayCount;
-    block.dates.forEach((date, di) => {
-      if (isWeekend(date)) {
-        setFill(doc, WEEKEND_FILL);
-        doc.rect(block.x + di * dayW, y, dayW, BODY_ROW_H, 'F');
-      }
-    });
-  });
 
   const midY = y + BODY_ROW_H / 2 + 1.2;
 
@@ -547,27 +600,80 @@ function drawGridRow(
   while (doc.getTextWidth(name) > MARGIN_X + NAME_W - nameX - 1.5 && name.length > 4) name = `${name.slice(0, -2)}…`;
   doc.text(name, nameX, midY);
 
-  // Per-week cells: compact colour-coded shift number, plus a weekly-hours total.
+  // One block per worker-week, plus the weekly-hours total.
   blocks.forEach((block) => {
-    const dayW = (block.w - WEEK_HOURS_W) / dayCount;
-    block.dates.forEach((date, di) => {
-      const cx = block.x + di * dayW + dayW / 2;
-      const assignment = block.schedule.assignments.find((a) => a.workerId === workerId && a.date === date);
-      const definition = assignment ? input.definitionById.get(assignment.shiftDefinitionId) : undefined;
-      if (definition) {
-        const code = String(codes.get(definition.id) ?? '•');
-        const c = hexToRgb(definition.color);
-        doc.setFont(FONT, 'bold');
-        doc.setFontSize(8.6);
-        doc.setTextColor(c.r, c.g, c.b);
-        doc.text(code, cx - doc.getTextWidth(code) / 2, midY);
-      } else {
+    const cell = weekCellFor(input, block, workerId, order);
+    const cellX = block.x + 1.2;
+    const cellW = block.w - WEEK_HOURS_W - 2.4;
+
+    if (cell.definition) {
+      const c = hexToRgb(cell.definition.color);
+      // Tinted plate + a solid colour bar at the left edge. The bar survives
+      // greyscale printing, where a 12% tint is nearly invisible.
+      const plateY = y + 1.1;
+      const plateH = BODY_ROW_H - (cell.uniform ? 2.2 : TICK_H + 3.2);
+      doc.setFillColor(
+        Math.round(255 - (255 - c.r) * 0.12),
+        Math.round(255 - (255 - c.g) * 0.12),
+        Math.round(255 - (255 - c.b) * 0.12),
+      );
+      doc.rect(cellX, plateY, cellW, plateH, 'F');
+      doc.setFillColor(c.r, c.g, c.b);
+      doc.rect(cellX, plateY, 1.3, plateH, 'F');
+
+      // "1 · 06–14" — the code carries the colour, the times stay ink.
+      const code = String(codes.get(cell.definition.id) ?? '•');
+      const times = `${cell.definition.startTime.slice(0, 5)}–${cell.definition.endTime.slice(0, 5)}`;
+      doc.setFont(FONT, 'bold');
+      doc.setFontSize(8.6);
+      const codeW = doc.getTextWidth(code);
+      doc.setFont(FONT, 'normal');
+      doc.setFontSize(7.4);
+      const timesW = doc.getTextWidth(times);
+      const gap = 1.8;
+      const showTimes = codeW + gap + timesW + 5 <= cellW;
+      const totalW = showTimes ? codeW + gap + timesW : codeW;
+      const startX = cellX + 2.4 + Math.max(0, (cellW - 3.6 - totalW) / 2);
+      const textY = plateY + plateH / 2 + 1.1;
+
+      doc.setFont(FONT, 'bold');
+      doc.setFontSize(8.6);
+      doc.setTextColor(c.r, c.g, c.b);
+      doc.text(code, startX, textY);
+      if (showTimes) {
         doc.setFont(FONT, 'normal');
-        doc.setFontSize(8);
-        setInk(doc, HAIRLINE);
-        doc.text('·', cx - doc.getTextWidth('·') / 2, midY);
+        doc.setFontSize(7.4);
+        setInk(doc, INK);
+        doc.text(times, startX + codeW + gap, textY);
       }
-    });
+
+      // Exception strip: only on weeks that are not uniform, so its presence is
+      // itself the signal that something deviates. One tick per date — filled in
+      // that day's own shift colour, hollow where the worker is not scheduled.
+      if (!cell.uniform) {
+        const tickY = plateY + plateH + 1.1;
+        const tickW = (cellW - (cell.days.length - 1) * 0.7) / cell.days.length;
+        cell.days.forEach((day, di) => {
+          const tx = cellX + di * (tickW + 0.7);
+          if (day) {
+            const dc = hexToRgb(day.color);
+            doc.setFillColor(dc.r, dc.g, dc.b);
+            doc.rect(tx, tickY, tickW, TICK_H, 'F');
+          } else {
+            setDraw(doc, HAIRLINE);
+            doc.setLineWidth(0.2);
+            doc.rect(tx, tickY, tickW, TICK_H);
+          }
+        });
+      }
+    } else {
+      doc.setFont(FONT, 'normal');
+      doc.setFontSize(8);
+      setInk(doc, HAIRLINE);
+      const off = L[input.lang].off;
+      doc.text(off, cellX + cellW / 2 - doc.getTextWidth(off) / 2, midY);
+    }
+
     const hours = input.weeklyHours(block.schedule, workerId);
     const hoursTxt = hours > 0 ? String(hours) : '–';
     doc.setFont(FONT, hours > 0 ? 'bold' : 'normal');
@@ -575,6 +681,36 @@ function drawGridRow(
     setInk(doc, hours > 0 ? INK : HAIRLINE);
     doc.text(hoursTxt, block.x + block.w - 2 - doc.getTextWidth(hoursTxt), midY);
   });
+}
+
+/**
+ * Lay the legend out and report how tall it is, without drawing.
+ *
+ * The footer used to flow downward from the bottom of the grid, which let it
+ * run into the signature block once the legend wrapped or the how-to-read note
+ * was added. Measuring first lets the footer be anchored to the bottom of the
+ * sheet instead, so it can never collide, and the body gets every row that is
+ * actually free above it.
+ */
+function measureFooter(doc: jsPDF, input: ShiftPdfInput, defs: ShiftDefinition[], codes: Map<number, number>): number {
+  const t = L[input.lang];
+  let rows = 1;
+  let cursorX = MARGIN_X;
+  defs.forEach((definition) => {
+    const code = String(codes.get(definition.id) ?? '•');
+    const name = input.lang === 'hr' ? definition.nameHr : definition.nameEn;
+    const text = `${name} · ${definition.startTime}–${definition.endTime}`;
+    doc.setFont(FONT, 'bold');
+    doc.setFontSize(9);
+    const chunkW = doc.getTextWidth(code) + 2.5 + doc.getTextWidth(text) + 11;
+    if (cursorX + chunkW > PAGE_W - MARGIN_X) { cursorX = MARGIN_X; rows += 1; }
+    cursorX += chunkW;
+  });
+  doc.setFont(FONT, 'normal');
+  doc.setFontSize(7.4);
+  const noteLines: string[] = doc.splitTextToSize(t.exceptionNote, CONTENT_W);
+  // label + legend rows + note + gap + footnote
+  return 5.5 + rows * 6 + 1 + noteLines.length * 3.4 + 5 + 4;
 }
 
 function drawLegendAndFootnote(doc: jsPDF, input: ShiftPdfInput, defs: ShiftDefinition[], codes: Map<number, number>, y: number) {
@@ -602,8 +738,20 @@ function drawLegendAndFootnote(doc: jsPDF, input: ShiftPdfInput, defs: ShiftDefi
     cursorX += chunkW;
   });
 
+  // How to read a week block — the grid is week-grain, which is not the
+  // convention a reader arrives with, so it is spelled out once.
+  cursorY += 6.5;
+  doc.setFont(FONT, 'normal');
+  doc.setFontSize(7.4);
+  setInk(doc, MUTED);
+  const noteLines: string[] = doc.splitTextToSize(t.exceptionNote, CONTENT_W);
+  doc.text(noteLines, MARGIN_X, cursorY);
+  // Advance by the note's ACTUAL height — it wraps to two lines in Croatian, and
+  // a fixed step would drop the footnote on top of it.
+  cursorY += noteLines.length * 3.4;
+
   // Footnote.
-  cursorY += 8;
+  cursorY += 5;
   doc.setFont(FONT, 'italic');
   doc.setFontSize(8.5);
   setInk(doc, MUTED);
@@ -646,8 +794,10 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
   // How many week-blocks fit across the sheet, and how wide each is once the
   // available width is shared out (kept within sensible min/max bounds).
   const availW = CONTENT_W - NAME_W;
-  const minBlockW = dayCount * 6.2 + WEEK_HOURS_W;
-  const maxBlockW = dayCount * 13 + WEEK_HOURS_W;
+  // A week column has to hold "1 · 06–14" plus the hours cell. Below the minimum
+  // the times are dropped and only the shift code prints, which still reads.
+  const minBlockW = 21 + WEEK_HOURS_W;
+  const maxBlockW = 34 + WEEK_HOURS_W;
   const weeksPerPage = Math.max(1, Math.floor(availW / minBlockW));
 
   const chunks: ShiftScheduleRecord[][] = [];
@@ -664,8 +814,13 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
       w: blockW,
     }));
     const tableRight = blocks[blocks.length - 1].x + blocks[blocks.length - 1].w;
-    const bodyLimit = PAGE_H - MARGIN_BOTTOM - 30;
+    // Reserve the footer's measured height plus the signature band, so the grid
+    // stops above them instead of printing through them.
+    const footerH = measureFooter(doc, input, defs, codes);
+    const footerTop = PAGE_H - MARGIN_BOTTOM - SIGNATURE_BAND_H - footerH;
+    const bodyLimit = footerTop - 4;
 
+    const order = defs.map((d) => d.id);
     let rowStart = 0;
     do {
       if (!firstPage) doc.addPage('a4', 'landscape');
@@ -680,12 +835,27 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
       while (rowStart < roster.length && y + BODY_ROW_H <= bodyLimit) {
         const { id, group } = roster[rowStart];
         if (prevGroup !== null && group !== prevGroup) {
-          // Divider between trades — a rule, never a printed label.
+          // Group divider. A bare rule reads fine for trades; when the caller
+          // supplies a label (fixed-shift vs rotating) it is printed, because an
+          // unnamed split tells the reader nothing.
           setDraw(doc, RULE);
           doc.setLineWidth(0.4);
           doc.line(MARGIN_X, y, tableRight, y);
+          const heading = input.groupLabel?.(group) ?? null;
+          if (heading) {
+            if (y + GROUP_LABEL_H + BODY_ROW_H > bodyLimit) break;
+            drawGroupHeading(doc, heading, y, tableRight);
+            y += GROUP_LABEL_H;
+          }
+        } else if (prevGroup === null) {
+          const heading = input.groupLabel?.(group) ?? null;
+          if (heading) {
+            if (y + GROUP_LABEL_H + BODY_ROW_H > bodyLimit) break;
+            drawGroupHeading(doc, heading, y, tableRight);
+            y += GROUP_LABEL_H;
+          }
         }
-        drawGridRow(doc, input, blocks, codes, id, rowStart + 1, y, drawn % 2 === 1);
+        drawGridRow(doc, input, blocks, codes, order, id, rowStart + 1, y, drawn % 2 === 1);
         prevGroup = group;
         y += BODY_ROW_H;
         rowStart += 1;
@@ -698,7 +868,7 @@ function renderDocument(doc: jsPDF, input: ShiftPdfInput) {
       doc.line(MARGIN_X, y, tableRight, y);
       drawVerticals(doc, blocks, gridTop, y);
 
-      drawLegendAndFootnote(doc, input, defs, codes, y + 9);
+      drawLegendAndFootnote(doc, input, defs, codes, footerTop);
       drawSignatures(doc, input);
     } while (rowStart < roster.length);
   });

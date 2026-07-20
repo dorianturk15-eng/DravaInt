@@ -181,6 +181,20 @@ export default function ShiftSchedule() {
     return worker ? displayName(worker) : `#${id}`;
   }
 
+  /** Group the printed roster by fixed-shift vs rotating, mirroring the Rotation
+   *  Board's two row groups, so the sheet and the screen order people the same
+   *  way. Sorts fixed first — they are the stable block readers scan past. */
+  function pdfWorkerGroup(id: number) {
+    return workerById.get(id)?.fixedShiftDefinitionId != null ? '0-fixed' : '1-rotating';
+  }
+
+  function pdfGroupLabel(group: string) {
+    // Kept short deliberately: the band spans the table but the vertical column
+    // rules are drawn over it, so a long label gets struck through.
+    if (group === '0-fixed') return lang === 'hr' ? 'Stalna smjena' : 'Fixed shift';
+    return lang === 'hr' ? 'Rotacija' : 'Rotating';
+  }
+
   function nameForShift(id: number) {
     const shift = definitionById.get(id);
     if (!shift) return `#${id}`;
@@ -466,7 +480,8 @@ export default function ShiftSchedule() {
         companyName: 'Drava International d.o.o.',
         preparedBy: username ?? undefined,
         workerName: nameForWorker,
-        workerGroup: (id) => workerById.get(id)?.roleName ?? '',
+        workerGroup: pdfWorkerGroup,
+        groupLabel: pdfGroupLabel,
         lanesFor,
         weeklyHours,
         definitionById,
@@ -494,7 +509,8 @@ export default function ShiftSchedule() {
         companyName: 'Drava International d.o.o.',
         preparedBy: snapshot.publishedBy,
         workerName: nameForWorker,
-        workerGroup: (id) => workerById.get(id)?.roleName ?? '',
+        workerGroup: pdfWorkerGroup,
+        groupLabel: pdfGroupLabel,
         lanesFor,
         weeklyHours,
         definitionById,

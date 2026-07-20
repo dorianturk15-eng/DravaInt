@@ -89,6 +89,47 @@ describe('buildShiftSchedulePdf', () => {
     expect(doc.getNumberOfPages()).toBe(1);
   });
 
+  it('fits six weeks on one sheet at week grain', async () => {
+    // A week column costs ~32mm instead of ~42mm for five day-columns, so the
+    // sheet holds six weeks where it held five. The redesign's real gain is
+    // legibility (one block per week, not five repeated digits) — the density
+    // improvement is a modest side effect, not the headline.
+    const many = Array.from({ length: 6 }, (_, n) => ({
+      ...schedule, id: 40 + n, weekNumber: 29 + n,
+      startDate: '2026-07-13', endDate: '2026-07-19',
+    }));
+    const doc = await buildShiftSchedulePdf(makeInput({ schedules: many }));
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
+
+  it('still builds when a week contains per-day overrides and gaps', async () => {
+    // The exception escape hatch: a worker whose week is NOT uniform (a mid-week
+    // override plus a missing day) must still render, as a dominant block with a
+    // per-day tick strip rather than being collapsed away.
+    const mixed: ShiftScheduleRecord = {
+      ...schedule,
+      assignments: [
+        { id: 1, scheduleId: 10, workerId: 1, shiftDefinitionId: 1, date: '2026-07-13', isOverride: false, notes: '' },
+        { id: 2, scheduleId: 10, workerId: 1, shiftDefinitionId: 1, date: '2026-07-14', isOverride: false, notes: '' },
+        // Overridden mid-week onto the second shift.
+        { id: 3, scheduleId: 10, workerId: 1, shiftDefinitionId: 2, date: '2026-07-15', isOverride: true, notes: '' },
+        // 2026-07-16 deliberately absent — an unscheduled day.
+        { id: 4, scheduleId: 10, workerId: 1, shiftDefinitionId: 1, date: '2026-07-17', isOverride: false, notes: '' },
+      ],
+    };
+    const doc = await buildShiftSchedulePdf(makeInput({ schedules: [mixed], participantIds: [1] }));
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(pdfBytes(doc.output('datauristring')).length).toBeGreaterThan(2000);
+  });
+
+  it('builds with a fixed-shift group split out from the rotating one', async () => {
+    const doc = await buildShiftSchedulePdf(makeInput({
+      workerGroup: (id) => (id === 1 ? '0-fixed' : '1-rotating'),
+      groupLabel: (group) => (group === '0-fixed' ? 'Stalna smjena' : 'Rotacija'),
+    }));
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
+
   it('leads the title block with a facility row built from the department', () => {
     const rows = titleBlockRows('hr', 'Objavljeno', 'Alatnica', 'Ivan');
     expect(rows[0]).toEqual(['Pogon', 'Proizvodni pogon - Alatnica']);
