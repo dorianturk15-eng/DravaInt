@@ -15,6 +15,9 @@ export interface Worker {
   isActive: boolean;
   status: WorkerStatus;
   qualifications: string[];
+  /** Pins the worker to one shift permanently; they sit out the weekly rotation.
+   *  Null/undefined = the worker rotates. See src/shifts/rotation.ts. */
+  fixedShiftDefinitionId?: number | null;
 }
 
 type WorkerInput = Omit<Worker, 'id' | 'status'> & { status?: WorkerStatus };
@@ -102,6 +105,7 @@ function rowToWorker(row: Record<string, unknown>): Worker {
     isActive: row.is_active !== false && row.deleted_at == null,
     status: (row.status as WorkerStatus) || 'available',
     qualifications: Array.isArray(row.qualifications) ? row.qualifications.map(String) : [],
+    fixedShiftDefinitionId: row.fixed_shift_definition_id == null ? null : Number(row.fixed_shift_definition_id),
   };
 }
 
@@ -125,7 +129,7 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('workers')
-      .select('id,first_name,last_name,email,role_id,app_user_id,is_active,status,qualifications,deleted_at,roles(id,name)')
+      .select('id,first_name,last_name,email,role_id,app_user_id,is_active,status,qualifications,fixed_shift_definition_id,deleted_at,roles(id,name)')
       .order('last_name');
     if (error) {
       setSyncError(error.message);
@@ -202,6 +206,7 @@ export function WorkersProvider({ children }: { children: ReactNode }) {
       if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
       if (patch.status !== undefined) dbPatch.status = patch.status;
       if (patch.qualifications !== undefined) dbPatch.qualifications = patch.qualifications;
+      if (patch.fixedShiftDefinitionId !== undefined) dbPatch.fixed_shift_definition_id = patch.fixedShiftDefinitionId;
       const { error } = await supabase.from('workers').update(dbPatch).eq('id', id);
       if (error) {
         setSyncError(error.message);
