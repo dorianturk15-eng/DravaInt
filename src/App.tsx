@@ -3,11 +3,12 @@ import './styles/app.css';
 import { useLanguage } from './i18n/LanguageContext';
 import { useAuth } from './auth/AuthContext';
 import { useTheme } from './theme/ThemeContext';
-import { IconDashboard, IconCalendar, IconGear, IconChart, IconGantt, IconFlow, IconShield, IconSun, IconMoon, IconLogout, IconMenu, IconSearch, IconLock } from './components/Icons';
+import { IconDashboard, IconCalendar, IconGear, IconChart, IconGantt, IconFlow, IconShield, IconSun, IconMoon, IconMenu, IconSearch, IconLock } from './components/Icons';
 import { SettingsModal } from './components/SettingsModal';
 import { LockScreen } from './components/LockScreen';
 import { useSettings, type AppTab } from './settings/SettingsContext';
 import { useInactivityLock } from './hooks/useInactivityLock';
+import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkers } from './workers/WorkersContext';
 import { useMachines } from './machines/MachinesContext';
 import Login from './pages/Login';
@@ -17,6 +18,7 @@ import { useShifts } from './shifts/ShiftsContext';
 import { hasChildren } from './scheduling/hierarchy';
 import { useConnectivity } from './hooks/useConnectivity';
 import { CommandPalette, type CommandItem } from './components/CommandPalette';
+import { ProfileMenu } from './components/ProfileMenu';
 import { NotificationCenter, type OperationalAlert } from './components/NotificationCenter';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from './scheduling/capacity';
@@ -60,6 +62,9 @@ function App() {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const { isLocked, setIsLocked, secondsRemaining, isDimmed, resetTimer } = useInactivityLock({ authenticated: isAuthenticated, role, settings });
+  // Single source of truth for the navigation model: tabs above, drawer below.
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const drawerOpen = isSidebarOpen && !isDesktop;
 
   const linkedWorker = useMemo(() => workers.find((worker) => {
     if (!username) return false;
@@ -118,6 +123,13 @@ function App() {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [isAuthenticated, isLocked]);
+
+  // The drawer is a below-1024px affordance. Crossing the breakpoint must clear
+  // its open state, or resizing up and back down reveals a drawer the user never
+  // reopened — and on desktop the hamburger that would dismiss it is gone.
+  useEffect(() => {
+    if (isDesktop && isSidebarOpen) setIsSidebarOpen(false);
+  }, [isDesktop, isSidebarOpen]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('compact-layout', settings.compactMode);
@@ -207,26 +219,32 @@ function App() {
     {secondsRemaining !== null && secondsRemaining <= settings.warningSeconds && <div className="lock-countdown-banner" role="status"><IconLock /><span>{lang === 'hr' ? `Zaključavanje za ${secondsRemaining} s` : `Locking in ${secondsRemaining}s`}</span><button className="btn btn-blue" onClick={resetTimer}>{lang === 'hr' ? 'Ostani povezan' : 'Keep connected'}</button></div>}
     {forbidden && <div className="access-denied-toast" role="alert"><strong>403</strong><span>{lang === 'hr' ? 'Nemate ovlasti za ovaj modul.' : 'Your role cannot access this module.'}</span></div>}
 
-    {isSidebarOpen && <div className="drawer-overlay" onClick={() => setIsSidebarOpen(false)} />}
-    <aside className={`side-drawer${isSidebarOpen ? ' open' : ''}`} aria-hidden={!isSidebarOpen}>
+    {drawerOpen && <div className="drawer-overlay" onClick={() => setIsSidebarOpen(false)} />}
+    <aside className={`side-drawer${drawerOpen ? ' open' : ''}`} aria-hidden={!drawerOpen}>
       <div className="drawer-header"><div><span className="eyebrow">Workshop OS</span><div className="drawer-brand">{t.appTitle}</div></div><button className="drawer-close-btn" onClick={() => setIsSidebarOpen(false)} aria-label="Close">×</button></div>
       <div className="drawer-user-card">{settings.avatar ? <img src={settings.avatar} alt="" /> : <span>{operatorName.slice(0, 2).toUpperCase()}</span>}<div><strong>{operatorName}</strong><small>{role}</small></div></div>
       <nav className="drawer-menu" aria-label={lang === 'hr' ? 'Glavna navigacija' : 'Main navigation'}>{tabs.map((item) => <button key={item.key} className={`drawer-menu-btn${tab === item.key ? ' active' : ''}`} onClick={() => { navigate(item.key); setIsSidebarOpen(false); }}><span>{item.icon}</span>{item.label}</button>)}</nav>
-      <div className="drawer-footer"><button className="drawer-menu-btn" onClick={() => { setIsSettingsOpen(true); setIsSidebarOpen(false); }}><IconGear />{lang === 'hr' ? 'Postavke' : 'Settings'}</button><button className="drawer-menu-btn danger-link" onClick={logout}><IconLogout />{t.login.logout}</button></div>
     </aside>
 
     <nav className="top-nav" aria-label={lang === 'hr' ? 'Glavna navigacija' : 'Main navigation'}>
-      <div className="nav-brand-group"><button className="nav-icon-button" onClick={() => setIsSidebarOpen(true)} aria-label={lang === 'hr' ? 'Otvori izbornik' : 'Open menu'}><IconMenu /></button><div><div className="brand">{t.appTitle}</div><small className="nav-active-module">{tabs.find((item) => item.key === tab)?.label}</small></div></div>
+      <div className="nav-brand-group"><button className="nav-icon-button nav-drawer-toggle" onClick={() => setIsSidebarOpen(true)} aria-label={lang === 'hr' ? 'Otvori izbornik' : 'Open menu'}><IconMenu /></button><div><div className="brand">{t.appTitle}</div><small className="nav-active-module">{tabs.find((item) => item.key === tab)?.label}</small></div></div>
       <div className="tabs">{tabs.map((item) => <button key={item.key} className={`tab-btn${tab === item.key ? ' active' : ''}`} onClick={() => navigate(item.key)} title={item.label} aria-label={item.label}><span>{item.icon}</span><small>{item.label}</small></button>)}</div>
       <div className="nav-actions">
         <button className="nav-command-button" onClick={() => setIsCommandOpen(true)} title={lang === 'hr' ? 'Paleta naredbi (Ctrl+K)' : 'Command palette (Ctrl+K)'}><IconSearch /><span>{lang === 'hr' ? 'Traži' : 'Search'}</span><kbd>⌘K</kbd></button>
         <span className={`connection-pill ${online ? 'online' : 'offline'}`} title={online ? (lang === 'hr' ? 'Povezano' : 'Online') : (lang === 'hr' ? 'Izvan mreže' : 'Offline')}><i />{pendingChanges > 0 && <b>{pendingChanges}</b>}</span>
         <NotificationCenter alerts={alerts} online={online} pendingChanges={pendingChanges} language={lang} activeTab={tab} onNavigate={navigate} />
         <div className="lang-switch"><button className={`lang-btn${lang === 'hr' ? ' active' : ''}`} onClick={() => setLang('hr')}>HR</button><button className={`lang-btn${lang === 'en' ? ' active' : ''}`} onClick={() => setLang('en')}>EN</button></div>
-        {settings.autoLockEnabled && <button className="nav-lock-status" onClick={() => setIsLocked(true)} title={lang === 'hr' ? 'Zaključaj sada' : 'Lock now'} aria-label={lang === 'hr' ? 'Zaključaj sada' : 'Lock now'}><IconLock /></button>}
         <button className="theme-toggle-btn" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}>{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
-        <button className="nav-profile-button" onClick={() => setIsSettingsOpen(true)} title={lang === 'hr' ? 'Profil i postavke' : 'Profile and settings'}>{settings.avatar ? <img src={settings.avatar} alt="" /> : <span>{operatorName.slice(0, 2).toUpperCase()}</span>}<small>{operatorName}</small></button>
-        <button className="logout-btn" onClick={logout}><IconLogout />{t.login.logout}</button>
+        <ProfileMenu
+          operatorName={operatorName}
+          role={role}
+          avatar={settings.avatar}
+          canLock={settings.autoLockEnabled}
+          language={lang}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onLock={() => setIsLocked(true)}
+          onLogout={logout}
+        />
       </div>
     </nav>
 
