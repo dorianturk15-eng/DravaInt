@@ -90,10 +90,9 @@ describe('buildShiftSchedulePdf', () => {
   });
 
   it('fits six weeks on one sheet at week grain', async () => {
-    // A week column costs ~32mm instead of ~42mm for five day-columns, so the
-    // sheet holds six weeks where it held five. The redesign's real gain is
-    // legibility (one block per week, not five repeated digits) — the density
-    // improvement is a modest side effect, not the headline.
+    // A week column costs ~26mm instead of ~42mm for five day-columns. The
+    // redesign's real gain is legibility (one number per week, not five
+    // repeated digits); the density improvement is a side effect.
     const many = Array.from({ length: 6 }, (_, n) => ({
       ...schedule, id: 40 + n, weekNumber: 29 + n,
       startDate: '2026-07-13', endDate: '2026-07-19',
@@ -104,8 +103,8 @@ describe('buildShiftSchedulePdf', () => {
 
   it('still builds when a week contains per-day overrides and gaps', async () => {
     // The exception escape hatch: a worker whose week is NOT uniform (a mid-week
-    // override plus a missing day) must still render, as a dominant block with a
-    // per-day tick strip rather than being collapsed away.
+    // override plus a missing day) must still render — as per-day shift codes
+    // in place of the single weekly one, rather than being collapsed away.
     const mixed: ShiftScheduleRecord = {
       ...schedule,
       assignments: [

@@ -100,7 +100,9 @@ export default function ShiftSchedule() {
   );
 
   const [startDate, setStartDate] = useState(() => mondayOf(localStorage.getItem('shift-board-start') || today));
-  const [weekCount, setWeekCount] = useState(4);
+  // Five weeks: the printed schedule covers a bit over a month, and five week
+  // columns still sit comfortably on one A4 landscape sheet.
+  const [weekCount, setWeekCount] = useState(5);
   const [showWeekend, setShowWeekend] = useState(() => localStorage.getItem('shift-board-weekend') === 'true');
   const [view, setView] = useState<'planner' | 'archive'>('planner');
   const [department, setDepartment] = useState(() => localStorage.getItem('shift-board-department') || 'Alatnica');
