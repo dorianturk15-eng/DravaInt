@@ -67,3 +67,9 @@
 .input-narrow { width: 60px; padding: var(--space-1); }
 .btn-icon-square { padding: var(--space-1); width: 24px; height: 24px; min-width: 24px; border-radius: var(--radius-sm); }
 .modal-close-button { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-secondary); }
+
+/* Added by the Gantt/MachineSchedule sweep. */
+.text-success { color: var(--success-color); }
+.text-danger-strong { color: var(--danger-color); font-weight: 700; }
+.justify-start { justify-content: flex-start; }
+.has-gap-r-sm { margin-right: 6px; }

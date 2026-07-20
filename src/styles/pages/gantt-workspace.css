@@ -26,3 +26,66 @@
 @keyframes skeleton-fade { to { opacity: .45; } }
 @media (max-width: 1023.98px) { .gantt-command-deck { grid-template-columns: 1fr; }.gantt-command-actions,.gantt-filter-row { grid-column: 1; }.gantt-edit-grid { grid-template-columns: 1fr; }.full-field { grid-column: 1; } }
 
+
+/* --- Extracted from GanttChart.tsx inline styles (Tier 1.1) --- */
+
+.gantt-inset-panel {
+  margin-top: var(--space-4);
+  background: var(--bg-step);
+  padding: var(--space-4);
+  border-radius: var(--radius-inner);
+}
+
+.gantt-card-panel {
+  background: var(--bg-card);
+  padding: var(--space-5);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-color);
+  margin: var(--space-4) 0 0;
+}
+
+.gantt-block-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: var(--space-2);
+  color: var(--text-primary);
+}
+
+.gantt-legend-row {
+  font-size: var(--text-sm);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.gantt-button-row { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
+
+/* Baseline toggle: on/off is state, so it becomes a class rather than a
+   ternary inside the style object. */
+.gantt-baseline-toggle { background: var(--primary-light); color: var(--primary-color); }
+.gantt-baseline-toggle.is-on { background: var(--success-color); color: #fff; }
+
+/* Scroll-to-today floating action button. Was ~15 inline properties plus
+   onMouseEnter/onMouseLeave handlers that mutated element.style directly;
+   hover is a real :hover rule now, and the stacking level uses the z-index
+   scale instead of a literal 1000 that outranked every modal and toast. */
+.gantt-today-fab {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  z-index: var(--z-fixed);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform var(--transition-base), opacity var(--transition-base);
+}
+
+.gantt-today-fab:hover { transform: translateY(-2px); opacity: 0.9; }

@@ -45,8 +45,8 @@ export default function MachineSchedule() {
 
   return (
     <div className="wizard-container">
-      <h2 style={{ marginBottom: 5 }}>{t.machines.title}</h2>
-      <p className="subtitle-text" style={{ margin: '0 0 20px 0', fontSize: 13 }}>{t.machines.subtitle}</p>
+      <h2 className="mb-xs">{t.machines.title}</h2>
+      <p className="subtitle-text text-md woc-lead">{t.machines.subtitle}</p>
 
       <details className="step-box board-add-manually">
         <summary className="step-title">
@@ -66,7 +66,7 @@ export default function MachineSchedule() {
               ))}
             </select>
             {machines.length === 0 && (
-              <p className="subtitle-text" style={{ fontSize: 11, marginTop: 4 }}>
+              <p className="subtitle-text text-xs has-gap-xs">
                 {t.machines.noMachinesDefined}
               </p>
             )}
@@ -95,7 +95,7 @@ export default function MachineSchedule() {
             />
           </div>
         </div>
-        <div className="grid-inputs workers-ruster" style={{ marginTop: 15 }}>
+        <div className="grid-inputs workers-ruster mt-md">
           <div>
             <label>{t.common.end}</label>
             <input
@@ -106,21 +106,21 @@ export default function MachineSchedule() {
           </div>
         </div>
 
-        {feedback && <p role={feedback.tone === 'error' ? 'alert' : 'status'} style={{ color: feedback.tone === 'error' ? 'var(--danger-color)' : 'var(--success-color)', fontSize: 13, marginTop: 12 }}>{feedback.text}</p>}
+        {feedback && <p role={feedback.tone === 'error' ? 'alert' : 'status'} className={`woc-status ${feedback.tone === 'error' ? 'is-error' : 'is-success'}`}>{feedback.text}</p>}
 
         <div className="action-bar">
           <button className="btn btn-green" onClick={handleAdd}>
-            <IconPlus style={{ marginRight: 6, verticalAlign: -3 }} />
+            <IconPlus className="inline-icon" />
             {t.common.add}
           </button>
         </div>
       </details>
 
-      <p className="subtitle-text" style={{ fontSize: 12, marginTop: 20 }}>
+      <p className="subtitle-text text-sm mt-lg">
         {t.machines.sharedNote}
       </p>
 
-      <div className="step-title" style={{ marginTop: 20 }}>
+      <div className="step-title mt-lg">
         <span className="step-number">2</span>
         {t.machines.title}
       </div>
