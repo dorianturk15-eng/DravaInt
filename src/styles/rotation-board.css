@@ -200,7 +200,7 @@
 .rotation-empty { padding: var(--space-5); }
 
 /* Phone: drop the times, keep the shift code, tighten the name column. */
-@media (max-width: 680px) {
+@media (max-width: 679.98px) {
   .rotation-board { padding: var(--space-3); }
   .rotation-grid { grid-template-columns: 132px repeat(var(--rotation-columns), minmax(64px, 1fr)); min-width: 0; }
   .rotation-times { display: none; }

@@ -10,11 +10,11 @@
   gap: 16px;
 }
 
-@media (min-width: 700px) {
+@media (min-width: 680px) {
   .board-columns { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1024px) {
   .board-columns { grid-template-columns: repeat(4, 1fr); }
 }
 

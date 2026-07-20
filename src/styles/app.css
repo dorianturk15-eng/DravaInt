@@ -9,6 +9,22 @@
  * the original file byte for byte, so the cascade — including every
  * specificity tie broken by source order — is unchanged. Keep it that way:
  * add new rules to the module they belong to, not to the end of the last one.
+ *
+ * BREAKPOINTS — exactly three, and no others:
+ *
+ *   680px    phone / tablet boundary (already the machine board's boundary)
+ *   1024px   tablet / desktop
+ *   1360px   wide desktop
+ *
+ * Mobile-first `min-width: 680px | 1024px | 1360px`; where a rule is genuinely
+ * desktop-first, `max-width: 679.98px | 1023.98px | 1359.98px` so the two never
+ * overlap at the boundary pixel.
+ *
+ * The migration from the previous 19 ad-hoc widths always rounded toward the
+ * SAFE direction: min-width rounded up (delays the wide layout) and max-width
+ * rounded up (engages the narrow layout earlier). Both directions can only ever
+ * make a layout collapse sooner, never leave a wide layout on a screen too
+ * narrow to hold it, so no rule can start overflowing.
  */
 
 @import './shell.css';

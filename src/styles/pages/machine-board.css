@@ -221,7 +221,7 @@
 .board-mobile-card-sheet select { flex: 1; padding: 6px 8px; font-size: 12px; }
 
 /* Tablet band (680–1100px): keep the full board but bump touch targets and toolbar sizing. */
-@media (min-width: 681px) and (max-width: 1100px) {
+@media (min-width: 680px) and (max-width: 1023.98px) {
   .board-task-card-resize { flex-basis: 16px; }
   .board-task-card-connect { width: 24px; height: 40px; }
   .board-toolbar-btn { padding: 9px 13px; font-size: 12px; }
