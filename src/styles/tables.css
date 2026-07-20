@@ -136,3 +136,93 @@
   color: white;
 }
 
+
+/* ===== Responsive tables (UI_MODERNIZATION_PLAN Tier 2.3 / F7) =====
+ *
+ * `data-table` was a desktop-only pattern: on a phone the Progress list was a
+ * sideways-scrolling spreadsheet, with a card fallback existing only where a
+ * bespoke one had been hand-built (machine board, Gantt).
+ *
+ * Below 680px a table marked `.is-cards` restacks each row as a card. The
+ * column header is reattached to each cell from its `data-label`, so the
+ * meaning of a value survives losing the header row — that attribute is
+ * required on every cell of an opted-in table.
+ *
+ * Opt-in rather than automatic: tables whose cells are not labelled would
+ * silently lose their headers, and some tables (dense diagnostic dumps) are
+ * genuinely better left scrolling.
+ */
+@media (max-width: 679.98px) {
+  .data-table.is-cards { border: none; border-radius: 0; }
+
+  /* Visually hidden, not display:none — screen readers keep the header row. */
+  .data-table.is-cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .data-table.is-cards tr {
+    display: block;
+    margin-bottom: var(--space-3);
+    padding: var(--space-3);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-inner);
+    box-shadow: var(--shadow-flat);
+  }
+
+  .data-table.is-cards td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 6px 0;
+    border: none;
+    text-align: right;
+    /* Long unbroken values (emails, machine codes) must wrap inside the card
+       instead of forcing it wider than the viewport — that reintroduced the
+       sideways scroll the card layout exists to remove. */
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .data-table.is-cards td > * { min-width: 0; overflow-wrap: anywhere; }
+
+  .data-table.is-cards td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    text-align: left;
+  }
+
+  /* The first cell is the card's title line: full width, no label, no divider. */
+  .data-table.is-cards td:first-child {
+    display: block;
+    text-align: left;
+    padding-top: 0;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: var(--space-1);
+    font-weight: 600;
+  }
+
+  .data-table.is-cards td:first-child::before { content: none; }
+
+  /* A cell with no label (an actions column) spans the card instead. */
+  .data-table.is-cards td:not([data-label]) { justify-content: flex-end; }
+  .data-table.is-cards td:not([data-label])::before { content: none; }
+
+  /* Let the interactive bits breathe rather than squashing against the label. */
+  .data-table.is-cards td > div { justify-content: flex-end; flex-wrap: wrap; }
+  .data-table.is-cards .cell-progress-row,
+  .data-table.is-cards .row-center-xs { min-width: 150px; }
+}

@@ -398,7 +398,7 @@ export default function Admin() {
             {machines.length === 0 ? (
               <EmptyState compact>{t.admin.noMachines}</EmptyState>
             ) : (
-              <table className="data-table">
+              <table className="data-table is-cards">
                 <thead>
                   <tr>
                     <th>{t.admin.machineName}</th>
@@ -411,8 +411,8 @@ export default function Admin() {
                   {machines.map((m) => (
                     <tr key={m.id}>
                       <td className="cell-strong">{m.name}</td>
-                      <td>{machineTypeLabels[m.type]}</td>
-                      <td>{m.axis ? `${m.axis} ${t.machines.axisShort}` : '-'}</td>
+                      <td data-label={t.admin.machineType}>{machineTypeLabels[m.type]}</td>
+                      <td data-label={t.admin.machineAxis}>{m.axis ? `${m.axis} ${t.machines.axisShort}` : '-'}</td>
                       <td>
                         <div className="admin-row">
                           <button
@@ -463,7 +463,7 @@ export default function Admin() {
                     : `${unmapped.length} machine reference(s) match no registered machine. Register the machine or fix the operation; run the machineId backfill so remaining operations match by id.`}
                 </p>
                 <div className="table-scroll">
-                  <table className="data-table">
+                  <table className="data-table is-cards">
                     <thead>
                       <tr>
                         <th>{t.admin.machineName}</th>
@@ -479,8 +479,8 @@ export default function Admin() {
                         return (
                         <tr key={name}>
                           <td className="cell-strong">{name}</td>
-                          <td>{info.count}</td>
-                          <td className="cell-sm">{[...info.orders].slice(0, 10).join(', ')}{info.orders.size > 10 ? '…' : ''}</td>
+                          <td data-label={lang === 'hr' ? 'Operacije' : 'Operations'}>{info.count}</td>
+                          <td className="cell-sm" data-label={lang === 'hr' ? 'Nalozi' : 'Orders'}>{[...info.orders].slice(0, 10).join(', ')}{info.orders.size > 10 ? '…' : ''}</td>
                           <td>
                             <button type="button" className="btn btn-blue btn-sm" onClick={() => requestFocus({ tab: 'machines', jobId: focusJob?.id, machineName: name })}>
                               {t.machineBoard.showOnBoard}
@@ -550,7 +550,7 @@ export default function Admin() {
           {workerError && <p className="admin-error-text">{workerError}</p>}
 
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table is-cards">
               <thead>
                 <tr>
                   <th>{lang === 'hr' ? 'Ime radnika' : 'Worker Name'}</th>
@@ -565,12 +565,12 @@ export default function Admin() {
                 {workersList.map((w) => (
                   <tr key={w.id}>
                     <td className="cell-strong">{displayName(w)}</td>
-                    <td>
+                    <td data-label={t.roles.title}>
                       <span className="admin-role-chip">{w.roleName}</span>
                     </td>
-                    <td>{w.email ? <span className="mono">{w.email}</span> : <span className="admin-meta is-xs">{lang === 'hr' ? 'Nema' : 'None'}</span>}</td>
-                    <td className="cell-xs">{w.qualifications.join(', ') || '—'}</td>
-                    <td><select value={w.status} onChange={(e) => void updateWorker(w.id, { status: e.target.value as Worker['status'] })} className="input-inline is-xs"><option value="available">Available</option><option value="busy">Busy</option><option value="break">Break</option><option value="absent">Absent</option></select></td>
+                    <td data-label={lang === 'hr' ? 'Korisnički račun' : 'Linked Account'}>{w.email ? <span className="mono">{w.email}</span> : <span className="admin-meta is-xs">{lang === 'hr' ? 'Nema' : 'None'}</span>}</td>
+                    <td className="cell-xs" data-label={lang === 'hr' ? 'Kvalifikacije' : 'Qualifications'}>{w.qualifications.join(', ') || '—'}</td>
+                    <td data-label={lang === 'hr' ? 'Status' : 'Status'}><select value={w.status} onChange={(e) => void updateWorker(w.id, { status: e.target.value as Worker['status'] })} className="input-inline is-xs"><option value="available">Available</option><option value="busy">Busy</option><option value="break">Break</option><option value="absent">Absent</option></select></td>
                     <td>
                       <div className="admin-row">
                         <button className="btn btn-blue btn-sm" onClick={() => handleEditWorker(w)}>
@@ -608,7 +608,7 @@ export default function Admin() {
           </p>
 
           <div className="table-scroll has-gap">
-            <table className="data-table">
+            <table className="data-table is-cards">
               <thead>
                 <tr>
                   <th>{lang === 'hr' ? 'Ime radnika' : 'Worker Name'}</th>
@@ -619,7 +619,7 @@ export default function Admin() {
                 {workersList.map((w) => (
                   <tr key={w.id}>
                     <td className="cell-strong">{displayName(w)}</td>
-                    <td>
+                    <td data-label={t.roles.title}>
                       <select
                         value={w.roleName}
                         onChange={(e) => {
@@ -712,7 +712,7 @@ export default function Admin() {
           {userError && <p className="admin-error-text">{userError}</p>}
 
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table is-cards">
               <thead>
                 <tr>
                   <th>{t.admin.username}</th>
@@ -725,8 +725,8 @@ export default function Admin() {
                 {users.map((u) => (
                   <tr key={u.username}>
                     <td className="cell-strong">{u.username}</td>
-                    <td className="cell-muted">{'•'.repeat(Math.min(8, u.password.length))}</td>
-                    <td className="admin-meta">{lastLogins[u.username] ? new Date(lastLogins[u.username]).toLocaleString() : '—'}</td>
+                    <td className="cell-muted" data-label={t.admin.password}>{'•'.repeat(Math.min(8, u.password.length))}</td>
+                    <td className="admin-meta" data-label={lang === 'hr' ? 'Zadnja prijava' : 'Last login'}>{lastLogins[u.username] ? new Date(lastLogins[u.username]).toLocaleString() : '—'}</td>
                     <td>
                       <div className="admin-row">
                         <button

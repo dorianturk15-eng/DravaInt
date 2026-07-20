@@ -162,7 +162,7 @@ export default function ProgressMonitoring() {
         </p>
       ) : view === 'list' ? (
         <div className="table-scroll">
-          <table className="data-table">
+          <table className="data-table is-cards">
             <thead>
               <tr>
                 <th>{t.progress.task}</th>
@@ -181,7 +181,7 @@ export default function ProgressMonitoring() {
                       {job.operator ? ` · ${job.operator}` : ''}
                     </div>
                   </td>
-                  <td>
+                  <td data-label={t.common.status}>
                     <div className="row-center-sm">
                       <select
                         value={job.status}
@@ -203,7 +203,7 @@ export default function ProgressMonitoring() {
                       {job.status !== 'delayed' && isJobOverdue(job) && overdueBadge}
                     </div>
                   </td>
-                  <td className="min-w-md">
+                  <td className="min-w-md" data-label={t.common.progressLabel}>
                     <div className="row-center-xs">
                       <div className="progress-bar-track flex-1">
                         <div className="progress-bar-fill" style={{ width: `${job.progress}%`, '--bar-color': job.status === 'done' ? 'var(--success-color)' : 'var(--primary-color)' } as React.CSSProperties} />

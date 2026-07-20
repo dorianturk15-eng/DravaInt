@@ -265,7 +265,7 @@ export default function Dashboard() {
           <EmptyState compact>{t.dashboard.noJobs}</EmptyState>
         ) : (
           <div className="table-scroll">
-          <table className="data-table">
+          <table className="data-table is-cards">
             <thead>
               <tr>
                 <th>{t.machines.order}</th>
@@ -278,13 +278,13 @@ export default function Dashboard() {
               {recent.map((job) => (
                 <tr key={job.id}>
                   <td className="cell-strong">{job.order || '-'}</td>
-                  <td>{job.machine || '-'}</td>
-                  <td>
+                  <td data-label={t.machines.machine}>{job.machine || '-'}</td>
+                  <td data-label={t.common.status}>
                     <span className={`status-pill status-${job.status}`}>
                       {t.progress.statusOptions[job.status]}
                     </span>
                   </td>
-                  <td className="cell-progress">
+                  <td className="cell-progress" data-label={t.common.progressLabel}>
                     <div className="cell-progress-row">
                       <div className="progress-bar-track is-flex">
                         <div
