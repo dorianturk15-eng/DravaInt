@@ -82,7 +82,9 @@
 }
 
 .progress-bar-fill {
-  background: var(--success-color);
+  /* Per-instance colour comes in as --bar-color (status/load driven); the
+     default is unchanged for the call sites that do not set it. */
+  background: var(--bar-color, var(--success-color));
   height: 100%;
   border-radius: var(--radius-pill);
   transition: width var(--transition-base);
@@ -90,8 +92,8 @@
 
 .logout-btn {
   background: transparent;
-  color: #cbd5e1;
-  border: 1px solid #dc2626;
+  color: var(--text-secondary);
+  border: 1px solid var(--danger-color);
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;

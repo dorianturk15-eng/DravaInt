@@ -53,3 +53,91 @@
   text-transform: uppercase;
 }
 
+
+/* ===== Extracted from Dashboard.tsx inline styles (Tier 1.1) =====
+   These encoded design (colour, size, spacing, radius), so per the sweep rule
+   they become classes; the only inline styles left on the page are the two
+   data-driven bar widths, which are intrinsic to an element instance. */
+
+.stat-tile-icon { width: 20px; height: 20px; }
+
+.dashboard-panel-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
+  align-items: start;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.dashboard-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+  margin: 0;
+}
+
+.dashboard-panel.is-column { display: flex; flex-direction: column; }
+
+.dashboard-panel-title {
+  font-family: var(--font-title);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-5);
+  flex: 0 0 auto;
+}
+
+/* Title row that also carries controls (the capacity week nav). */
+.dashboard-panel-title.has-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.capacity-week-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.capacity-week-label { min-width: 92px; text-align: center; }
+.capacity-machine-list { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.capacity-machine-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-1);
+  font-size: 13px;
+}
+
+.capacity-machine-load { color: var(--text-secondary); }
+.dashboard-machine-link { font-weight: 600; }
+.muted-note { color: var(--text-secondary); }
+
+/* Recent-jobs table cells. */
+.table-scroll { overflow-x: auto; }
+.data-table .cell-strong { font-weight: 600; }
+.data-table .cell-progress { min-width: 160px; }
+.cell-progress-row { display: flex; align-items: center; gap: var(--space-2); }
+.cell-progress-row .progress-bar-track { flex: 1; }
+
+.cell-progress-value {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  width: 35px;
+  text-align: right;
+}
+
+/* The capacity bar carried a soft glow tinted to its own load colour as an
+   inline boxShadow (`0 0 6px ${color}55`). Reproduced here from --bar-color so
+   the effect survives the inline-style sweep. */
+.capacity-machine-list .progress-bar-fill {
+  border-radius: 5px;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--bar-color, var(--success-color)) 33%, transparent);
+}

@@ -18,6 +18,7 @@ import { useSettings } from '../settings/SettingsContext';
 import { calculateMachineLoads, getWeeklyCapacityHours, weekWindow, jobIntersectsWeek } from '../scheduling/capacity';
 import { computeEffectiveSchedule, jobsToScheduleInput, getJobConflicts } from '../scheduling/cpm';
 import { requestFocus } from '../navigation/focusTarget';
+import { EmptyState, PageHeader, StatTile } from '../components/Page';
 import { routingStates } from '../scheduling/routingProgress';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
@@ -90,20 +91,17 @@ export default function Dashboard() {
 
 
   const statIcons: Record<string, React.ReactNode> = {
-    total: <IconFlow style={{ width: 20, height: 20 }} />,
-    avg: <IconChart style={{ width: 20, height: 20 }} />,
-    planned: <IconCalendar style={{ width: 20, height: 20 }} />,
-    inProgress: <IconRefresh style={{ width: 20, height: 20 }} />,
+    total: <IconFlow className="stat-tile-icon" />,
+    avg: <IconChart className="stat-tile-icon" />,
+    planned: <IconCalendar className="stat-tile-icon" />,
+    inProgress: <IconRefresh className="stat-tile-icon" />,
     done: <IconCheck />,
     delayed: <IconAlertOutline />,
   };
 
   return (
     <div className="wizard-container">
-      <div style={{ marginBottom: 25 }}>
-        <h2 style={{ margin: '0 0 6px 0', fontSize: 24, fontFamily: 'var(--font-title)', fontWeight: 800 }}>{t.dashboard.title}</h2>
-        <p className="subtitle-text" style={{ margin: 0 }}>{t.dashboard.subtitle}</p>
-      </div>
+      <PageHeader title={t.dashboard.title} subtitle={t.dashboard.subtitle} />
 
       <section className="dashboard-command-strip glass-panel">
         <div className="dashboard-today"><span className="eyebrow">{lang === 'hr' ? 'Današnji fokus' : 'Today’s focus'}</span><strong>{todayLabel}</strong><small>{exceptionCount ? (lang === 'hr' ? `${delayedCount} kašnjenja · ${materialRisks} rizika materijala · ${hasMachineOverlap ? 1 : 0} konflikt · ${overloadedMachineCount} iznad kapaciteta` : `${delayedCount} delayed · ${materialRisks} material risks · ${hasMachineOverlap ? 1 : 0} conflict · ${overloadedMachineCount} over capacity`) : (lang === 'hr' ? 'Plan je stabilan i bez aktivnih iznimki' : 'Plan is stable with no active exceptions')}</small></div>
@@ -115,50 +113,32 @@ export default function Dashboard() {
       </section>
 
       {/* Stats Summary Grid */}
-      <div className="stat-grid" style={{ marginBottom: 30 }}>
-        <div className="stat-tile" style={{ '--accent': '#2563eb' } as React.CSSProperties}>
-          <div>
-            <div className="stat-value">{total}</div>
-            <div className="stat-label">{t.dashboard.totalJobs}</div>
-          </div>
-          <div style={{ color: '#2563eb', opacity: 0.85, alignSelf: 'flex-end', marginTop: 10 }}>{statIcons.total}</div>
-        </div>
-
-        <div className="stat-tile" style={{ '--accent': '#10b981' } as React.CSSProperties}>
-          <div>
-            <div className="stat-value">{avgProgress}%</div>
-            <div className="stat-label">{t.dashboard.avgProgress}</div>
-          </div>
-          <div style={{ color: '#10b981', opacity: 0.85, alignSelf: 'flex-end', marginTop: 10 }}>{statIcons.avg}</div>
-        </div>
-
+      <div className="stat-grid">
+        {/* Total and average progress are rarely actionable, so they read as
+            quiet tiles rather than competing with the status counts. */}
+        <StatTile quiet value={total} label={t.dashboard.totalJobs} icon={statIcons.total} accent="var(--primary-color)" />
+        <StatTile quiet value={`${avgProgress}%`} label={t.dashboard.avgProgress} icon={statIcons.avg} accent="var(--success-color)" />
         {(['planned', 'inProgress', 'done', 'delayed'] as JobStatus[]).map((s) => (
-          <div className="stat-tile" key={s} style={{ '--accent': STATUS_COLORS[s] } as React.CSSProperties}>
-            <div>
-              <div className="stat-value">{counts[s]}</div>
-              <div className="stat-label">{t.progress.statusOptions[s]}</div>
-            </div>
-            <div style={{ color: STATUS_COLORS[s], opacity: 0.85, alignSelf: 'flex-end', marginTop: 10 }}>{statIcons[s]}</div>
-          </div>
+          <StatTile key={s} value={counts[s]} label={t.progress.statusOptions[s]} icon={statIcons[s]} accent={STATUS_COLORS[s]} />
         ))}
       </div>
 
       {/* Split visual columns: Capacity Heatmap & Routing Node Map */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(400px, 100%), 1fr))', alignItems: 'start', gap: 20, marginBottom: 25 }}>
+      <div className="dashboard-panel-columns">
 
         {/* Capacity Heatmap */}
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0 }}>
-          <div className="step-title" style={{ fontSize: 16, marginBottom: 12, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div className="dashboard-panel">
+          <div className="dashboard-panel-title has-controls">
             <span><IconChart className="panel-title-icon" /> {lang === 'hr' ? 'Kapacitet Strojeva (Tjedni opterećenje)' : 'Machine Capacities (Weekly Load)'}</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500 }}>
+            <span className="capacity-week-nav">
               <button type="button" className="routing-order-nav" onClick={() => setCapacityWeekOffset((o) => o - 1)} aria-label={lang === 'hr' ? 'Prethodni tjedan' : 'Previous week'}>‹</button>
-              <span style={{ minWidth: 92, textAlign: 'center' }}>{capacityWeekOffset === 0 ? (lang === 'hr' ? 'Ovaj tjedan' : 'This week') : `${lang === 'hr' ? 'Tjedan' : 'Week'} ${capacityWeekLabel}`}</span>
+              <span className="capacity-week-label">{capacityWeekOffset === 0 ? (lang === 'hr' ? 'Ovaj tjedan' : 'This week') : `${lang === 'hr' ? 'Tjedan' : 'Week'} ${capacityWeekLabel}`}</span>
               <button type="button" className="routing-order-nav" onClick={() => setCapacityWeekOffset((o) => o + 1)} aria-label={lang === 'hr' ? 'Sljedeći tjedan' : 'Next week'}>›</button>
             </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+          <div className="capacity-machine-list">
             {machinesList.length === 0 && (
-              <small style={{ color: 'var(--text-secondary)' }}>
+              <small className="muted-note">
                 {lang === 'hr' ? 'Nema registriranih strojeva — dodajte ih u Administraciji.' : 'No machines registered yet — add them in Administration.'}
               </small>
             )}
@@ -169,19 +149,14 @@ export default function Dashboard() {
 
               return (
                 <div key={m}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}>
-                    <button type="button" className="dashboard-machine-link" style={{ fontWeight: 600 }} onClick={() => requestFocus({ tab: 'machines', machineName: m })} title={lang === 'hr' ? 'Prikaži na rasporedu strojeva' : 'Show on machine board'}>{m}</button>
-                    <span style={{ color: 'var(--text-secondary)' }}>{hours}h / {weeklyCapacityHours}h ({loadPercent}%)</span>
+                  <div className="capacity-machine-row">
+                    <button type="button" className="dashboard-machine-link" onClick={() => requestFocus({ tab: 'machines', machineName: m })} title={lang === 'hr' ? 'Prikaži na rasporedu strojeva' : 'Show on machine board'}>{m}</button>
+                    <span className="capacity-machine-load">{hours}h / {weeklyCapacityHours}h ({loadPercent}%)</span>
                   </div>
-                  <div className="progress-bar-track" style={{ height: 10 }}>
+                  <div className="progress-bar-track">
                     <div
                       className="progress-bar-fill"
-                      style={{
-                        width: `${loadPercent}%`,
-                        background: color,
-                        boxShadow: `0 0 6px ${color}55`,
-                        borderRadius: 5,
-                      }}
+                      style={{ width: `${loadPercent}%`, '--bar-color': color } as React.CSSProperties}
                     />
                   </div>
                 </div>
@@ -191,16 +166,14 @@ export default function Dashboard() {
         </div>
 
         {/* Live Routing Node Map */}
-        <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0, display: 'flex', flexDirection: 'column' }}>
-          <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)', flex: '0 0 auto' }}>
+        <div className="dashboard-panel is-column">
+          <div className="dashboard-panel-title">
             <IconFlow className="panel-title-icon" /> {lang === 'hr' ? 'Dijagram Toga Procesa' : 'Routing Process Map'}
           </div>
           {jobsWithOps.length === 0 && (
-            <div style={{ padding: '10px 0' }}>
-              <small style={{ color: 'var(--text-secondary)' }}>
-                {lang === 'hr' ? 'Još nema naloga s definiranom rutom — kreirajte radni nalog s operacijama.' : 'No work orders with a routing yet — create a work order with operations.'}
-              </small>
-            </div>
+            <EmptyState compact>
+              {lang === 'hr' ? 'Još nema naloga s definiranom rutom — kreirajte radni nalog s operacijama.' : 'No work orders with a routing yet — create a work order with operations.'}
+            </EmptyState>
           )}
           {jobsWithOps.length > 0 && (
             <div className="routing-order-list">
@@ -272,9 +245,9 @@ export default function Dashboard() {
       <div className="step-box allocation-panel">
         <div className="section-title-row"><div className="step-title">{lang === 'hr' ? 'Ravnoteža operatera i smjena' : 'Operator and shift balance'}</div><span>{lang === 'hr' ? `Prosjek ${averageWorkerHours.toFixed(1)} h` : `Average ${averageWorkerHours.toFixed(1)}h`}</span></div>
         {workerLoads.length === 0 && (
-          <small style={{ color: 'var(--text-secondary)' }}>
+          <EmptyState compact>
             {lang === 'hr' ? 'Nema registriranih radnika — dodajte ih u Administraciji.' : 'No workers registered yet — add them in Administration.'}
-          </small>
+          </EmptyState>
         )}
         <div className="allocation-grid">{workerLoads.map(({ worker, hours, jobs: jobCount }) => {
           const variance = averageWorkerHours ? (hours - averageWorkerHours) / averageWorkerHours * 100 : 0;
@@ -284,14 +257,14 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Jobs Table */}
-      <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)' }}>
-        <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)' }}>
+      <div className="dashboard-panel">
+        <div className="dashboard-panel-title">
           {t.dashboard.recentJobs}
         </div>
         {recent.length === 0 ? (
-          <p className="subtitle-text" style={{ margin: 0 }}>{t.dashboard.noJobs}</p>
+          <EmptyState compact>{t.dashboard.noJobs}</EmptyState>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -304,19 +277,22 @@ export default function Dashboard() {
             <tbody>
               {recent.map((job) => (
                 <tr key={job.id}>
-                  <td style={{ fontWeight: 600 }}>{job.order || '-'}</td>
+                  <td className="cell-strong">{job.order || '-'}</td>
                   <td>{job.machine || '-'}</td>
                   <td>
                     <span className={`status-pill status-${job.status}`}>
                       {t.progress.statusOptions[job.status]}
                     </span>
                   </td>
-                  <td style={{ minWidth: 160 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="progress-bar-track" style={{ flex: 1 }}>
-                        <div className="progress-bar-fill" style={{ width: `${job.progress}%`, background: job.status === 'done' ? 'var(--success-color)' : 'var(--primary-color)' }} />
+                  <td className="cell-progress">
+                    <div className="cell-progress-row">
+                      <div className="progress-bar-track is-flex">
+                        <div
+                          className="progress-bar-fill"
+                          style={{ width: `${job.progress}%`, '--bar-color': job.status === 'done' ? 'var(--success-color)' : 'var(--primary-color)' } as React.CSSProperties}
+                        />
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, width: 35, textAlign: 'right' }}>{job.progress}%</span>
+                      <span className="cell-progress-value">{job.progress}%</span>
                     </div>
                   </td>
                 </tr>
