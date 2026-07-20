@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
-import { IconPlus, IconTrash, IconPrint } from '../components/Icons';
+import { IconPlus, IconTrash, IconPrint, IconAlert } from '../components/Icons';
 import { useScheduling, type Job, type OperationStep, type JobPriority } from '../scheduling/SchedulingContext';
 import { hasChildren, collectDescendants } from '../scheduling/hierarchy';
 import { useLogo } from '../logo/LogoContext';
@@ -496,7 +496,7 @@ export default function WorkOrderCreator() {
           )}
           {cadError && (
             <div style={{ marginTop: 8, fontSize: 12, color: 'var(--danger-color)', fontWeight: 'bold' }}>
-              ⚠️ {cadError}
+              <IconAlert className="panel-title-icon" /> {cadError}
             </div>
           )}
         </div>

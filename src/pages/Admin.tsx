@@ -10,7 +10,7 @@ import { detectOperationOverlaps } from '../scheduling/jobOperations';
 import { OverlapEnforcementCard } from '../components/OverlapEnforcementCard';
 import { requestFocus } from '../navigation/focusTarget';
 import { useRoles } from '../roles/RolesContext';
-import { IconUpload, IconTrash, IconEdit, IconPlus } from '../components/Icons';
+import { IconUpload, IconTrash, IconEdit, IconPlus, IconList, IconGear } from '../components/Icons';
 import { useWorkers, type Worker } from '../workers/WorkersContext';
 import { useSettings } from '../settings/SettingsContext';
 
@@ -307,13 +307,13 @@ export default function Admin() {
           👤 {lang === 'hr' ? 'Radnici' : 'Workers'}
         </button>
         <button className={adminTab === 'roles' ? 'active' : ''} onClick={() => setAdminTab('roles')}>
-          📋 {lang === 'hr' ? 'Uloge radnika' : 'Worker Roles'}
+          <IconList className="panel-title-icon" /> {lang === 'hr' ? 'Uloge radnika' : 'Worker Roles'}
         </button>
         <button className={adminTab === 'users' ? 'active' : ''} onClick={() => setAdminTab('users')}>
           🔑 {lang === 'hr' ? 'Korisnički računi' : 'Login Accounts'}
         </button>
         <button className={adminTab === 'system' ? 'active' : ''} onClick={() => setAdminTab('system')}>
-          ⚙️ {lang === 'hr' ? 'Sustav' : 'System'}
+          <IconGear className="panel-title-icon" /> {lang === 'hr' ? 'Sustav' : 'System'}
         </button>
       </div>
 
@@ -604,7 +604,7 @@ export default function Admin() {
       {adminTab === 'roles' && (
         <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
           <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
-            📋 {lang === 'hr' ? 'Uloge Radnika' : 'Worker Roles Manager'}
+            <IconList className="panel-title-icon" /> {lang === 'hr' ? 'Uloge Radnika' : 'Worker Roles Manager'}
           </div>
 
           <p className="subtitle-text" style={{ marginBottom: 20, fontSize: 12 }}>
@@ -764,7 +764,7 @@ export default function Admin() {
           {/* Key-Value Config Editor */}
           <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-card)', padding: 24 }}>
             <div className="step-title" style={{ fontSize: 16, color: 'var(--text-primary)', marginBottom: 20 }}>
-              ⚙️ {lang === 'hr' ? 'Uređivanje Postavki Sustava' : 'System Configuration Editor'}
+              <IconGear className="panel-title-icon" /> {lang === 'hr' ? 'Uređivanje Postavki Sustava' : 'System Configuration Editor'}
             </div>
             <div className="grid-inputs time-settings" style={{ marginBottom: 20 }}>
               <div>

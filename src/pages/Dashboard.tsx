@@ -7,6 +7,8 @@ import {
   IconChart,
   IconCalendar,
   IconRefresh,
+  IconCheck,
+  IconAlertOutline,
 } from '../components/Icons';
 import { useWorkers } from '../workers/WorkersContext';
 import { useMachines } from '../machines/MachinesContext';
@@ -86,20 +88,6 @@ export default function Dashboard() {
   // fit, stacked as compact rows, most recent first — scrolling covers the rest instead of paging.
   const jobsWithOps = [...jobs].filter((j) => j.operations && j.operations.length > 0).sort((a, b) => b.id - a.id);
 
-  // Icons
-  const IconCheck = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-
-  const IconAlert = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
 
   const statIcons: Record<string, React.ReactNode> = {
     total: <IconFlow style={{ width: 20, height: 20 }} />,
@@ -107,7 +95,7 @@ export default function Dashboard() {
     planned: <IconCalendar style={{ width: 20, height: 20 }} />,
     inProgress: <IconRefresh style={{ width: 20, height: 20 }} />,
     done: <IconCheck />,
-    delayed: <IconAlert />,
+    delayed: <IconAlertOutline />,
   };
 
   return (
@@ -161,7 +149,7 @@ export default function Dashboard() {
         {/* Capacity Heatmap */}
         <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0 }}>
           <div className="step-title" style={{ fontSize: 16, marginBottom: 12, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <span>📊 {lang === 'hr' ? 'Kapacitet Strojeva (Tjedni opterećenje)' : 'Machine Capacities (Weekly Load)'}</span>
+            <span><IconChart className="panel-title-icon" /> {lang === 'hr' ? 'Kapacitet Strojeva (Tjedni opterećenje)' : 'Machine Capacities (Weekly Load)'}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500 }}>
               <button type="button" className="routing-order-nav" onClick={() => setCapacityWeekOffset((o) => o - 1)} aria-label={lang === 'hr' ? 'Prethodni tjedan' : 'Previous week'}>‹</button>
               <span style={{ minWidth: 92, textAlign: 'center' }}>{capacityWeekOffset === 0 ? (lang === 'hr' ? 'Ovaj tjedan' : 'This week') : `${lang === 'hr' ? 'Tjedan' : 'Week'} ${capacityWeekLabel}`}</span>
@@ -205,7 +193,7 @@ export default function Dashboard() {
         {/* Live Routing Node Map */}
         <div className="step-box" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: 24, borderRadius: 'var(--radius-card)', margin: 0, display: 'flex', flexDirection: 'column' }}>
           <div className="step-title" style={{ fontSize: 16, marginBottom: 20, color: 'var(--text-primary)', flex: '0 0 auto' }}>
-            ⛓️ {lang === 'hr' ? 'Dijagram Toga Procesa' : 'Routing Process Map'}
+            <IconFlow className="panel-title-icon" /> {lang === 'hr' ? 'Dijagram Toga Procesa' : 'Routing Process Map'}
           </div>
           {jobsWithOps.length === 0 && (
             <div style={{ padding: '10px 0' }}>

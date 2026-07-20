@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { DravaGantt, type DravaGanttHandle, type GanttDragPreview } from '../components/drava-gantt/DravaGantt';
 import type { GanttLane, GanttTask, GanttViewMode } from '../components/drava-gantt/types';
 import { useLanguage } from '../i18n/LanguageContext';
-import { IconPlus } from '../components/Icons';
+import { IconPlus, IconList } from '../components/Icons';
 import { useScheduling, type DependencyType, type UpdateResult } from '../scheduling/SchedulingContext';
 import { buildGanttTasks, jobIdFromTaskId, hasChildren, computeOperationSchedule } from '../scheduling/hierarchy';
 import { findDependencyCycle, jobsToScheduleInput, computeEffectiveSchedule, computeScheduleSlack, cascadeDependents, toLocalDateTimeString, splitMachineChain, type JobConflicts } from '../scheduling/cpm';
@@ -863,7 +863,7 @@ export default function GanttChart() {
       {showBaseline && (
         <div className="step-box" style={{ marginTop: 15, background: 'var(--bg-step)', padding: 15, borderRadius: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: 'var(--text-primary)' }}>
-            📋 {lang === 'hr' ? 'Log odstupanja od baznog plana' : 'Baseline Deviation Log'}
+            <IconList className="panel-title-icon" /> {lang === 'hr' ? 'Log odstupanja od baznog plana' : 'Baseline Deviation Log'}
           </div>
           {jobs.map((j) => {
             const baseVal = baseline[j.id];

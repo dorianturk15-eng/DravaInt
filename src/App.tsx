@@ -4,7 +4,7 @@ import './styles/rotation-board.css';
 import { useLanguage } from './i18n/LanguageContext';
 import { useAuth } from './auth/AuthContext';
 import { useTheme } from './theme/ThemeContext';
-import { IconDashboard, IconCalendar, IconGear, IconChart, IconGantt, IconFlow, IconShield, IconSun, IconMoon, IconLogout } from './components/Icons';
+import { IconDashboard, IconCalendar, IconGear, IconChart, IconGantt, IconFlow, IconShield, IconSun, IconMoon, IconLogout, IconMenu, IconSearch, IconLock } from './components/Icons';
 import { SettingsModal } from './components/SettingsModal';
 import { LockScreen } from './components/LockScreen';
 import { useSettings, type AppTab } from './settings/SettingsContext';
@@ -33,18 +33,6 @@ const ProgressMonitoring = lazy(() => import('./pages/ProgressMonitoring'));
 const GanttChart = lazy(() => import('./pages/GanttChartResponsive'));
 const WorkOrderCreator = lazy(() => import('./pages/WorkOrderCreator'));
 const Admin = lazy(() => import('./pages/Admin'));
-
-function MenuIcon() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>;
-}
-
-function LockStatusIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
-}
-
-function SearchIcon() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
-}
 
 const ALL_TABS: AppTab[] = ['dashboard', 'shifts', 'machines', 'workOrders', 'progress', 'gantt', 'admin'];
 
@@ -213,11 +201,11 @@ function App() {
     ...(canAccess(role, 'workOrders') ? [{ id: 'new-work-order', label: lang === 'hr' ? 'Novi radni nalog' : 'New work order', description: lang === 'hr' ? 'Pokreni izradu i ispis naloga' : 'Start order creation and printing', group: actionGroup, icon: <IconFlow />, keywords: 'create order print', run: () => navigate('workOrders') }] : []),
     ...(canAccess(role, 'shifts') ? [{ id: 'plan-shifts', label: lang === 'hr' ? 'Planiraj smjene' : 'Plan shifts', description: lang === 'hr' ? 'Generiraj i objavi raspored' : 'Generate and publish a schedule', group: actionGroup, icon: <IconCalendar />, keywords: 'schedule workers', run: () => navigate('shifts') }] : []),
     { id: 'open-settings', label: lang === 'hr' ? 'Postavke radne stanice' : 'Workstation settings', description: lang === 'hr' ? 'Izgled, sigurnost i planiranje' : 'Appearance, security, and planning', group: actionGroup, icon: <IconGear />, shortcut: 'Ctrl Alt S', keywords: 'theme compact lock', run: () => setIsSettingsOpen(true) },
-    { id: 'lock-now', label: lang === 'hr' ? 'Zaključaj sada' : 'Lock now', description: lang === 'hr' ? 'Zaštiti trenutnu radnu stanicu' : 'Secure the current workstation', group: actionGroup, icon: <LockStatusIcon />, keywords: 'security pin', run: () => setIsLocked(true) },
+    { id: 'lock-now', label: lang === 'hr' ? 'Zaključaj sada' : 'Lock now', description: lang === 'hr' ? 'Zaštiti trenutnu radnu stanicu' : 'Secure the current workstation', group: actionGroup, icon: <IconLock />, keywords: 'security pin', run: () => setIsLocked(true) },
   ];
 
   return <div className={`app-shell${isDimmed ? ' is-dimmed' : ''}`}>
-    {secondsRemaining !== null && secondsRemaining <= settings.warningSeconds && <div className="lock-countdown-banner" role="status"><LockStatusIcon /><span>{lang === 'hr' ? `Zaključavanje za ${secondsRemaining} s` : `Locking in ${secondsRemaining}s`}</span><button className="btn btn-blue" onClick={resetTimer}>{lang === 'hr' ? 'Ostani povezan' : 'Keep connected'}</button></div>}
+    {secondsRemaining !== null && secondsRemaining <= settings.warningSeconds && <div className="lock-countdown-banner" role="status"><IconLock /><span>{lang === 'hr' ? `Zaključavanje za ${secondsRemaining} s` : `Locking in ${secondsRemaining}s`}</span><button className="btn btn-blue" onClick={resetTimer}>{lang === 'hr' ? 'Ostani povezan' : 'Keep connected'}</button></div>}
     {forbidden && <div className="access-denied-toast" role="alert"><strong>403</strong><span>{lang === 'hr' ? 'Nemate ovlasti za ovaj modul.' : 'Your role cannot access this module.'}</span></div>}
 
     {isSidebarOpen && <div className="drawer-overlay" onClick={() => setIsSidebarOpen(false)} />}
@@ -229,14 +217,14 @@ function App() {
     </aside>
 
     <nav className="top-nav" aria-label={lang === 'hr' ? 'Glavna navigacija' : 'Main navigation'}>
-      <div className="nav-brand-group"><button className="nav-icon-button" onClick={() => setIsSidebarOpen(true)} aria-label={lang === 'hr' ? 'Otvori izbornik' : 'Open menu'}><MenuIcon /></button><div><div className="brand">{t.appTitle}</div><small className="nav-active-module">{tabs.find((item) => item.key === tab)?.label}</small></div></div>
+      <div className="nav-brand-group"><button className="nav-icon-button" onClick={() => setIsSidebarOpen(true)} aria-label={lang === 'hr' ? 'Otvori izbornik' : 'Open menu'}><IconMenu /></button><div><div className="brand">{t.appTitle}</div><small className="nav-active-module">{tabs.find((item) => item.key === tab)?.label}</small></div></div>
       <div className="tabs">{tabs.map((item) => <button key={item.key} className={`tab-btn${tab === item.key ? ' active' : ''}`} onClick={() => navigate(item.key)} title={item.label} aria-label={item.label}><span>{item.icon}</span><small>{item.label}</small></button>)}</div>
       <div className="nav-actions">
-        <button className="nav-command-button" onClick={() => setIsCommandOpen(true)} title={lang === 'hr' ? 'Paleta naredbi (Ctrl+K)' : 'Command palette (Ctrl+K)'}><SearchIcon /><span>{lang === 'hr' ? 'Traži' : 'Search'}</span><kbd>⌘K</kbd></button>
+        <button className="nav-command-button" onClick={() => setIsCommandOpen(true)} title={lang === 'hr' ? 'Paleta naredbi (Ctrl+K)' : 'Command palette (Ctrl+K)'}><IconSearch /><span>{lang === 'hr' ? 'Traži' : 'Search'}</span><kbd>⌘K</kbd></button>
         <span className={`connection-pill ${online ? 'online' : 'offline'}`} title={online ? (lang === 'hr' ? 'Povezano' : 'Online') : (lang === 'hr' ? 'Izvan mreže' : 'Offline')}><i />{pendingChanges > 0 && <b>{pendingChanges}</b>}</span>
         <NotificationCenter alerts={alerts} online={online} pendingChanges={pendingChanges} language={lang} activeTab={tab} onNavigate={navigate} />
         <div className="lang-switch"><button className={`lang-btn${lang === 'hr' ? ' active' : ''}`} onClick={() => setLang('hr')}>HR</button><button className={`lang-btn${lang === 'en' ? ' active' : ''}`} onClick={() => setLang('en')}>EN</button></div>
-        {settings.autoLockEnabled && <button className="nav-lock-status" onClick={() => setIsLocked(true)} title={lang === 'hr' ? 'Zaključaj sada' : 'Lock now'} aria-label={lang === 'hr' ? 'Zaključaj sada' : 'Lock now'}><LockStatusIcon /></button>}
+        {settings.autoLockEnabled && <button className="nav-lock-status" onClick={() => setIsLocked(true)} title={lang === 'hr' ? 'Zaključaj sada' : 'Lock now'} aria-label={lang === 'hr' ? 'Zaključaj sada' : 'Lock now'}><IconLock /></button>}
         <button className="theme-toggle-btn" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}>{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
         <button className="nav-profile-button" onClick={() => setIsSettingsOpen(true)} title={lang === 'hr' ? 'Profil i postavke' : 'Profile and settings'}>{settings.avatar ? <img src={settings.avatar} alt="" /> : <span>{operatorName.slice(0, 2).toUpperCase()}</span>}<small>{operatorName}</small></button>
         <button className="logout-btn" onClick={logout}><IconLogout />{t.login.logout}</button>

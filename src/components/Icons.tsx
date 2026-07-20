@@ -193,3 +193,53 @@ export function IconAlert(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Stroke-outline glyphs. These were previously defined privately inside App.tsx
+// and Dashboard.tsx; hoisted here so Icons.tsx is the only icon source (F3).
+// They keep their original outline look rather than being redrawn as solid
+// glyphs — this is a de-duplication, not a restyle.
+// ---------------------------------------------------------------------------
+
+function outline(props: SVGProps<SVGSVGElement>) {
+  return {
+    width: 18,
+    height: 18,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    ...props,
+  };
+}
+
+export function IconMenu(props: SVGProps<SVGSVGElement>) {
+  return <svg {...outline({ width: 20, height: 20, ...props })}><path d="M4 7h16M4 12h16M4 17h16" /></svg>;
+}
+
+export function IconSearch(props: SVGProps<SVGSVGElement>) {
+  return <svg {...outline({ width: 16, height: 16, ...props })}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
+}
+
+export function IconLock(props: SVGProps<SVGSVGElement>) {
+  return <svg {...outline({ width: 14, height: 14, strokeLinecap: 'butt', ...props })}><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
+}
+
+export function IconCheck(props: SVGProps<SVGSVGElement>) {
+  return <svg {...outline({ width: 16, height: 16, ...props })}><polyline points="20 6 9 17 4 12" /></svg>;
+}
+
+/** Outline triangle-with-bang, as used by the Dashboard stat tiles. Distinct
+ *  from the solid IconAlert used in denser chrome. */
+export function IconAlertOutline(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...outline({ width: 16, height: 16, ...props })}>
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
